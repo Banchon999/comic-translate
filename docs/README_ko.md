@@ -68,7 +68,7 @@ GPT-4를 번역기로 사용.
 
   > 참고: GPU 가속은 현재 소스 코드에서 실행할 때만 사용할 수 있습니다.
 
-* **브라우저 확장 프로그램**: Chromium 기반 브라우저(Chrome, Edge, Brave 등)용 Comic Translate 브라우저 확장 프로그램을 [Chrome Web Store](https://chromewebstore.google.com/detail/comic-translate/hdkkhpjikkbdopnjdgphcohofonjkcpd?hl=ko)에서 설치하여 웹사이트에서 직접 읽어보세요.
+* **브라우저 확장 프로그램**: Chromium 기반 브라우저(Chrome, Edge, Brave 등)용 Comic Translate 브라우저 확장 프로그램은 [여기](https://www.comic-translate.com/download)에서 설치해 웹사이트에서 바로 읽어보세요.
 
 ### 소스 코드에서 설치
 또는 소스 코드를 직접 실행하고 싶다면 다음과 같이 하세요.

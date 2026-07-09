@@ -75,7 +75,7 @@ Note: Some of these also have Official English Translations
 
   >Note: GPU acceleration is currently only available when running from source.
 
-* **Browser Extension**: Install the Comic Translate extension for Chromium-based browsers (Chrome, Edge, Brave, etc.) from the [Chrome Web Store](https://chromewebstore.google.com/detail/comic-translate/hdkkhpjikkbdopnjdgphcohofonjkcpd?hl=en) to read directly on websites.
+* **Browser Extension**: Install the Comic Translate extension for Chromium-based browsers (Chrome, Edge, Brave, etc.) [here](https://www.comic-translate.com/download) to read directly on websites.
 
 ### From Source
 Alternatively, if you'd like to run the source code directly.
