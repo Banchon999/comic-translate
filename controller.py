@@ -167,6 +167,7 @@ class ComicTranslate(ComicTranslateUI):
         self.archive_browser_button.sig_files_changed.connect(self.image_ctrl.thread_load_images)
         self.comic_browser_button.sig_files_changed.connect(self.image_ctrl.thread_load_images)
         self.project_browser_button.sig_file_changed.connect(self.project_ctrl.thread_load_project)
+        self.folder_browser_button.sig_folder_changed.connect(self._load_images_from_folder)
         self.insert_browser_button.sig_files_changed.connect(self.image_ctrl.thread_insert)
 
         self.save_browser.sig_file_changed.connect(self.image_ctrl.save_current_image)
@@ -272,6 +273,26 @@ class ComicTranslate(ComicTranslateUI):
         if not self._confirm_start_new_project():
             return
         self.image_ctrl.thread_load_images(paths)
+
+    def _load_images_from_folder(self, folder: str):
+        """Load all supported images found in a folder (and its subfolders)."""
+        from modules.utils.archives import natural_sort_key
+
+        image_extensions = ('.png', '.jpg', '.jpeg', '.webp', '.bmp', '.avif')
+        paths = []
+        for root, dirs, files in os.walk(folder):
+            dirs.sort(key=natural_sort_key)
+            for file_name in sorted(files, key=natural_sort_key):
+                if file_name.lower().endswith(image_extensions):
+                    paths.append(os.path.join(root, file_name))
+
+        if not paths:
+            QtWidgets.QMessageBox.information(
+                self, self.tr("Open Folder"),
+                self.tr("No supported images were found in the selected folder.")
+            )
+            return
+        self._guarded_thread_load_images(paths)
 
     def _on_new_project_clicked(self):
         """Clear the app to initial state after confirmation."""

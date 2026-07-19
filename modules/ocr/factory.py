@@ -198,12 +198,33 @@ class OCRFactory:
         # Check if we have a specific model factory
         if ocr_model in general:
             return general[ocr_model](settings)
-        
+
+        # Explicit PaddleOCR choices (mobile = light, server = heavy detection).
+        # The PP-OCRv5 Chinese model also covers Japanese, so route both there.
+        if ocr_model in ('PaddleOCR', 'PaddleOCR (Server)'):
+            ppocr_lang_by_source = {
+                'Japanese': 'ch', 'Chinese': 'ch', 'Korean': 'ko',
+                'Russian': 'ru', 'English': 'en',
+                'French': 'latin', 'Spanish': 'latin', 'Italian': 'latin',
+                'German': 'latin', 'Dutch': 'latin',
+                'japanese': 'ch', 'chinese': 'ch', 'korean': 'ko',
+                'cyrillic': 'ru', 'latin': 'latin',
+            }
+            lang = ppocr_lang_by_source.get(source_lang_english, 'ch')
+            det_model = 'server' if 'Server' in ocr_model else 'mobile'
+            return cls._create_ppocr(settings, lang, effective_backend, det_model=det_model)
+
+        if ocr_model == 'Pororo (Korean)':
+            return cls._create_pororo_ocr(settings, effective_backend)
+
+        if ocr_model == 'EasyOCR':
+            return cls._create_easyocr(settings, source_lang_english)
+
         # For Default, use language-specific engines
         if ocr_model == 'Default' and source_lang_english in language_factories:
             return language_factories[source_lang_english](settings)
-        
-        return 
+
+        return
     
     @staticmethod
     def _create_microsoft_ocr(settings) -> OCREngine:
@@ -259,7 +280,7 @@ class OCRFactory:
         return engine
     
     @staticmethod
-    def _create_ppocr(settings, lang: str, backend: str = 'onnx') -> OCREngine:
+    def _create_ppocr(settings, lang: str, backend: str = 'onnx', det_model: str = 'mobile') -> OCREngine:
         device = resolve_device(settings.is_gpu_enabled(), backend)
         if backend.lower() == 'torch' and torch_available():
             from .ppocr.torch.engine import PPOCRv5TorchEngine
@@ -268,8 +289,16 @@ class OCRFactory:
             engine.initialize(lang=lang, device=device, use_text_lines=True)
         else:
             engine = PPOCRv5Engine()
-            engine.initialize(lang=lang, device=device, use_text_lines=True)
-        
+            engine.initialize(lang=lang, device=device, det_model=det_model, use_text_lines=True)
+
+        return engine
+
+    @staticmethod
+    def _create_easyocr(settings, source_lang_english: str) -> OCREngine:
+        from .easy_ocr import EasyOCREngine
+        device = resolve_device(settings.is_gpu_enabled(), 'torch')
+        engine = EasyOCREngine()
+        engine.initialize(source_lang_english=source_lang_english, device=device)
         return engine
     
     @staticmethod

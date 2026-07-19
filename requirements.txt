@@ -10,6 +10,7 @@ rarfile>=4.1
 pypdfium2>=5.8.0
 keyring>=25.7.0
 jaconv>=0.3.4
+pythainlp>=5.0.0
 wget>=3.2
 onnxruntime>=1.22.1
 shapely>=2.1.1

@@ -101,6 +101,25 @@ class GlossaryPage(QtWidgets.QWidget):
 
         layout = QtWidgets.QVBoxLayout(self)
 
+        # Profile (one glossary per series/story)
+        profile_layout = QtWidgets.QHBoxLayout()
+        profile_layout.addWidget(MLabel(self.tr("Series:")).strong())
+
+        self.profile_combo = MComboBox().small()
+        self.profile_combo.setMinimumWidth(200)
+        profile_layout.addWidget(self.profile_combo)
+
+        new_profile_button = MPushButton(self.tr("New")).small()
+        new_profile_button.clicked.connect(self.new_profile)
+        rename_profile_button = MPushButton(self.tr("Rename")).small()
+        rename_profile_button.clicked.connect(self.rename_profile)
+        delete_profile_button = MPushButton(self.tr("Delete")).small()
+        delete_profile_button.clicked.connect(self.delete_profile)
+        for b in (new_profile_button, rename_profile_button, delete_profile_button):
+            profile_layout.addWidget(b)
+        profile_layout.addStretch(1)
+        layout.addLayout(profile_layout)
+
         # Options
         self.enabled_checkbox = MCheckBox(self.tr("Use Glossary during AI Translation"))
         self.enabled_checkbox.setChecked(self.manager.enabled)
@@ -174,6 +193,60 @@ class GlossaryPage(QtWidgets.QWidget):
         buttons_layout.addStretch(1)
         layout.addLayout(buttons_layout)
 
+        self._refresh_profiles()
+        self._refresh_type_filter()
+        self.refresh_table()
+        self.profile_combo.currentTextChanged.connect(self._on_profile_selected)
+
+    # Profiles
+
+    def _refresh_profiles(self):
+        self.profile_combo.blockSignals(True)
+        self.profile_combo.clear()
+        self.profile_combo.addItems(self.manager.list_profiles())
+        self.profile_combo.setCurrentText(self.manager.active_profile)
+        self.profile_combo.blockSignals(False)
+
+    def _on_profile_selected(self, name: str):
+        if not name or name == self.manager.active_profile:
+            return
+        self.manager.switch_profile(name)
+        self._refresh_type_filter()
+        self.refresh_table()
+
+    def _ask_profile_name(self, title: str, initial: str = "") -> str:
+        name, ok = QtWidgets.QInputDialog.getText(
+            self, title, self.tr("Series name:"), text=initial
+        )
+        return name.strip() if ok else ""
+
+    def new_profile(self):
+        name = self._ask_profile_name(self.tr("New Glossary"))
+        if not name:
+            return
+        self.manager.create_profile(name)
+        self._refresh_profiles()
+        self._refresh_type_filter()
+        self.refresh_table()
+
+    def rename_profile(self):
+        name = self._ask_profile_name(self.tr("Rename Glossary"), self.manager.active_profile)
+        if not name:
+            return
+        self.manager.rename_profile(name)
+        self._refresh_profiles()
+
+    def delete_profile(self):
+        answer = QtWidgets.QMessageBox.question(
+            self, self.tr("Glossary"),
+            self.tr('Delete the glossary "{0}" and all its terms?').format(
+                self.manager.active_profile
+            ),
+        )
+        if answer != QtWidgets.QMessageBox.StandardButton.Yes:
+            return
+        self.manager.delete_profile()
+        self._refresh_profiles()
         self._refresh_type_filter()
         self.refresh_table()
 

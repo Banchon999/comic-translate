@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from modules.inpainting.lama import LaMa
 from modules.inpainting.mi_gan import MIGAN
 from modules.inpainting.aot import AOT
+from modules.inpainting.smart_fill import SmartFill
 from modules.inpainting.schema import Config
 from app.ui.messages import Messages
 from app.ui.settings.settings_page import SettingsPage
@@ -16,6 +17,7 @@ inpaint_map = {
     "LaMa": LaMa,
     "MI-GAN": MIGAN,
     "AOT": AOT,
+    "Smart Fill": SmartFill,
 }
 
 
