@@ -1,0 +1,65 @@
+name: Build Linux App
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14.5'
+          cache: 'pip'
+
+      - name: Install system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libegl1 libgl1 libxkbcommon-x11-0 \
+            libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
+            libxcb-randr0 libxcb-render-util0 libxcb-shape0 xvfb
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build app with PyInstaller
+        run: |
+          pyinstaller --noconfirm --clean \
+            --name ComicTranslate \
+            --add-data "resources:resources" \
+            comic.py
+
+      - name: Smoke test bundle
+        run: |
+          set +e
+          xvfb-run --auto-servernum timeout 20 ./dist/ComicTranslate/ComicTranslate
+          rc=$?
+          set -e
+          # 124 = still running when timeout hit (app started fine)
+          if [ "$rc" != "124" ] && [ "$rc" != "0" ]; then
+            echo "App exited with unexpected status $rc"
+            exit 1
+          fi
+          echo "Smoke test passed (exit $rc)"
+
+      - name: Package tarball
+        run: |
+          cd dist
+          tar -czf ComicTranslate-Linux-x86_64.tar.gz ComicTranslate
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: Comic-Translate-Linux
+          path: dist/ComicTranslate-Linux-x86_64.tar.gz
+          if-no-files-found: error
+          retention-days: 30
