@@ -23,6 +23,7 @@ from modules.utils.translator_utils import get_raw_translation, get_raw_text, fo
 from modules.rendering.render import get_best_render_area, pyside_word_wrap, is_vertical_block
 from modules.utils.device import resolve_device
 from modules.utils.exceptions import InsufficientCreditsException
+from modules.utils.glossary import collect_source_text
 from app.path_materialization import ensure_path_materialized
 from app.ui.canvas.text_item import OutlineInfo, OutlineType
 from app.ui.canvas.text.text_item_properties import TextItemProperties
@@ -206,7 +207,7 @@ class BatchProcessor:
                 return
 
             # Get Translations/ Export if selected
-            extra_context = settings_page.get_llm_settings()['extra_context']
+            extra_context = settings_page.get_extra_context(collect_source_text(blk_list))
             translator_key = settings_page.get_tool_selection('translator')
             translator = Translator(self.main_page, source_lang, target_lang)
             

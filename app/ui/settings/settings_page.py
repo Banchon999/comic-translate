@@ -100,7 +100,7 @@ class SettingsPage(QtWidgets.QWidget):
 
     def _sync_extra_context_limit(self, translator: str) -> None:
         normalized = self.ui.reverse_mappings.get(translator, translator)
-        self.ui.llms_page.set_extra_context_unlimited(normalized == "Custom")
+        self.ui.llms_page.set_extra_context_unlimited(normalized in ("Custom", "OpenRouter"))
 
     def on_theme_changed(self, theme: str):
         self.theme_changed.emit(theme)
@@ -130,6 +130,20 @@ class SettingsPage(QtWidgets.QWidget):
             'extra_context': self.ui.extra_context.toPlainText(),
             'image_input_enabled': self.ui.image_checkbox.isChecked(),
         }
+
+    def get_extra_context(self, source_text: str = "") -> str:
+        """Extra context for LLM translators: user context plus the glossary.
+
+        When source_text is provided and the glossary is set to match-only,
+        only terms that appear in that text are included.
+        """
+        extra_context = self.ui.extra_context.toPlainText()
+        glossary_block = self.ui.glossary_page.manager.build_prompt(source_text)
+        if glossary_block:
+            if extra_context.strip():
+                return f"{extra_context}\n\n{glossary_block}"
+            return glossary_block
+        return extra_context
 
     def get_export_settings(self):
         owner = self.window()
@@ -168,6 +182,9 @@ class SettingsPage(QtWidgets.QWidget):
             if normalized == "Custom":
                 for field in ("api_key", "api_url", "model"):
                     creds[field] = _text_or_none(f"Custom_{field}")
+            elif normalized == "OpenRouter":
+                for field in ("api_key", "model"):
+                    creds[field] = _text_or_none(f"OpenRouter_{field}")
 
             return creds
 
@@ -310,6 +327,9 @@ class SettingsPage(QtWidgets.QWidget):
                     settings.setValue(f"{translated_service}_api_key", cred['api_key'])
                     settings.setValue(f"{translated_service}_api_url", cred['api_url'])
                     settings.setValue(f"{translated_service}_model", cred['model'])
+                elif translated_service == "OpenRouter":
+                    settings.setValue(f"{translated_service}_api_key", cred['api_key'])
+                    settings.setValue(f"{translated_service}_model", cred['model'])
         else:
             settings.remove('credentials')  # Clear all credentials if save_keys is unchecked
         settings.endGroup()
@@ -429,6 +449,9 @@ class SettingsPage(QtWidgets.QWidget):
                 if translated_service == "Custom":
                     self.ui.credential_widgets[f"{translated_service}_api_key"].setText(settings.value(f"{translated_service}_api_key", ''))
                     self.ui.credential_widgets[f"{translated_service}_api_url"].setText(settings.value(f"{translated_service}_api_url", ''))
+                    self.ui.credential_widgets[f"{translated_service}_model"].setText(settings.value(f"{translated_service}_model", ''))
+                elif translated_service == "OpenRouter":
+                    self.ui.credential_widgets[f"{translated_service}_api_key"].setText(settings.value(f"{translated_service}_api_key", ''))
                     self.ui.credential_widgets[f"{translated_service}_model"].setText(settings.value(f"{translated_service}_model", ''))
         settings.endGroup()
 

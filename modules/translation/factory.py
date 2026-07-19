@@ -10,6 +10,7 @@ from .llm.claude import ClaudeTranslation
 from .llm.gemini import GeminiTranslation
 from .llm.deepseek import DeepseekTranslation
 from .llm.custom import CustomTranslation
+from .llm.openrouter import OpenRouterTranslation
 from .user import UserTranslator
 from app.account.auth.token_storage import get_token
 
@@ -32,6 +33,7 @@ class TranslationFactory:
         "Claude": ClaudeTranslation,
         "Gemini": GeminiTranslation,
         "Deepseek": DeepseekTranslation,
+        "OpenRouter": OpenRouterTranslation,
         "Custom": CustomTranslation
     }
     
@@ -78,7 +80,7 @@ class TranslationFactory:
         """Get the appropriate engine class based on translator key."""
 
         access_token = get_token("access_token")
-        if access_token and translator_key not in ['Custom']:
+        if access_token and translator_key not in ['Custom', 'OpenRouter']:
             return UserTranslator
 
         # First check if it's a traditional translation engine (exact match)

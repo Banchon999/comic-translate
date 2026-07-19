@@ -9,7 +9,11 @@ from ...utils.translator_utils import MODEL_MAP
 
 class GPTTranslation(BaseLLMTranslation):
     """Translation engine using OpenAI GPT models through direct REST API calls."""
-    
+
+    # Name of the max-token request parameter; subclasses targeting other
+    # OpenAI-compatible APIs may override (e.g. OpenRouter uses "max_tokens").
+    MAX_TOKENS_PARAM = "max_completion_tokens"
+
     def __init__(self):
         super().__init__()
         self.model_name = None
@@ -84,7 +88,7 @@ class GPTTranslation(BaseLLMTranslation):
             "model": self.model,
             "messages": messages,
             "temperature": self.temperature,
-            "max_completion_tokens": self.max_tokens,
+            self.MAX_TOKENS_PARAM: self.max_tokens,
             "top_p": self.top_p,
         }
 

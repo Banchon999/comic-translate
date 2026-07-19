@@ -1,5 +1,6 @@
 from .base import DetectionEngine
 from .rtdetr_v2_onnx import RTDetrV2ONNXDetection
+from .bubble_seg_onnx import RTDetrV2BubbleSegDetection
 from ..utils.device import resolve_device, torch_available
 from .backend import DEFAULT_DETECTION_BACKEND, resolve_detection_backend
 
@@ -41,6 +42,7 @@ class DetectionEngineFactory:
         # Map model names to factory methods
         engine_factories = {
             'RT-DETR-v2': cls._create_rtdetr_v2,
+            'RT-DETR-v2 + Bubble Seg': cls._create_rtdetr_v2_bubble_seg,
         }
         
         # Get the appropriate factory method, defaulting to RT-DETR-v2
@@ -55,6 +57,15 @@ class DetectionEngineFactory:
     @classmethod
     def _resolve_backend(cls, backend: str | None = None) -> str:
         return resolve_detection_backend(backend)
+
+    @staticmethod
+    def _create_rtdetr_v2_bubble_seg(settings, backend: str = 'onnx'):
+        """Create RT-DETR-v2 text detection paired with dedicated
+        YOLOv8m-seg speech bubble segmentation (ONNX only)."""
+        device = resolve_device(settings.is_gpu_enabled(), 'onnx')
+        engine = RTDetrV2BubbleSegDetection(settings)
+        engine.initialize(device=device)
+        return engine
 
     @staticmethod
     def _create_rtdetr_v2(settings, backend: str = 'onnx'):
