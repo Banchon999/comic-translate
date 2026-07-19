@@ -11,6 +11,11 @@ from ...utils.translator_utils import get_raw_text, set_texts_from_json
 
 class BaseLLMTranslation(LLMTranslation):
     """Base class for LLM-based translation engines with shared functionality."""
+
+    def get_system_prompt(self, source_lang: str, target_lang: str) -> str:
+        # Use the user's active prompt preset (manga/manhwa/webtoon/custom).
+        from ...utils.prompts import PromptManager
+        return PromptManager.instance().build_system_prompt(source_lang, target_lang)
     
     def __init__(self):
         self.source_lang = None

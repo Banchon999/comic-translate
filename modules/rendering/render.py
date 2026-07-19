@@ -32,6 +32,17 @@ class TextRenderingSettings:
     underline: bool
     line_spacing: str
     direction: Qt.LayoutDirection
+    # Optional per-text-type fonts; empty string falls back to font_family
+    bubble_font_family: str = ""
+    free_font_family: str = ""
+
+
+def font_family_for_block(render_settings: TextRenderingSettings, blk) -> str:
+    """Pick the font for a block: speech bubbles and free text (SFX,
+    narration) can use different fonts, falling back to the main font."""
+    if getattr(blk, "text_class", "") == "text_bubble":
+        return render_settings.bubble_font_family or render_settings.font_family
+    return render_settings.free_font_family or render_settings.font_family
 
 def array_to_pil(rgb_image: np.ndarray):
     # Image is already in RGB format, just convert to PIL
@@ -511,6 +522,7 @@ def manual_wrap(
     
     target_lang = main_page.lang_mapping.get(main_page.t_combo.currentText(), None)
     trg_lng_cd = get_language_code(target_lang)
+    render_settings = main_page.render_settings()
 
     for blk in blk_list:
         x1, y1, width, height = blk.xywh
@@ -520,11 +532,12 @@ def manual_wrap(
             continue
 
         vertical = is_vertical_block(blk, trg_lng_cd)
+        blk_font_family = font_family_for_block(render_settings, blk) or font_family
 
         translation, font_size = pyside_word_wrap(
-            translation, 
-            font_family, 
-            width, 
+            translation,
+            blk_font_family,
+            width,
             height,
             line_spacing, 
             outline_width, 

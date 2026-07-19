@@ -12,7 +12,7 @@ from app.path_materialization import ensure_path_materialized
 from app.ui.canvas.save_renderer import ImageSaveRenderer
 from app.ui.canvas.text.text_item_properties import TextItemProperties
 from app.ui.canvas.text_item import OutlineInfo, OutlineType
-from modules.rendering.render import get_best_render_area, is_vertical_block, pyside_word_wrap
+from modules.rendering.render import get_best_render_area, is_vertical_block, pyside_word_wrap, font_family_for_block
 from modules.utils.image_utils import get_smart_text_color
 from modules.utils.language_utils import get_language_code, is_no_space_lang
 from modules.utils.textblock import TextBlock
@@ -108,6 +108,7 @@ class RenderMixin:
                 continue
 
             vertical = is_vertical_block(block, target_lang_code)
+            block_font = font_family_for_block(render_settings, block) or font
             (
                 wrapped_translation,
                 font_size,
@@ -115,7 +116,7 @@ class RenderMixin:
                 rendered_height,
             ) = pyside_word_wrap(
                 translation,
-                font,
+                block_font,
                 width,
                 height,
                 line_spacing,
@@ -149,7 +150,7 @@ class RenderMixin:
 
             text_props = TextItemProperties(
                 text=wrapped_translation,
-                font_family=font,
+                font_family=block_font,
                 font_size=font_size,
                 text_color=font_color,
                 alignment=alignment,

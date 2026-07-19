@@ -1,5 +1,7 @@
 from PySide6 import QtWidgets, QtCore
+from PySide6.QtCore import QThreadPool
 
+from app.thread_worker import GenericWorker
 from ..dayu_widgets.label import MLabel
 from ..dayu_widgets.line_edit import MLineEdit
 from ..dayu_widgets.check_box import MCheckBox
@@ -131,8 +133,28 @@ class GlossaryPage(QtWidgets.QWidget):
         self.match_only_checkbox.setChecked(self.manager.match_only)
         self.match_only_checkbox.stateChanged.connect(self._on_options_changed)
 
+        self.log_ocr_checkbox = MCheckBox(
+            self.tr("Save OCR'd text to this series' log (for glossary extraction)")
+        )
+        self.log_ocr_checkbox.setChecked(self.manager.log_ocr)
+        self.log_ocr_checkbox.stateChanged.connect(self._on_options_changed)
+
         layout.addWidget(self.enabled_checkbox)
         layout.addWidget(self.match_only_checkbox)
+        layout.addWidget(self.log_ocr_checkbox)
+
+        # OCR log → glossary extraction
+        extract_layout = QtWidgets.QHBoxLayout()
+        self.extract_button = MPushButton(self.tr("Extract Glossary from OCR Log")).small()
+        self.extract_button.clicked.connect(self.extract_from_log)
+        clear_log_button = MPushButton(self.tr("Clear Log")).small()
+        clear_log_button.clicked.connect(self.clear_ocr_log)
+        self.log_status_label = MLabel("").secondary()
+        extract_layout.addWidget(self.extract_button)
+        extract_layout.addWidget(clear_log_button)
+        extract_layout.addWidget(self.log_status_label)
+        extract_layout.addStretch(1)
+        layout.addLayout(extract_layout)
 
         # Search / filter row
         filter_layout = QtWidgets.QHBoxLayout()
@@ -196,6 +218,7 @@ class GlossaryPage(QtWidgets.QWidget):
         self._refresh_profiles()
         self._refresh_type_filter()
         self.refresh_table()
+        self._refresh_log_status()
         self.profile_combo.currentTextChanged.connect(self._on_profile_selected)
 
     # Profiles
@@ -213,6 +236,7 @@ class GlossaryPage(QtWidgets.QWidget):
         self.manager.switch_profile(name)
         self._refresh_type_filter()
         self.refresh_table()
+        self._refresh_log_status()
 
     def _ask_profile_name(self, title: str, initial: str = "") -> str:
         name, ok = QtWidgets.QInputDialog.getText(
@@ -228,6 +252,7 @@ class GlossaryPage(QtWidgets.QWidget):
         self._refresh_profiles()
         self._refresh_type_filter()
         self.refresh_table()
+        self._refresh_log_status()
 
     def rename_profile(self):
         name = self._ask_profile_name(self.tr("Rename Glossary"), self.manager.active_profile)
@@ -249,13 +274,84 @@ class GlossaryPage(QtWidgets.QWidget):
         self._refresh_profiles()
         self._refresh_type_filter()
         self.refresh_table()
+        self._refresh_log_status()
 
     # Options
 
     def _on_options_changed(self):
         self.manager.enabled = self.enabled_checkbox.isChecked()
         self.manager.match_only = self.match_only_checkbox.isChecked()
+        self.manager.log_ocr = self.log_ocr_checkbox.isChecked()
         self.manager.save()
+
+    # OCR log → glossary extraction
+
+    def _refresh_log_status(self):
+        count = self.manager.ocr_log_line_count()
+        self.log_status_label.setText(self.tr("{0} logged lines").format(count))
+        self.extract_button.setEnabled(count > 0)
+
+    def clear_ocr_log(self):
+        answer = QtWidgets.QMessageBox.question(
+            self, self.tr("Glossary"),
+            self.tr('Clear the OCR log for "{0}"?').format(self.manager.active_profile),
+        )
+        if answer == QtWidgets.QMessageBox.StandardButton.Yes:
+            self.manager.clear_ocr_log()
+            self._refresh_log_status()
+
+    def extract_from_log(self):
+        log_text = self.manager.read_ocr_log()
+        if not log_text.strip():
+            QtWidgets.QMessageBox.information(
+                self, self.tr("Glossary"),
+                self.tr("The OCR log is empty. Run OCR on some pages first."),
+            )
+            return
+
+        from modules.utils.glossary_extractor import extract_glossary_terms
+        main_page = self.window()
+        existing = {entry.source for entry in self.manager.entries}
+
+        self.extract_button.setEnabled(False)
+        self.extract_button.setText(self.tr("Extracting..."))
+
+        worker = GenericWorker(extract_glossary_terms, main_page, log_text, existing)
+        worker.signals.result.connect(self._on_extraction_done)
+        worker.signals.error.connect(self._on_extraction_error)
+        QThreadPool.globalInstance().start(worker)
+
+    def _reset_extract_button(self):
+        self.extract_button.setText(self.tr("Extract Glossary from OCR Log"))
+        self._refresh_log_status()
+
+    def _on_extraction_done(self, entries):
+        self._reset_extract_button()
+        if not entries:
+            QtWidgets.QMessageBox.information(
+                self, self.tr("Glossary"),
+                self.tr("No new terms were found in the OCR log."),
+            )
+            return
+        for entry in entries:
+            self.manager.upsert(entry, save=False)
+        self.manager.save()
+        self._refresh_type_filter()
+        self.refresh_table()
+        QtWidgets.QMessageBox.information(
+            self, self.tr("Glossary"),
+            self.tr("Added {0} new term(s) to \"{1}\".").format(
+                len(entries), self.manager.active_profile
+            ),
+        )
+
+    def _on_extraction_error(self, error_info):
+        self._reset_extract_button()
+        _, value, _ = error_info
+        QtWidgets.QMessageBox.warning(
+            self, self.tr("Glossary"),
+            self.tr("Glossary extraction failed:\n{0}").format(str(value)),
+        )
 
     # Table
 

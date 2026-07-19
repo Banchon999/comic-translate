@@ -1545,6 +1545,16 @@ class ProjectController:
             self.main.set_font(saved_font_family)
         else:
             self.main.font_dropdown.setCurrentText('')
+
+        # Per-text-type fonts (speech bubble vs free text)
+        bubble_font = settings.value('bubble_font_family', '')
+        free_font = settings.value('free_font_family', '')
+        settings_ui = self.main.settings_page.ui
+        settings_ui.per_class_fonts_checkbox.setChecked(bool(bubble_font or free_font))
+        if bubble_font:
+            settings_ui.bubble_font_combo.setCurrentText(bubble_font)
+        if free_font:
+            settings_ui.free_font_combo.setCurrentText(free_font)
         min_font_size = settings.value('min_font_size', 5)  # Default value is 5
         max_font_size = settings.value('max_font_size', 40) # Default value is 40
         self.main.settings_page.ui.min_font_spinbox.setValue(int(min_font_size))

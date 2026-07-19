@@ -119,9 +119,13 @@ class SettingsPage(QtWidgets.QWidget):
             ui.use_gpu_checkbox, ui.save_keys_checkbox, ui.image_checkbox,
             ui.uppercase_checkbox, ui.raw_text_checkbox,
             ui.translated_text_checkbox, ui.inpainted_image_checkbox,
+            ui.per_class_fonts_checkbox,
         ]
         for checkbox in checkboxes:
             checkbox.stateChanged.connect(self._mark_settings_dirty)
+
+        ui.bubble_font_combo.currentTextChanged.connect(self._mark_settings_dirty)
+        ui.free_font_combo.currentTextChanged.connect(self._mark_settings_dirty)
 
         spinboxes = [
             ui.resize_spinbox, ui.crop_margin_spinbox, ui.crop_trigger_spinbox,
@@ -146,6 +150,15 @@ class SettingsPage(QtWidgets.QWidget):
             self.save_settings()
         except Exception:
             logger.exception("Failed to autosave settings")
+        # Also persist main-page state (fonts, colors, languages) so those
+        # survive crashes too.
+        try:
+            owner = self.window()
+            project_ctrl = getattr(owner, 'project_ctrl', None)
+            if project_ctrl is not None:
+                project_ctrl.save_main_page_settings()
+        except Exception:
+            logger.exception("Failed to autosave main page settings")
 
     def _sync_extra_context_limit(self, translator: str) -> None:
         normalized = self.ui.reverse_mappings.get(translator, translator)

@@ -214,7 +214,13 @@ class CacheManager:
         image_hash = self._generate_image_hash(image)
         # Include extra_context in cache key since it affects translation results
         context_hash = hashlib.md5(extra_context.encode()).hexdigest() if extra_context else "no_context"
-        return (image_hash, translator_key, source_lang, target_lang, context_hash)
+        # Include the active prompt preset so switching presets retranslates
+        try:
+            from modules.utils.prompts import PromptManager
+            prompt_id = PromptManager.instance().fingerprint()
+        except Exception:
+            prompt_id = "no_prompt"
+        return (image_hash, translator_key, source_lang, target_lang, context_hash, prompt_id)
 
     def _is_translation_cached(self, cache_key):
         """Check if translation results are cached for this image/translator/language combination"""

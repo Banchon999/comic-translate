@@ -15,7 +15,7 @@ from app.ui.canvas.text_item import TextBlockItem
 from app.ui.canvas.text.text_item_properties import TextItemProperties
 
 from modules.utils.textblock import TextBlock
-from modules.rendering.render import TextRenderingSettings, manual_wrap, is_vertical_block, pyside_word_wrap
+from modules.rendering.render import TextRenderingSettings, manual_wrap, is_vertical_block, pyside_word_wrap, font_family_for_block
 from modules.utils.pipeline_config import font_selected
 from modules.utils.language_utils import get_language_code, get_layout_direction, is_no_space_lang
 from modules.utils.language_utils import to_canonical_language_name
@@ -114,7 +114,7 @@ class TextController:
         trg_lng_cd = get_language_code(target_lang)
 
         render_settings = self.render_settings()
-        font_family = render_settings.font_family
+        font_family = font_family_for_block(render_settings, blk)
         text_color_str = render_settings.color
         text_color = QColor(text_color_str)
 
@@ -846,9 +846,10 @@ class TextController:
                             continue
 
                         vertical = is_vertical_block(blk, trg_lng_cd)
+                        blk_font_family = font_family_for_block(render_settings, blk) or font_family
                         wrapped, font_size, rendered_width, rendered_height = pyside_word_wrap(
                             translation,
-                            font_family,
+                            blk_font_family,
                             block_width,
                             block_height,
                             line_spacing,
@@ -868,7 +869,7 @@ class TextController:
                         font_color = get_smart_text_color(blk.font_color, setting_font_color)
                         text_props = TextItemProperties(
                             text=wrapped,
-                            font_family=font_family,
+                            font_family=blk_font_family,
                             font_size=font_size,
                             text_color=font_color,
                             alignment=alignment,
@@ -1012,13 +1013,15 @@ class TextController:
         target_lang = self.main.lang_mapping.get(self.main.t_combo.currentText(), None)
         direction = get_layout_direction(target_lang)
 
+        settings_ui = self.main.settings_page.ui
+        per_class_fonts = settings_ui.per_class_fonts_checkbox.isChecked()
         return TextRenderingSettings(
             alignment_id = self.main.alignment_tool_group.get_dayu_checked(),
             font_family = self.main.font_dropdown.currentText(),
-            min_font_size = int(self.main.settings_page.ui.min_font_spinbox.value()),
-            max_font_size = int(self.main.settings_page.ui.max_font_spinbox.value()),
+            min_font_size = int(settings_ui.min_font_spinbox.value()),
+            max_font_size = int(settings_ui.max_font_spinbox.value()),
             color = self.main.block_font_color_button.property('selected_color'),
-            upper_case = self.main.settings_page.ui.uppercase_checkbox.isChecked(),
+            upper_case = settings_ui.uppercase_checkbox.isChecked(),
             outline = self.main.outline_checkbox.isChecked(),
             outline_color = self.main.outline_font_color_button.property('selected_color'),
             outline_width = self.main.outline_width_dropdown.currentText(),
@@ -1026,5 +1029,7 @@ class TextController:
             italic = self.main.italic_button.isChecked(),
             underline = self.main.underline_button.isChecked(),
             line_spacing = self.main.line_spacing_dropdown.currentText(),
-            direction = direction
+            direction = direction,
+            bubble_font_family = settings_ui.bubble_font_combo.currentText() if per_class_fonts else "",
+            free_font_family = settings_ui.free_font_combo.currentText() if per_class_fonts else "",
         )

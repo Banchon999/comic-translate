@@ -67,6 +67,7 @@ class GlossaryManager:
         self.base_dir = base_dir or os.path.join(get_user_data_dir(), "glossaries")
         self.enabled: bool = True
         self.match_only: bool = True  # only send terms found in the source text
+        self.log_ocr: bool = True  # keep OCR'd text for glossary extraction
         self.active_profile: str = self.DEFAULT_PROFILE
         self.entries: list[GlossaryEntry] = []
         self._load_meta_and_migrate()
@@ -148,6 +149,7 @@ class GlossaryManager:
                     meta = json.load(f)
                 self.enabled = bool(meta.get("enabled", True))
                 self.match_only = bool(meta.get("match_only", True))
+                self.log_ocr = bool(meta.get("log_ocr", True))
                 self.active_profile = self._safe_filename(
                     str(meta.get("active_profile", self.DEFAULT_PROFILE))
                 )
@@ -179,6 +181,7 @@ class GlossaryManager:
                     {
                         "enabled": self.enabled,
                         "match_only": self.match_only,
+                        "log_ocr": self.log_ocr,
                         "active_profile": self.active_profile,
                     },
                     f, ensure_ascii=False, indent=2,
@@ -241,6 +244,57 @@ class GlossaryManager:
             if e.type and e.type not in seen:
                 seen.append(e.type)
         return seen
+
+    # OCR log (per profile) — raw source text collected during OCR so a
+    # glossary can later be extracted from it by an LLM.
+
+    def ocr_log_path(self) -> str:
+        return os.path.join(
+            self.base_dir, f"{self._safe_filename(self.active_profile)}.ocrlog.txt"
+        )
+
+    def append_ocr_log(self, texts: list[str]) -> None:
+        if not self.log_ocr:
+            return
+        lines = [t.strip().replace("\n", " ") for t in texts if t and t.strip()]
+        if not lines:
+            return
+        try:
+            os.makedirs(self.base_dir, exist_ok=True)
+            with open(self.ocr_log_path(), "a", encoding="utf-8") as f:
+                f.write("\n".join(lines) + "\n")
+        except OSError as e:
+            logger.error(f"Failed to append OCR log: {e}")
+
+    def read_ocr_log(self, max_chars: int = 60000) -> str:
+        path = self.ocr_log_path()
+        if not os.path.exists(path):
+            return ""
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read()
+        except OSError as e:
+            logger.error(f"Failed to read OCR log: {e}")
+            return ""
+        # Keep the most recent portion when the log grows very large.
+        return content[-max_chars:] if len(content) > max_chars else content
+
+    def ocr_log_line_count(self) -> int:
+        path = self.ocr_log_path()
+        if not os.path.exists(path):
+            return 0
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return sum(1 for line in f if line.strip())
+        except OSError:
+            return 0
+
+    def clear_ocr_log(self) -> None:
+        try:
+            if os.path.exists(self.ocr_log_path()):
+                os.remove(self.ocr_log_path())
+        except OSError as e:
+            logger.error(f"Failed to clear OCR log: {e}")
 
     # Import / Export
 
