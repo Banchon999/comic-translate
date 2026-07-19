@@ -20,7 +20,7 @@ from modules.utils.pipeline_config import get_config
 from modules.utils.image_utils import generate_mask, get_smart_text_color
 from modules.utils.language_utils import get_language_code, is_no_space_lang
 from modules.utils.translator_utils import get_raw_translation, get_raw_text, format_translations, is_renderable_translation
-from modules.rendering.render import get_best_render_area, pyside_word_wrap, is_vertical_block
+from modules.rendering.render import get_best_render_area, pyside_word_wrap, is_vertical_block, font_family_for_block
 from modules.utils.device import resolve_device
 from modules.utils.exceptions import InsufficientCreditsException
 from modules.utils.glossary import collect_source_text
@@ -377,11 +377,12 @@ class BatchProcessor:
                 
                 # Determine if this block should use vertical rendering
                 vertical = is_vertical_block(blk, trg_lng_cd)
+                blk_font = font_family_for_block(render_settings, blk) or font
 
                 translation, font_size, rendered_width, rendered_height = pyside_word_wrap(
-                    translation, 
-                    font, 
-                    block_width, 
+                    translation,
+                    blk_font,
+                    block_width,
                     block_height,
                     line_spacing, 
                     outline_width, 
@@ -407,7 +408,7 @@ class BatchProcessor:
                 # Use TextItemProperties for consistent text item creation
                 text_props = TextItemProperties(
                     text=translation,
-                    font_family=font,
+                    font_family=blk_font,
                     font_size=font_size,
                     text_color=font_color,
                     alignment=alignment,

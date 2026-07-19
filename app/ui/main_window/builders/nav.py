@@ -52,10 +52,15 @@ class NavRailMixin:
         self.project_browser_button = MClickBrowserFileToolButton(multiple=False)
         self.project_browser_button.set_dayu_filters([".ctpr"])
 
+        self.folder_browser_button = MClickBrowserFolderToolButton(multiple=False)
+
         self.tool_menu = MMenu(parent=self)
 
         image_action = self.tool_menu.addAction(MIcon("ion--image-outline.svg"), self.tr("Images"))
         image_action.triggered.connect(self.image_browser_button.clicked)
+
+        folder_action = self.tool_menu.addAction(MIcon("folder-open.svg"), self.tr("Folder"))
+        folder_action.triggered.connect(self.folder_browser_button.clicked)
 
         document_action = self.tool_menu.addAction(MIcon("mingcute--document-line.svg"), self.tr("Document"))
         document_action.triggered.connect(self.document_browser_button.clicked)
@@ -129,6 +134,12 @@ class NavRailMixin:
             self.tr("PSD"),
         )
         export_psd_action.triggered.connect(self._on_export_psd_requested)
+
+        export_translations_action = self.export_menu.addAction(
+            MIcon("mingcute--document-line.svg"),
+            self.tr("Translations (Text)"),
+        )
+        export_translations_action.triggered.connect(self._on_export_translations_requested)
 
         nav_tool_group = MToolButtonGroup(orientation=QtCore.Qt.Vertical, exclusive=True)
         nav_tools = [
@@ -290,6 +301,11 @@ class NavRailMixin:
             project_ctrl.export_to_psd_dialog()
             return
         self.export_psd_folder_browser.click()
+
+    def _on_export_translations_requested(self):
+        project_ctrl = getattr(self, "project_ctrl", None)
+        if project_ctrl is not None and hasattr(project_ctrl, "export_translations_dialog"):
+            project_ctrl.export_translations_dialog()
 
     def create_push_button(self, text: str, clicked=None):
         button = MPushButton(text)

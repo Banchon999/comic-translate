@@ -3,6 +3,7 @@ from ..dayu_widgets.label import MLabel
 from ..dayu_widgets.spin_box import MSpinBox
 from ..dayu_widgets.browser import MClickBrowserFileToolButton
 from ..dayu_widgets.check_box import MCheckBox
+from ..dayu_widgets.combo_box import MFontComboBox
 
 class TextRenderingPage(QtWidgets.QWidget):
     def __init__(self, parent=None):
@@ -47,8 +48,39 @@ class TextRenderingPage(QtWidgets.QWidget):
         font_browser_layout.addWidget(self.font_browser)
         font_browser_layout.addStretch()
 
+        # Per-text-type fonts: bubbles vs free text (SFX/narration)
+        self.per_class_fonts_checkbox = MCheckBox(
+            self.tr("Use different fonts for Speech Bubbles and Free Text")
+        )
+
+        bubble_font_layout = QtWidgets.QHBoxLayout()
+        bubble_font_label = MLabel(self.tr("Speech Bubble Font:"))
+        self.bubble_font_combo = MFontComboBox().small()
+        self.bubble_font_combo.setMinimumWidth(220)
+        bubble_font_layout.addWidget(bubble_font_label)
+        bubble_font_layout.addWidget(self.bubble_font_combo)
+        bubble_font_layout.addStretch()
+
+        free_font_layout = QtWidgets.QHBoxLayout()
+        free_font_label = MLabel(self.tr("Free Text / SFX Font:"))
+        self.free_font_combo = MFontComboBox().small()
+        self.free_font_combo.setMinimumWidth(220)
+        free_font_layout.addWidget(free_font_label)
+        free_font_layout.addWidget(self.free_font_combo)
+        free_font_layout.addStretch()
+
+        self._per_class_font_widgets = (
+            bubble_font_label, self.bubble_font_combo,
+            free_font_label, self.free_font_combo,
+        )
+        self.per_class_fonts_checkbox.stateChanged.connect(self._sync_per_class_font_widgets)
+        self._sync_per_class_font_widgets()
+
         font_layout.addWidget(font_label)
         font_layout.addLayout(font_browser_layout)
+        font_layout.addWidget(self.per_class_fonts_checkbox)
+        font_layout.addLayout(bubble_font_layout)
+        font_layout.addLayout(free_font_layout)
         font_layout.addLayout(min_font_layout)
         font_layout.addLayout(max_font_layout)
 
@@ -60,3 +92,8 @@ class TextRenderingPage(QtWidgets.QWidget):
         layout.addLayout(font_layout)
         layout.addSpacing(10)
         layout.addStretch(1)
+
+    def _sync_per_class_font_widgets(self, *args):
+        enabled = self.per_class_fonts_checkbox.isChecked()
+        for widget in self._per_class_font_widgets:
+            widget.setEnabled(enabled)

@@ -1,4 +1,5 @@
 import os
+import re
 import csv
 import json
 import logging
@@ -50,20 +51,143 @@ def collect_source_text(blk_list) -> str:
 
 
 class GlossaryManager:
-    """Stores the user's term glossary and formats it for LLM prompts.
+    """Stores the user's term glossaries and formats them for LLM prompts.
 
-    Persisted as a standalone JSON file in the user data directory so the
-    glossary survives independently of QSettings and is easy to share.
+    Glossaries are organized as named profiles — one per series/story —
+    each persisted as its own JSON file under ``<user data>/glossaries/``.
+    A small ``config.json`` in the same directory remembers the active
+    profile and the global enable/match options. A legacy single-file
+    ``glossary.json`` is migrated into the "Default" profile automatically.
     """
 
-    def __init__(self, file_path: str | None = None):
-        self.file_path = file_path or os.path.join(get_user_data_dir(), "glossary.json")
+    DEFAULT_PROFILE = "Default"
+    _META_FILE = "config.json"
+
+    def __init__(self, base_dir: str | None = None):
+        self.base_dir = base_dir or os.path.join(get_user_data_dir(), "glossaries")
         self.enabled: bool = True
         self.match_only: bool = True  # only send terms found in the source text
+        self.log_ocr: bool = True  # keep OCR'd text for glossary extraction
+        self.active_profile: str = self.DEFAULT_PROFILE
         self.entries: list[GlossaryEntry] = []
+        self._load_meta_and_migrate()
+        self.load()
+
+    # Profiles
+
+    @staticmethod
+    def _safe_filename(name: str) -> str:
+        cleaned = re.sub(r'[\\/:*?"<>|]', "_", name).strip()
+        return cleaned or GlossaryManager.DEFAULT_PROFILE
+
+    @property
+    def _meta_path(self) -> str:
+        return os.path.join(self.base_dir, self._META_FILE)
+
+    @property
+    def file_path(self) -> str:
+        return self._profile_path(self.active_profile)
+
+    def _profile_path(self, name: str) -> str:
+        return os.path.join(self.base_dir, f"{self._safe_filename(name)}.json")
+
+    def list_profiles(self) -> list[str]:
+        names = set()
+        if os.path.isdir(self.base_dir):
+            for file_name in os.listdir(self.base_dir):
+                if file_name.endswith(".json") and file_name != self._META_FILE:
+                    names.add(file_name[:-len(".json")])
+        names.add(self.active_profile)
+        return sorted(names)
+
+    def switch_profile(self, name: str) -> None:
+        name = self._safe_filename(name)
+        if name == self.active_profile:
+            return
+        self.active_profile = name
+        self._save_meta()
+        self.entries = []
+        self.load()
+
+    def create_profile(self, name: str) -> None:
+        name = self._safe_filename(name)
+        if os.path.exists(self._profile_path(name)):
+            self.switch_profile(name)
+            return
+        self.active_profile = name
+        self.entries = []
+        self.save()
+
+    def rename_profile(self, new_name: str) -> None:
+        new_name = self._safe_filename(new_name)
+        if new_name == self.active_profile:
+            return
+        old_path, new_path = self.file_path, self._profile_path(new_name)
+        if os.path.exists(old_path) and not os.path.exists(new_path):
+            os.rename(old_path, new_path)
+        self.active_profile = new_name
+        self.save()
+
+    def delete_profile(self) -> None:
+        try:
+            if os.path.exists(self.file_path):
+                os.remove(self.file_path)
+        except OSError as e:
+            logger.error(f"Failed to delete glossary profile {self.active_profile}: {e}")
+        remaining = [p for p in self.list_profiles() if p != self.active_profile]
+        self.active_profile = remaining[0] if remaining else self.DEFAULT_PROFILE
+        self._save_meta()
+        self.entries = []
         self.load()
 
     # Persistence
+
+    def _load_meta_and_migrate(self) -> None:
+        if os.path.exists(self._meta_path):
+            try:
+                with open(self._meta_path, "r", encoding="utf-8") as f:
+                    meta = json.load(f)
+                self.enabled = bool(meta.get("enabled", True))
+                self.match_only = bool(meta.get("match_only", True))
+                self.log_ocr = bool(meta.get("log_ocr", True))
+                self.active_profile = self._safe_filename(
+                    str(meta.get("active_profile", self.DEFAULT_PROFILE))
+                )
+            except Exception as e:
+                logger.error(f"Failed to load glossary config: {e}")
+            return
+
+        # First run of the profile system: migrate the legacy single file.
+        legacy_path = os.path.join(os.path.dirname(self.base_dir), "glossary.json")
+        if os.path.exists(legacy_path):
+            try:
+                with open(legacy_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                self.enabled = bool(data.get("enabled", True))
+                self.match_only = bool(data.get("match_only", True))
+                self.entries = self._parse_entries(data.get("entries", []))
+                self.save()
+                logger.info("Migrated legacy glossary.json into the Default profile")
+            except Exception as e:
+                logger.error(f"Failed to migrate legacy glossary: {e}")
+        else:
+            self._save_meta()
+
+    def _save_meta(self) -> None:
+        try:
+            os.makedirs(self.base_dir, exist_ok=True)
+            with open(self._meta_path, "w", encoding="utf-8") as f:
+                json.dump(
+                    {
+                        "enabled": self.enabled,
+                        "match_only": self.match_only,
+                        "log_ocr": self.log_ocr,
+                        "active_profile": self.active_profile,
+                    },
+                    f, ensure_ascii=False, indent=2,
+                )
+        except Exception as e:
+            logger.error(f"Failed to save glossary config: {e}")
 
     def load(self) -> None:
         if not os.path.exists(self.file_path):
@@ -74,24 +198,19 @@ class GlossaryManager:
         except Exception as e:
             logger.error(f"Failed to load glossary from {self.file_path}: {e}")
             return
-        self.enabled = bool(data.get("enabled", True))
-        self.match_only = bool(data.get("match_only", True))
         self.entries = self._parse_entries(data.get("entries", []))
 
     def save(self) -> None:
         try:
-            os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
+            os.makedirs(self.base_dir, exist_ok=True)
             with open(self.file_path, "w", encoding="utf-8") as f:
                 json.dump(
-                    {
-                        "enabled": self.enabled,
-                        "match_only": self.match_only,
-                        "entries": [asdict(e) for e in self.entries],
-                    },
+                    {"entries": [asdict(e) for e in self.entries]},
                     f, ensure_ascii=False, indent=2,
                 )
         except Exception as e:
             logger.error(f"Failed to save glossary to {self.file_path}: {e}")
+        self._save_meta()
 
     # Editing
 
@@ -125,6 +244,57 @@ class GlossaryManager:
             if e.type and e.type not in seen:
                 seen.append(e.type)
         return seen
+
+    # OCR log (per profile) — raw source text collected during OCR so a
+    # glossary can later be extracted from it by an LLM.
+
+    def ocr_log_path(self) -> str:
+        return os.path.join(
+            self.base_dir, f"{self._safe_filename(self.active_profile)}.ocrlog.txt"
+        )
+
+    def append_ocr_log(self, texts: list[str]) -> None:
+        if not self.log_ocr:
+            return
+        lines = [t.strip().replace("\n", " ") for t in texts if t and t.strip()]
+        if not lines:
+            return
+        try:
+            os.makedirs(self.base_dir, exist_ok=True)
+            with open(self.ocr_log_path(), "a", encoding="utf-8") as f:
+                f.write("\n".join(lines) + "\n")
+        except OSError as e:
+            logger.error(f"Failed to append OCR log: {e}")
+
+    def read_ocr_log(self, max_chars: int = 60000) -> str:
+        path = self.ocr_log_path()
+        if not os.path.exists(path):
+            return ""
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read()
+        except OSError as e:
+            logger.error(f"Failed to read OCR log: {e}")
+            return ""
+        # Keep the most recent portion when the log grows very large.
+        return content[-max_chars:] if len(content) > max_chars else content
+
+    def ocr_log_line_count(self) -> int:
+        path = self.ocr_log_path()
+        if not os.path.exists(path):
+            return 0
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return sum(1 for line in f if line.strip())
+        except OSError:
+            return 0
+
+    def clear_ocr_log(self) -> None:
+        try:
+            if os.path.exists(self.ocr_log_path()):
+                os.remove(self.ocr_log_path())
+        except OSError as e:
+            logger.error(f"Failed to clear OCR log: {e}")
 
     # Import / Export
 

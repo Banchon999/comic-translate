@@ -62,10 +62,24 @@ class OCRProcessor:
         self._set_source_language(blk_list)
 
         if self.source_lang_english == 'Auto':
-            return self._process_auto(img, blk_list)
+            result = self._process_auto(img, blk_list)
+        else:
+            engine = OCRFactory.create_engine(self.settings, self.source_lang_english, self.ocr_key)
+            result = self._dispatch_with_override(img, blk_list, engine)
 
-        engine = OCRFactory.create_engine(self.settings, self.source_lang_english, self.ocr_key)
-        return self._dispatch_with_override(img, blk_list, engine)
+        self._log_ocr_texts(blk_list)
+        return result
+
+    def _log_ocr_texts(self, blk_list: list[TextBlock]) -> None:
+        """Record recognized text in the active glossary profile's OCR log."""
+        try:
+            glossary_page = getattr(self.settings.ui, 'glossary_page', None)
+            if glossary_page is not None:
+                glossary_page.manager.append_ocr_log(
+                    [blk.text for blk in blk_list if getattr(blk, 'text', '')]
+                )
+        except Exception:
+            pass  # logging must never break OCR
 
     def _process_auto(self, img: np.ndarray, blk_list: list[TextBlock]) -> list[TextBlock]:
         """Route each block to an OCR engine using block script plus a page-level fallback."""
@@ -131,5 +145,9 @@ class OCRProcessor:
             self.settings.ui.tr('Google Cloud Vision'): 'Google Cloud Vision',
             self.settings.ui.tr('Gemini-2.5-Flash-Lite'): 'Gemini-2.5-Flash-Lite',
             self.settings.ui.tr('Default'): 'Default',
+            'PaddleOCR': 'PaddleOCR',
+            'PaddleOCR (Server)': 'PaddleOCR (Server)',
+            'Pororo (Korean)': 'Pororo (Korean)',
+            'EasyOCR': 'EasyOCR',
         }
         return translator_map.get(localized_ocr, localized_ocr)

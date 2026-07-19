@@ -664,6 +664,82 @@ class ProjectController:
             return ""
         return selected_path
 
+    def export_translations_dialog(self):
+        """Export the raw text and translations of all loaded pages to a file."""
+        if not self.main.image_files:
+            return
+
+        # Capture live edits of the currently open page first.
+        try:
+            self.main.image_ctrl.save_current_image_state()
+        except Exception:
+            logger.exception("Failed to snapshot current page before exporting translations")
+
+        default_dir = self._get_default_export_dir()
+        selected_path, selected_filter = QtWidgets.QFileDialog.getSaveFileName(
+            self.main,
+            self.main.tr("Export Translations"),
+            os.path.join(default_dir, "translations.txt"),
+            "Text Files (*.txt);;JSON Files (*.json)",
+        )
+        if not selected_path:
+            return
+        as_json = "json" in selected_filter.lower() or selected_path.lower().endswith(".json")
+        if not selected_path.lower().endswith(".json" if as_json else ".txt"):
+            selected_path += ".json" if as_json else ".txt"
+
+        pages = []
+        for image_path in self.main.image_files:
+            state = self.main.image_states.get(image_path, {})
+            blocks = state.get('blk_list') or []
+            entries = [
+                {
+                    "text": (blk.text or "").strip(),
+                    "translation": (blk.translation or "").strip(),
+                }
+                for blk in blocks
+                if (blk.text or "").strip() or (blk.translation or "").strip()
+            ]
+            if entries:
+                pages.append({"page": os.path.basename(image_path), "blocks": entries})
+
+        if not pages:
+            MMessage.info(
+                self.main.tr("There are no texts or translations to export yet."),
+                parent=self.main,
+            )
+            return
+
+        try:
+            if as_json:
+                import json
+                with open(selected_path, 'w', encoding='utf-8') as f:
+                    json.dump(pages, f, ensure_ascii=False, indent=2)
+            else:
+                lines = []
+                for page in pages:
+                    lines.append(f"=== {page['page']} ===")
+                    for i, entry in enumerate(page["blocks"], start=1):
+                        if entry["text"]:
+                            lines.append(f"[{i}] {entry['text']}")
+                        if entry["translation"]:
+                            lines.append(f"    -> {entry['translation']}")
+                    lines.append("")
+                with open(selected_path, 'w', encoding='utf-8') as f:
+                    f.write("\n".join(lines))
+        except OSError as exc:
+            QtWidgets.QMessageBox.warning(
+                self.main,
+                self.main.tr("Export Translations"),
+                self.main.tr("Could not write the export file.\n\n{error}").format(error=str(exc)),
+            )
+            return
+
+        MMessage.success(
+            self.main.tr("Translations exported to {0}").format(selected_path),
+            parent=self.main,
+        )
+
     def export_to_psd_dialog(self):
         if not self.main.image_files:
             return
@@ -1469,6 +1545,16 @@ class ProjectController:
             self.main.set_font(saved_font_family)
         else:
             self.main.font_dropdown.setCurrentText('')
+
+        # Per-text-type fonts (speech bubble vs free text)
+        bubble_font = settings.value('bubble_font_family', '')
+        free_font = settings.value('free_font_family', '')
+        settings_ui = self.main.settings_page.ui
+        settings_ui.per_class_fonts_checkbox.setChecked(bool(bubble_font or free_font))
+        if bubble_font:
+            settings_ui.bubble_font_combo.setCurrentText(bubble_font)
+        if free_font:
+            settings_ui.free_font_combo.setCurrentText(free_font)
         min_font_size = settings.value('min_font_size', 5)  # Default value is 5
         max_font_size = settings.value('max_font_size', 40) # Default value is 40
         self.main.settings_page.ui.min_font_spinbox.setValue(int(min_font_size))

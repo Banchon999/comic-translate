@@ -32,6 +32,17 @@ class TextRenderingSettings:
     underline: bool
     line_spacing: str
     direction: Qt.LayoutDirection
+    # Optional per-text-type fonts; empty string falls back to font_family
+    bubble_font_family: str = ""
+    free_font_family: str = ""
+
+
+def font_family_for_block(render_settings: TextRenderingSettings, blk) -> str:
+    """Pick the font for a block: speech bubbles and free text (SFX,
+    narration) can use different fonts, falling back to the main font."""
+    if getattr(blk, "text_class", "") == "text_bubble":
+        return render_settings.bubble_font_family or render_settings.font_family
+    return render_settings.free_font_family or render_settings.font_family
 
 def array_to_pil(rgb_image: np.ndarray):
     # Image is already in RGB format, just convert to PIL
@@ -113,6 +124,53 @@ def _wrap_text_greedily(text: str, measure_side, max_side: float) -> str:
 
     return "\n".join(lines)
 
+# Thai marks that must stay attached to the preceding character when breaking
+# lines: above/below vowels, tone marks, thanthakhat, nikhahit, and sara am.
+_THAI_ATTACHED_MARKS = frozenset(
+    "ัำิีึืฺุู"
+    "็่้๊๋์ํ๎"
+)
+# Leading vowels (เ แ โ ใ ไ) must never be separated from the character after them.
+_THAI_LEADING_VOWELS = frozenset("เแโใไ")
+
+
+def _contains_thai(text: str) -> bool:
+    return any("฀" <= char <= "๿" for char in text)
+
+
+def _thai_safe_clusters(text: str) -> List[str]:
+    """Split text into the smallest chunks that are safe to break between:
+    combining marks stay with their base and leading vowels stay with the
+    next character."""
+    clusters: List[str] = []
+    for char in text:
+        if clusters and (
+            char in _THAI_ATTACHED_MARKS
+            or clusters[-1][-1] in _THAI_LEADING_VOWELS
+        ):
+            clusters[-1] += char
+        else:
+            clusters.append(char)
+    return clusters
+
+
+def _segment_no_space_paragraph(paragraph: str) -> List[str]:
+    """Split a paragraph into wrap tokens for languages without word spaces.
+
+    Thai keeps its spaces (they separate phrases/sentences) and prefers
+    dictionary word boundaries via pythainlp when installed, falling back
+    to break-safe character clusters. Chinese/Japanese keep the previous
+    behavior: one character per token with spaces dropped.
+    """
+    if _contains_thai(paragraph):
+        try:
+            from pythainlp import word_tokenize  # optional dependency
+            return [token for token in word_tokenize(paragraph, keep_whitespace=True) if token]
+        except Exception:
+            return _thai_safe_clusters(paragraph)
+    return [char for char in paragraph if char != " "]
+
+
 def _wrap_no_space_text_greedily(text: str, measure_side, max_side: float) -> str:
     """Greedy wrapping for languages that do not rely on spaces between words."""
 
@@ -120,26 +178,45 @@ def _wrap_no_space_text_greedily(text: str, measure_side, max_side: float) -> st
     wrapped_paragraphs: List[str] = []
 
     for paragraph in paragraphs:
-        chars = [char for char in paragraph if char != " "]
-        if not chars:
+        tokens = _segment_no_space_paragraph(paragraph)
+        if not tokens:
             wrapped_paragraphs.append("")
             continue
 
         lines: List[str] = []
         line = ""
 
-        for char in chars:
-            candidate = f"{line}{char}"
+        def break_line():
+            nonlocal line
+            stripped = line.rstrip()
+            if stripped:
+                lines.append(stripped)
+            line = ""
+
+        for token in tokens:
+            candidate = f"{line}{token}"
             if not line or measure_side(candidate) <= max_side:
                 line = candidate
                 continue
 
-            lines.append(line)
-            line = char
+            # A whole token (e.g. a segmented Thai word) doesn't fit on a
+            # fresh line either: fall back to break-safe clusters within it.
+            pieces = (
+                _thai_safe_clusters(token)
+                if len(token) > 1 and measure_side(token) > max_side
+                else [token]
+            )
+            break_line()
+            for piece in pieces:
+                candidate = f"{line}{piece}"
+                if not line or measure_side(candidate) <= max_side:
+                    line = candidate
+                else:
+                    break_line()
+                    line = piece
+            line = line.lstrip()
 
-        if line:
-            lines.append(line)
-
+        break_line()
         wrapped_paragraphs.append("\n".join(lines))
 
     return "\n".join(wrapped_paragraphs)
@@ -445,6 +522,7 @@ def manual_wrap(
     
     target_lang = main_page.lang_mapping.get(main_page.t_combo.currentText(), None)
     trg_lng_cd = get_language_code(target_lang)
+    render_settings = main_page.render_settings()
 
     for blk in blk_list:
         x1, y1, width, height = blk.xywh
@@ -454,11 +532,12 @@ def manual_wrap(
             continue
 
         vertical = is_vertical_block(blk, trg_lng_cd)
+        blk_font_family = font_family_for_block(render_settings, blk) or font_family
 
         translation, font_size = pyside_word_wrap(
-            translation, 
-            font_family, 
-            width, 
+            translation,
+            blk_font_family,
+            width,
             height,
             line_spacing, 
             outline_width, 

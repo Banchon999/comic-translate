@@ -1,4 +1,5 @@
 ﻿import os
+import importlib.util
 from PySide6 import QtWidgets
 from PySide6 import QtCore
 
@@ -54,13 +55,19 @@ class SettingsPageUI(QtWidgets.QWidget):
 
         self.credential_widgets = {}
 
-        self.inpainters = ['LaMa', 'AOT']
+        self.inpainters = ['LaMa', 'AOT', 'Smart Fill']
         self.detectors = ['RT-DETR-v2', 'RT-DETR-v2 + Bubble Seg']
         self.ocr_engines = [
-            self.tr("Default"), 
-            self.tr('Microsoft OCR'), 
-            self.tr('Gemini-2.5-Flash-Lite'), 
+            self.tr("Default"),
+            'PaddleOCR',
+            'PaddleOCR (Server)',
+            'Pororo (Korean)',
+            self.tr('Microsoft OCR'),
+            self.tr('Gemini-2.5-Flash-Lite'),
         ]
+        # EasyOCR is an optional torch-based dependency; only offer it when installed
+        if importlib.util.find_spec("easyocr") is not None:
+            self.ocr_engines.insert(4, 'EasyOCR')
         self.inpaint_strategy = [self.tr('Resize'), self.tr('Original'), self.tr('Crop')]
         self.themes = [self.tr('Dark'), self.tr('Light')]
         self.alignment = [self.tr("Left"), self.tr("Center"), self.tr("Right")]
@@ -130,10 +137,15 @@ class SettingsPageUI(QtWidgets.QWidget):
             self.tr("Default"): "Default",
             self.tr("Microsoft OCR"): "Microsoft OCR",
             self.tr("Google Cloud Vision"): "Google Cloud Vision",
+            "PaddleOCR": "PaddleOCR",
+            "PaddleOCR (Server)": "PaddleOCR (Server)",
+            "Pororo (Korean)": "Pororo (Korean)",
+            "EasyOCR": "EasyOCR",
 
             # Inpainter mappings
             "LaMa": "LaMa",
             "AOT": "AOT",
+            "Smart Fill": "Smart Fill",
 
             # Detector mappings
             "RT-DETR-v2": "RT-DETR-v2",
@@ -231,6 +243,9 @@ class SettingsPageUI(QtWidgets.QWidget):
         self.max_font_spinbox = self.text_rendering_page.max_font_spinbox
         self.font_browser = self.text_rendering_page.font_browser
         self.uppercase_checkbox = self.text_rendering_page.uppercase_checkbox
+        self.per_class_fonts_checkbox = self.text_rendering_page.per_class_fonts_checkbox
+        self.bubble_font_combo = self.text_rendering_page.bubble_font_combo
+        self.free_font_combo = self.text_rendering_page.free_font_combo
 
         # Export
         self.raw_text_checkbox = self.export_page.raw_text_checkbox

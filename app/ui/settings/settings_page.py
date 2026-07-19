@@ -98,6 +98,68 @@ class SettingsPage(QtWidgets.QWidget):
         self.ui.check_update_button.clicked.connect(self.check_for_updates)
         self._sync_extra_context_limit(self.ui.translator_combo.currentText())
 
+        # Autosave settings shortly after any change so nothing is lost if
+        # the app never reaches a clean closeEvent (crash, force-quit).
+        self._settings_autosave_timer = QTimer(self)
+        self._settings_autosave_timer.setSingleShot(True)
+        self._settings_autosave_timer.setInterval(1500)
+        self._settings_autosave_timer.timeout.connect(self._autosave_settings)
+        self._connect_settings_autosave()
+
+    def _connect_settings_autosave(self):
+        ui = self.ui
+        combos = [
+            ui.lang_combo, ui.theme_combo, ui.translator_combo, ui.ocr_combo,
+            ui.detector_combo, ui.inpainter_combo, ui.inpaint_strategy_combo,
+        ]
+        for combo in combos:
+            combo.currentTextChanged.connect(self._mark_settings_dirty)
+
+        checkboxes = [
+            ui.use_gpu_checkbox, ui.save_keys_checkbox, ui.image_checkbox,
+            ui.uppercase_checkbox, ui.raw_text_checkbox,
+            ui.translated_text_checkbox, ui.inpainted_image_checkbox,
+            ui.per_class_fonts_checkbox,
+        ]
+        for checkbox in checkboxes:
+            checkbox.stateChanged.connect(self._mark_settings_dirty)
+
+        ui.bubble_font_combo.currentTextChanged.connect(self._mark_settings_dirty)
+        ui.free_font_combo.currentTextChanged.connect(self._mark_settings_dirty)
+
+        spinboxes = [
+            ui.resize_spinbox, ui.crop_margin_spinbox, ui.crop_trigger_spinbox,
+            ui.min_font_spinbox, ui.max_font_spinbox,
+            ui.project_autosave_interval_spinbox,
+        ]
+        for spinbox in spinboxes:
+            spinbox.valueChanged.connect(self._mark_settings_dirty)
+
+        ui.extra_context.textChanged.connect(self._mark_settings_dirty)
+        ui.project_autosave_folder_input.textChanged.connect(self._mark_settings_dirty)
+        for widget in ui.credential_widgets.values():
+            widget.textChanged.connect(self._mark_settings_dirty)
+
+    def _mark_settings_dirty(self, *args):
+        if getattr(self, "_loading_settings", False):
+            return
+        self._settings_autosave_timer.start()
+
+    def _autosave_settings(self):
+        try:
+            self.save_settings()
+        except Exception:
+            logger.exception("Failed to autosave settings")
+        # Also persist main-page state (fonts, colors, languages) so those
+        # survive crashes too.
+        try:
+            owner = self.window()
+            project_ctrl = getattr(owner, 'project_ctrl', None)
+            if project_ctrl is not None:
+                project_ctrl.save_main_page_settings()
+        except Exception:
+            logger.exception("Failed to autosave main page settings")
+
     def _sync_extra_context_limit(self, translator: str) -> None:
         normalized = self.ui.reverse_mappings.get(translator, translator)
         self.ui.llms_page.set_extra_context_unlimited(normalized in ("Custom", "OpenRouter"))
