@@ -11,6 +11,7 @@ from .personalization_page import PersonalizationPage
 from .tools_page import ToolsPage
 from .credentials_page import CredentialsPage
 from .llms_page import LlmsPage
+from .glossary_page import GlossaryPage
 from .text_rendering_page import TextRenderingPage
 from .project_page import ProjectPage
 from .export_page import ExportPage
@@ -54,7 +55,7 @@ class SettingsPageUI(QtWidgets.QWidget):
         self.credential_widgets = {}
 
         self.inpainters = ['LaMa', 'AOT']
-        self.detectors = ['RT-DETR-v2']
+        self.detectors = ['RT-DETR-v2', 'RT-DETR-v2 + Bubble Seg']
         self.ocr_engines = [
             self.tr("Default"), 
             self.tr('Microsoft OCR'), 
@@ -65,9 +66,10 @@ class SettingsPageUI(QtWidgets.QWidget):
         self.alignment = [self.tr("Left"), self.tr("Center"), self.tr("Right")]
 
         self.credential_services = [
-            self.tr("Custom"), 
+            self.tr("Custom"),
+            self.tr("OpenRouter"),
         ]
-        
+
         self.supported_translators = [
             self.tr("Gemini-3.1-Flash-Lite"),
             self.tr("GPT-4.1"),
@@ -75,6 +77,7 @@ class SettingsPageUI(QtWidgets.QWidget):
             self.tr("Claude-4.6-Sonnet"),
             self.tr("Claude-4.5-Haiku"),
             self.tr("Deepseek"),
+            self.tr("OpenRouter"),
             self.tr("Custom"),
         ]
         
@@ -111,6 +114,7 @@ class SettingsPageUI(QtWidgets.QWidget):
 
             # Translator mappings
             self.tr("Custom"): "Custom",
+            self.tr("OpenRouter"): "OpenRouter",
             self.tr("Deepseek"): "Deepseek",
             self.tr("GPT-4.1"): "GPT-4.1",
             self.tr("GPT-4.1-mini"): "GPT-4.1-mini",
@@ -133,6 +137,7 @@ class SettingsPageUI(QtWidgets.QWidget):
 
             # Detector mappings
             "RT-DETR-v2": "RT-DETR-v2",
+            "RT-DETR-v2 + Bubble Seg": "RT-DETR-v2 + Bubble Seg",
 
             # HD Strategy mappings
             self.tr("Resize"): "Resize",
@@ -189,6 +194,7 @@ class SettingsPageUI(QtWidgets.QWidget):
             parent=self,
         )
         self.llms_page = LlmsPage(parent=self)
+        self.glossary_page = GlossaryPage(parent=self)
         self.text_rendering_page = TextRenderingPage(parent=self)
         self.project_page = ProjectPage(parent=self)
         self.export_page = ExportPage(parent=self)
@@ -252,6 +258,7 @@ class SettingsPageUI(QtWidgets.QWidget):
         self.stacked_widget.addWidget(self.account_page)
         self.stacked_widget.addWidget(self.tools_page)
         self.stacked_widget.addWidget(self.llms_page)
+        self.stacked_widget.addWidget(self.glossary_page)
         self.stacked_widget.addWidget(self.text_rendering_page)
         self.stacked_widget.addWidget(self.project_page)
         self.stacked_widget.addWidget(self.export_page)
@@ -307,6 +314,7 @@ class SettingsPageUI(QtWidgets.QWidget):
             {"title": self.tr("Account"), "avatar": MPixmap(".svg")},
             {"title": self.tr("Tools"), "avatar": MPixmap(".svg")},
             {"title": self.tr("LLMs"), "avatar": MPixmap(".svg")},
+            {"title": self.tr("Glossary"), "avatar": MPixmap(".svg")},
             {"title": self.tr("Text Rendering"), "avatar": MPixmap(".svg")},
             {"title": self.tr("Project"), "avatar": MPixmap(".svg")},
             {"title": self.tr("Export"), "avatar": MPixmap(".svg")},

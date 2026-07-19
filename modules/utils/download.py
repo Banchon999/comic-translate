@@ -64,6 +64,7 @@ class ModelID(Enum):
     MIGAN_JIT = "migan-traced"
     RTDETR_V2_ONNX = "rtdetr-v2-onnx"
     RTDETR_INT8_ONNX = "rtdetr-int8-onnx"
+    SPEECH_BUBBLE_SEG_ONNX = "speech-bubble-seg-onnx"
     
     # PPOCRv5 Detection Models
     PPOCR_V5_DET_MOBILE = "ppocr-v5-det-mobile"
@@ -472,6 +473,18 @@ def _register_defaults():
         files=['detector-v4-s_int8.onnx'],
         sha256=['5fe9e4f576e49d4e7e8b0e029d6d3cdc252abd4694113e1cae120e62c931ea79'], 
         save_dir=os.path.join(models_base_dir, 'detection')
+    ))
+
+    # Speech bubble segmentation: YOLOv8m-seg ONNX
+    # (kitsumed/yolov8m_seg-speech-bubble; same weights as the candle
+    # conversion published as mayocream/speech-bubble-segmentation)
+    ModelDownloader.register(ModelSpec(
+        id=ModelID.SPEECH_BUBBLE_SEG_ONNX,
+        url='https://huggingface.co/kitsumed/yolov8m_seg-speech-bubble/resolve/main/',
+        files=['model_dynamic.onnx'],
+        sha256=['36c26bdefe150226acd9669772e9ff5a011fa0dd4622469b49d3d5e359f3251c'],
+        save_dir=os.path.join(models_base_dir, 'detection'),
+        save_as={'model_dynamic.onnx': 'speech-bubble-seg-yolov8m.onnx'}
     ))
 
     # PPOCRv5 Detection Models

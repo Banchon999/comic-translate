@@ -13,6 +13,7 @@ from modules.detection.processor import TextBlockDetector
 from modules.translation.processor import Translator
 from modules.utils.device import resolve_device
 from modules.utils.exceptions import InsufficientCreditsException
+from modules.utils.glossary import collect_source_text
 from modules.utils.image_utils import generate_mask
 from modules.utils.pipeline_config import get_config, get_inpainter_backend, inpaint_map
 from modules.utils.textblock import TextBlock, sort_blk_list
@@ -147,7 +148,9 @@ class ChunkMixin:
     ) -> None:
         if not blocks:
             return
-        extra_context = self.main_page.settings_page.get_llm_settings()["extra_context"]
+        extra_context = self.main_page.settings_page.get_extra_context(
+            collect_source_text(blocks)
+        )
         translator = Translator(self.main_page, source_lang, target_lang)
         try:
             translator.translate(blocks, image, extra_context)
