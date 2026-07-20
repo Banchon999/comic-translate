@@ -119,7 +119,7 @@ class SettingsPage(QtWidgets.QWidget):
             ui.use_gpu_checkbox, ui.save_keys_checkbox, ui.image_checkbox,
             ui.uppercase_checkbox, ui.raw_text_checkbox,
             ui.translated_text_checkbox, ui.inpainted_image_checkbox,
-            ui.per_class_fonts_checkbox,
+            ui.per_class_fonts_checkbox, ui.stitch_detection_checkbox,
         ]
         for checkbox in checkboxes:
             checkbox.stateChanged.connect(self._mark_settings_dirty)
@@ -131,6 +131,7 @@ class SettingsPage(QtWidgets.QWidget):
             ui.resize_spinbox, ui.crop_margin_spinbox, ui.crop_trigger_spinbox,
             ui.min_font_spinbox, ui.max_font_spinbox,
             ui.project_autosave_interval_spinbox,
+            ui.detector_conf_spinbox, ui.mask_padding_spinbox, ui.bubble_inset_spinbox,
         ]
         for spinbox in spinboxes:
             spinbox.valueChanged.connect(self._mark_settings_dirty)
@@ -186,6 +187,15 @@ class SettingsPage(QtWidgets.QWidget):
         if not is_gpu_available():
             return False
         return self.ui.use_gpu_checkbox.isChecked()
+
+    def get_detector_confidence(self) -> float:
+        return self.ui.detector_conf_spinbox.value() / 100.0
+
+    def get_mask_padding(self) -> int:
+        return int(self.ui.mask_padding_spinbox.value())
+
+    def get_bubble_inset(self) -> int:
+        return int(self.ui.bubble_inset_spinbox.value())
 
     def get_llm_settings(self):
         return {
@@ -286,6 +296,10 @@ class SettingsPage(QtWidgets.QWidget):
                 'detector': self.get_tool_selection('detector'),
                 'inpainter': self.get_tool_selection('inpainter'),
                 'use_gpu': self.is_gpu_enabled(),
+                'detector_confidence': int(self.ui.detector_conf_spinbox.value()),
+                'mask_padding': self.get_mask_padding(),
+                'bubble_inset': self.get_bubble_inset(),
+                'stitch_detection': self.ui.stitch_detection_checkbox.isChecked(),
                 'hd_strategy': self.get_hd_strategy_settings()
             },
             'llm': self.get_llm_settings(),
@@ -445,6 +459,11 @@ class SettingsPage(QtWidgets.QWidget):
             self.ui.use_gpu_checkbox.setChecked(settings.value('use_gpu', False, type=bool))
         else:
             self.ui.use_gpu_checkbox.setChecked(False)
+
+        self.ui.detector_conf_spinbox.setValue(settings.value('detector_confidence', 30, type=int))
+        self.ui.mask_padding_spinbox.setValue(settings.value('mask_padding', 5, type=int))
+        self.ui.bubble_inset_spinbox.setValue(settings.value('bubble_inset', 5, type=int))
+        self.ui.stitch_detection_checkbox.setChecked(settings.value('stitch_detection', False, type=bool))
 
         # Load HD strategy settings
         settings.beginGroup('hd_strategy')

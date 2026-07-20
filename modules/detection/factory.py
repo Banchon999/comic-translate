@@ -33,7 +33,8 @@ class DetectionEngineFactory:
 
         # build cache key
         device = resolve_device(settings.is_gpu_enabled(), effective_backend)
-        cache_key = f"{model_name}_{effective_backend}_{device}"
+        confidence = cls._get_confidence(settings)
+        cache_key = f"{model_name}_{effective_backend}_{device}_{confidence}"
 
         # Return cached engine if available
         if cache_key in cls._engines:
@@ -59,26 +60,35 @@ class DetectionEngineFactory:
         return resolve_detection_backend(backend)
 
     @staticmethod
-    def _create_rtdetr_v2_bubble_seg(settings, backend: str = 'onnx'):
+    def _get_confidence(settings) -> float:
+        getter = getattr(settings, 'get_detector_confidence', None)
+        try:
+            return float(getter()) if callable(getter) else 0.3
+        except Exception:
+            return 0.3
+
+    @classmethod
+    def _create_rtdetr_v2_bubble_seg(cls, settings, backend: str = 'onnx'):
         """Create RT-DETR-v2 text detection paired with dedicated
         YOLOv8m-seg speech bubble segmentation (ONNX only)."""
         device = resolve_device(settings.is_gpu_enabled(), 'onnx')
         engine = RTDetrV2BubbleSegDetection(settings)
-        engine.initialize(device=device)
+        engine.initialize(device=device, confidence_threshold=cls._get_confidence(settings))
         return engine
 
-    @staticmethod
-    def _create_rtdetr_v2(settings, backend: str = 'onnx'):
+    @classmethod
+    def _create_rtdetr_v2(cls, settings, backend: str = 'onnx'):
         """Create and initialize RT-DETR-v2 detection engine."""
         device = resolve_device(settings.is_gpu_enabled(), backend)
-        
+        confidence = cls._get_confidence(settings)
+
         if backend.lower() == 'torch' and torch_available():
             from .rtdetr_v2 import RTDetrV2Detection
             engine = RTDetrV2Detection(settings)
-            engine.initialize(device=device)
+            engine.initialize(device=device, confidence_threshold=confidence)
         else:
             engine = RTDetrV2ONNXDetection(settings)
-            engine.initialize(device=device)
-        
+            engine.initialize(device=device, confidence_threshold=confidence)
+
         return engine
     
