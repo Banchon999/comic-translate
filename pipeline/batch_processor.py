@@ -164,6 +164,29 @@ class BatchProcessor:
             blk.text = cached_text
         return True
 
+    def _ensure_detector(self, settings_page) -> None:
+        if self.block_detection.block_detector_cache is None:
+            self.block_detection.block_detector_cache = TextBlockDetector(settings_page)
+
+    def _ocr_with_cache(self, image, blk_list, source_lang, settings_page) -> bool:
+        """OCR blk_list in place, reusing cached results when available.
+
+        Returns True when cached results were reused instead of running OCR.
+        Shared by the main batch loop and the glossary pre-pass so both stay
+        in sync and OCR is never paid for twice on the same page.
+        """
+        ocr_model = settings_page.get_tool_selection('ocr')
+        device = resolve_device(settings_page.is_gpu_enabled())
+        cache_key = self.cache_manager._get_ocr_cache_key(image, source_lang, ocr_model, device)
+
+        self.ocr_handler.ocr.initialize(self.main_page, source_lang)
+        if self.cache_manager._is_ocr_cached(cache_key) and self._apply_cached_ocr(cache_key, blk_list):
+            return True
+
+        self.ocr_handler.ocr.process(image, blk_list)
+        self.cache_manager._cache_ocr_results(cache_key, blk_list)
+        return False
+
     def _glossary_prepass(self, image_list: List[str]) -> None:
         """Optional batch phase A: OCR every page and extract a glossary from
         the collected text BEFORE any translation happens, so page 1 already
@@ -196,24 +219,15 @@ class BatchProcessor:
             ensure_path_materialized(image_path)
             image = imk.read_image(image_path)
 
-            if self.block_detection.block_detector_cache is None:
-                self.block_detection.block_detector_cache = TextBlockDetector(settings_page)
+            self._ensure_detector(settings_page)
             blk_list = self._detect_blocks_for_batch(image_list, index, image)
             if not blk_list:
                 continue
             self.block_detection.annotate_language_if_auto(image, blk_list, source_lang)
 
-            ocr_model = settings_page.get_tool_selection('ocr')
-            device = resolve_device(settings_page.is_gpu_enabled())
-            cache_key = self.cache_manager._get_ocr_cache_key(image, source_lang, ocr_model, device)
-
             self.emit_progress(index, total, 2, 10, False)
             try:
-                if not (self.cache_manager._is_ocr_cached(cache_key)
-                        and self._apply_cached_ocr(cache_key, blk_list)):
-                    self.ocr_handler.ocr.initialize(self.main_page, source_lang)
-                    self.ocr_handler.ocr.process(image, blk_list)
-                    self.cache_manager._cache_ocr_results(cache_key, blk_list)
+                self._ocr_with_cache(image, blk_list, source_lang, settings_page)
             except InsufficientCreditsException:
                 raise
             except Exception:
@@ -309,8 +323,7 @@ class BatchProcessor:
                 return
 
             # Use the shared block detector from the handler
-            if self.block_detection.block_detector_cache is None:
-                self.block_detection.block_detector_cache = TextBlockDetector(settings_page)
+            self._ensure_detector(settings_page)
 
             blk_list = self._detect_blocks_for_batch(image_list, index, image)
 
@@ -321,24 +334,13 @@ class BatchProcessor:
             self.block_detection.annotate_language_if_auto(image, blk_list, source_lang)
 
             if blk_list:
-                # Get ocr cache key for batch processing
-                ocr_model = settings_page.get_tool_selection('ocr')
-                device = resolve_device(settings_page.is_gpu_enabled())
-                cache_key = self.cache_manager._get_ocr_cache_key(image, source_lang, ocr_model, device)
                 # Use the shared OCR processor from the handler
-                self.ocr_handler.ocr.initialize(self.main_page, source_lang)
                 try:
-                    if (self.cache_manager._is_ocr_cached(cache_key)
-                            and self._apply_cached_ocr(cache_key, blk_list)):
+                    if self._ocr_with_cache(image, blk_list, source_lang, settings_page):
                         logger.info("Using cached OCR results for %s", image_path)
-                    else:
-                        self.ocr_handler.ocr.process(image, blk_list)
-                        # Cache the OCR results so re-runs (and the glossary
-                        # pre-pass handoff) don't pay for OCR again
-                        self.cache_manager._cache_ocr_results(cache_key, blk_list)
                     rtl = True if source_lang == 'Japanese' else False
                     blk_list = sort_blk_list(blk_list, rtl)
-                    
+
                 except InsufficientCreditsException:
                     raise
                 except Exception as e:
