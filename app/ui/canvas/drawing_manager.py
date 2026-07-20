@@ -219,6 +219,7 @@ class DrawingManager:
 
     def load_brush_strokes(self, strokes: List[Dict]):
         self.clear_brush_strokes(page_switch=True)
+        strokes_visible = self.viewer.layer_visibility.get('strokes', True)
         for stroke in reversed(strokes):
             pen = QPen()
             pen.setColor(QColor(stroke['pen']))
@@ -228,9 +229,10 @@ class DrawingManager:
             pen.setJoinStyle(Qt.RoundJoin)
             brush = QBrush(QColor(stroke['brush']))
             if brush.color() == QColor("#80ff0000"):
-                self._scene.addPath(stroke['path'], pen, brush)
+                path_item = self._scene.addPath(stroke['path'], pen, brush)
             else:
-                self._scene.addPath(stroke['path'], pen)
+                path_item = self._scene.addPath(stroke['path'], pen)
+            path_item.setVisible(strokes_visible)
                 
     def clear_brush_strokes(self, page_switch=False):
         if page_switch:      

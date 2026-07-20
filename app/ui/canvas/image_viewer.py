@@ -73,6 +73,9 @@ class ImageViewer(QGraphicsView):
         self.rectangles: list[MoveableRectItem] = []
         self.text_items: list[TextBlockItem] = []
         self.selected_rect: MoveableRectItem = None
+
+        # Layer visibility: each pipeline stage's output can be hidden while editing
+        self.layer_visibility = {'boxes': True, 'strokes': True, 'patches': True, 'text': True}
         
         # Box drawing state
         self.start_point: QPointF = None
@@ -83,6 +86,31 @@ class ImageViewer(QGraphicsView):
     def webtoon_mode(self):
         """Read-only proxy to check if webtoon mode is active."""
         return self.webtoon_manager.is_active()
+
+    # Layer visibility
+
+    def set_layer_visibility(self, layer: str, visible: bool) -> None:
+        if layer not in self.layer_visibility:
+            return
+        self.layer_visibility[layer] = bool(visible)
+        self.apply_layer_visibility()
+
+    def apply_layer_visibility(self) -> None:
+        """Apply the current layer toggles to every item in the scene."""
+        visibility = self.layer_visibility
+        for item in self._scene.items():
+            if isinstance(item, MoveableRectItem):
+                item.setVisible(visibility['boxes'])
+            elif isinstance(item, TextBlockItem):
+                item.setVisible(visibility['text'])
+            elif isinstance(item, QtWidgets.QGraphicsPathItem) and item is not self.photo:
+                item.setVisible(visibility['strokes'])
+            elif (
+                isinstance(item, QGraphicsPixmapItem)
+                and item is not self.photo
+                and item.data(0) is not None  # inpaint patch items carry a hash key
+            ):
+                item.setVisible(visibility['patches'])
 
     # Public API
     def hasPhoto(self) -> bool:
@@ -350,6 +378,8 @@ class ImageViewer(QGraphicsView):
             self.empty = True
             self.photo.setPixmap(QtGui.QPixmap())
         self.zoom = 0
+        # Re-assert layer toggles for items restored by page loads
+        self.apply_layer_visibility()
 
     def get_mask_for_inpainting(self):
         mask = self.drawing_manager.generate_mask_from_strokes()
@@ -358,6 +388,7 @@ class ImageViewer(QGraphicsView):
     def create_rect_item(self, rect: QRectF, scene_pos: QPointF = None) -> MoveableRectItem:
         rect_item = MoveableRectItem(rect, None)
         self._scene.addItem(rect_item)
+        rect_item.setVisible(self.layer_visibility['boxes'])
         return rect_item
 
     def add_rectangle(self, rect: QRectF, position: QPointF, rotation: float = 0, origin: QPointF = None) -> MoveableRectItem:
@@ -430,10 +461,11 @@ class ImageViewer(QGraphicsView):
         # Add to scene and track
         self._scene.addItem(item)
         self.text_items.append(item)
-        
+        item.setVisible(self.layer_visibility['text'])
+
         # Emit the connect signal for the text item
         self.connect_text_item.emit(item)
-        
+
         return item
 
     def get_selected_text_items(self) -> list[TextBlockItem]:

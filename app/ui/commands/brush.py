@@ -15,6 +15,7 @@ class BrushStrokeCommand(QUndoCommand, PathCommandBase):
         if not self.find_matching_item(self.scene, self.properties):
             path_item = self.create_path_item(self.properties)
             self.scene.addItem(path_item)
+            path_item.setVisible(self.viewer.layer_visibility.get('strokes', True))
             self.scene.update()
 
     def undo(self):
@@ -35,6 +36,7 @@ class SegmentBoxesCommand(QUndoCommand, PathCommandBase):
             if not self.find_matching_item(self.scene, properties):
                 path_item = self.create_path_item(properties)
                 self.scene.addItem(path_item)
+                path_item.setVisible(self.viewer.layer_visibility.get('strokes', True))
         self.scene.update()
 
     def undo(self):
@@ -63,6 +65,7 @@ class ClearBrushStrokesCommand(QUndoCommand, PathCommandBase):
         for properties in self.properties_list:
             path_item = self.create_path_item(properties)
             self.scene.addItem(path_item)
+            path_item.setVisible(self.viewer.layer_visibility.get('strokes', True))
         self.scene.update()
         
 class EraseUndoCommand(QUndoCommand, PathCommandBase):
@@ -156,6 +159,7 @@ class EraseUndoCommand(QUndoCommand, PathCommandBase):
                 path_item = self.create_path_item(properties)
                 if path_item:  # Only add if creation was successful
                     self.scene.addItem(path_item)
+                    path_item.setVisible(self.viewer.layer_visibility.get('strokes', True))
             except Exception as e:
                 print(f"Warning: Failed to create path item during undo/redo: {e}")
                 continue

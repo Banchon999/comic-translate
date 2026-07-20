@@ -183,6 +183,16 @@ class ComicTranslate(ComicTranslateUI):
         # Webtoon mode toggle
         self.webtoon_toggle.clicked.connect(self.webtoon_ctrl.toggle_webtoon_mode)
 
+        # Layer visibility toggles
+        self.layer_boxes_checkbox.toggled.connect(
+            lambda visible: self.image_viewer.set_layer_visibility('boxes', visible))
+        self.layer_strokes_checkbox.toggled.connect(
+            lambda visible: self.image_viewer.set_layer_visibility('strokes', visible))
+        self.layer_patches_checkbox.toggled.connect(
+            lambda visible: self.image_viewer.set_layer_visibility('patches', visible))
+        self.layer_text_checkbox.toggled.connect(
+            lambda visible: self.image_viewer.set_layer_visibility('text', visible))
+
         # Connect buttons from button_groups
         self.hbutton_group.get_button_group().buttons()[0].clicked.connect(lambda: self.block_detect())
         self.hbutton_group.get_button_group().buttons()[1].clicked.connect(self.ocr)
