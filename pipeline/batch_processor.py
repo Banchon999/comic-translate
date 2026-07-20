@@ -7,6 +7,7 @@ import logging
 import traceback
 import imkit as imk
 import time
+import numpy as np
 from typing import TYPE_CHECKING
 from datetime import datetime
 from typing import List
@@ -85,6 +86,165 @@ class BatchProcessor:
         worker = getattr(self.main_page, "current_worker", None)
         return bool(worker and worker.is_cancelled)
 
+    def _neighbor_context(self, image_list: List[str], idx: int, width: int, tail: bool):
+        """A slice of the previous/next page used as detection context.
+
+        Only pages with the same width participate (long-strip chapters cut
+        into pieces); unrelated page sizes return None.
+        """
+        if idx < 0 or idx >= len(image_list):
+            return None
+        try:
+            ensure_path_materialized(image_list[idx])
+            neighbor = imk.read_image(image_list[idx])
+        except Exception:
+            return None
+        if neighbor is None or neighbor.ndim != 3 or neighbor.shape[1] != width:
+            return None
+        context_height = min(neighbor.shape[0], max(256, width // 2))
+        return neighbor[-context_height:] if tail else neighbor[:context_height]
+
+    @staticmethod
+    def _shift_block_vertical(blk, dy: float, page_height: int) -> None:
+        """Move a block detected on a stitched canvas back into page space."""
+        def shift_box(box):
+            if box is None or len(box) < 4:
+                return box
+            x1, y1, x2, y2 = [float(v) for v in box[:4]]
+            y1 = min(max(y1 - dy, 0.0), float(page_height))
+            y2 = min(max(y2 - dy, 0.0), float(page_height))
+            return np.array([x1, y1, x2, y2])
+
+        blk.xyxy = shift_box(blk.xyxy)
+        if getattr(blk, 'bubble_xyxy', None) is not None:
+            blk.bubble_xyxy = shift_box(blk.bubble_xyxy)
+        if getattr(blk, 'lines', None):
+            shifted_lines = []
+            for line in blk.lines:
+                shifted = shift_box(line)
+                if shifted is not None and shifted[3] - shifted[1] > 2:
+                    shifted_lines.append([int(v) for v in shifted])
+            blk.lines = shifted_lines or None
+
+    def _detect_blocks_for_batch(self, image_list: List[str], index: int, image: np.ndarray):
+        """Detect blocks, optionally stitching neighbor-page context above and
+        below so text cut off at page boundaries is still detected."""
+        detector = self.block_detection.block_detector_cache
+        settings_ui = self.main_page.settings_page.ui
+        if not getattr(settings_ui, 'stitch_detection_checkbox', None) \
+                or not settings_ui.stitch_detection_checkbox.isChecked():
+            return detector.detect(image)
+
+        height, width = image.shape[:2]
+        top_context = self._neighbor_context(image_list, index - 1, width, tail=True)
+        bottom_context = self._neighbor_context(image_list, index + 1, width, tail=False)
+        if top_context is None and bottom_context is None:
+            return detector.detect(image)
+
+        parts = [part for part in (top_context, image, bottom_context) if part is not None]
+        canvas = np.ascontiguousarray(np.vstack(parts))
+        offset = top_context.shape[0] if top_context is not None else 0
+
+        kept = []
+        for blk in detector.detect(canvas):
+            if blk.xyxy is None or len(blk.xyxy) < 4:
+                continue
+            center_y = (float(blk.xyxy[1]) + float(blk.xyxy[3])) / 2 - offset
+            if 0 <= center_y < height:
+                self._shift_block_vertical(blk, offset, height)
+                kept.append(blk)
+        return kept
+
+    def _apply_cached_ocr(self, cache_key, blk_list) -> bool:
+        """Fill block texts from the OCR cache; True when every block was found."""
+        for blk in blk_list:
+            cached_text = self.cache_manager._get_cached_text_for_block(cache_key, blk)
+            if cached_text is None:
+                return False
+            blk.text = cached_text
+        return True
+
+    def _glossary_prepass(self, image_list: List[str]) -> None:
+        """Optional batch phase A: OCR every page and extract a glossary from
+        the collected text BEFORE any translation happens, so page 1 already
+        benefits from terms that only appear later in the chapter.
+
+        OCR results are cached, so phase B (translation) does not pay for
+        OCR twice.
+        """
+        from modules.utils.glossary_extractor import extract_glossary_terms
+
+        settings_page = self.main_page.settings_page
+        glossary_page = getattr(settings_page.ui, 'glossary_page', None)
+        manager = glossary_page.manager if glossary_page is not None else None
+        if manager is None or not manager.enabled or not manager.batch_extract:
+            return
+
+        logger.info("Glossary pre-pass: running detection + OCR on %d images", len(image_list))
+        collected_texts: List[str] = []
+        total = len(image_list)
+
+        for index, image_path in enumerate(image_list):
+            if self._is_cancelled():
+                return
+            state = self.main_page.image_states.get(image_path, {})
+            if state.get('skip', False):
+                continue
+            source_lang = state.get('source_lang', '')
+
+            self.emit_progress(index, total, 1, 10, True)
+            ensure_path_materialized(image_path)
+            image = imk.read_image(image_path)
+
+            if self.block_detection.block_detector_cache is None:
+                self.block_detection.block_detector_cache = TextBlockDetector(settings_page)
+            blk_list = self._detect_blocks_for_batch(image_list, index, image)
+            if not blk_list:
+                continue
+            self.block_detection.annotate_language_if_auto(image, blk_list, source_lang)
+
+            ocr_model = settings_page.get_tool_selection('ocr')
+            device = resolve_device(settings_page.is_gpu_enabled())
+            cache_key = self.cache_manager._get_ocr_cache_key(image, source_lang, ocr_model, device)
+
+            self.emit_progress(index, total, 2, 10, False)
+            try:
+                if not (self.cache_manager._is_ocr_cached(cache_key)
+                        and self._apply_cached_ocr(cache_key, blk_list)):
+                    self.ocr_handler.ocr.initialize(self.main_page, source_lang)
+                    self.ocr_handler.ocr.process(image, blk_list)
+                    self.cache_manager._cache_ocr_results(cache_key, blk_list)
+            except InsufficientCreditsException:
+                raise
+            except Exception:
+                logger.exception("Glossary pre-pass OCR failed for %s; continuing", image_path)
+                continue
+
+            collected_texts.extend(
+                blk.text for blk in blk_list if getattr(blk, 'text', '')
+            )
+
+        if not collected_texts:
+            logger.info("Glossary pre-pass: no text collected, skipping extraction")
+            return
+
+        text_blob = "\n".join(collected_texts)[:60000]
+        existing_sources = {entry.source for entry in manager.entries}
+        try:
+            entries = extract_glossary_terms(self.main_page, text_blob, existing_sources)
+        except InsufficientCreditsException:
+            raise
+        except Exception:
+            logger.exception("Glossary pre-pass extraction failed; translating without new terms")
+            return
+
+        for entry in entries:
+            manager.upsert(entry, save=False)
+        if entries:
+            manager.save()
+        logger.info("Glossary pre-pass: added %d new terms to '%s'",
+                    len(entries), manager.active_profile)
+
     def batch_process(self, selected_paths: List[str] = None):
         timestamp = datetime.now().strftime("%b-%d-%Y_%I-%M-%S%p")
         image_list = selected_paths if selected_paths is not None else self.main_page.image_files
@@ -95,6 +255,14 @@ class BatchProcessor:
                 logger.info("Batch pre-materialized %d paths before full-run processing.", count)
         except Exception:
             logger.debug("Batch pre-materialization failed; continuing lazily.", exc_info=True)
+
+        # Phase A (optional): OCR everything and extract the glossary first
+        try:
+            self._glossary_prepass(image_list)
+        except InsufficientCreditsException:
+            raise
+        except Exception:
+            logger.exception("Glossary pre-pass failed; continuing with normal batch")
 
         for index, image_path in enumerate(image_list):
             if self._is_cancelled():
@@ -143,8 +311,8 @@ class BatchProcessor:
             # Use the shared block detector from the handler
             if self.block_detection.block_detector_cache is None:
                 self.block_detection.block_detector_cache = TextBlockDetector(settings_page)
-            
-            blk_list = self.block_detection.block_detector_cache.detect(image)
+
+            blk_list = self._detect_blocks_for_batch(image_list, index, image)
 
             self.emit_progress(index, total_images, 2, 10, False)
             if self._is_cancelled():
@@ -160,9 +328,14 @@ class BatchProcessor:
                 # Use the shared OCR processor from the handler
                 self.ocr_handler.ocr.initialize(self.main_page, source_lang)
                 try:
-                    self.ocr_handler.ocr.process(image, blk_list)
-                    # Cache the OCR results for potential future use
-                    self.cache_manager._cache_ocr_results(cache_key, self.main_page.blk_list)
+                    if (self.cache_manager._is_ocr_cached(cache_key)
+                            and self._apply_cached_ocr(cache_key, blk_list)):
+                        logger.info("Using cached OCR results for %s", image_path)
+                    else:
+                        self.ocr_handler.ocr.process(image, blk_list)
+                        # Cache the OCR results so re-runs (and the glossary
+                        # pre-pass handoff) don't pay for OCR again
+                        self.cache_manager._cache_ocr_results(cache_key, blk_list)
                     rtl = True if source_lang == 'Japanese' else False
                     blk_list = sort_blk_list(blk_list, rtl)
                     
@@ -320,7 +493,11 @@ class BatchProcessor:
             
             logger.info("pre-inpaint: generating mask (inpaint_blk_list=%d blocks out of %d)", len(inpaint_blk_list), len(blk_list))
             t0 = time.time()
-            mask = generate_mask(image, inpaint_blk_list)
+            mask = generate_mask(
+                image, inpaint_blk_list,
+                default_padding=settings_page.get_mask_padding(),
+                bubble_inset=settings_page.get_bubble_inset(),
+            )
             t1 = time.time()
             logger.info("pre-inpaint: mask generated in %.2fs (mask shape=%s)", t1 - t0, getattr(mask, 'shape', None))
 

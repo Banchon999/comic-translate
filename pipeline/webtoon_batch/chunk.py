@@ -206,7 +206,12 @@ class ChunkMixin:
             mask_blocks.append(mask_block)
         if not mask_blocks:
             return None, None
-        mask = generate_mask(image, mask_blocks)
+        settings_page = self.main_page.settings_page
+        mask = generate_mask(
+            image, mask_blocks,
+            default_padding=settings_page.get_mask_padding(),
+            bubble_inset=settings_page.get_bubble_inset(),
+        )
         if mask is None or not np.any(mask):
             return None, None
         inpainted = call_inpaint_image(self.inpainting, image, mask, config, blk_list=mask_blocks)

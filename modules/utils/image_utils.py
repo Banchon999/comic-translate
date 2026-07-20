@@ -313,6 +313,7 @@ def build_block_mask_data(
     default_padding: int = 5,
     require_text_or_translation: bool = True,
     clip_to_bubble: bool = False,
+    bubble_inset: int | None = None,
 ) -> tuple[np.ndarray | None, tuple[int, int, int, int] | None]:
     from modules.detection.utils.content import detect_content_mask_in_bbox
 
@@ -333,7 +334,8 @@ def build_block_mask_data(
     dilate_iterations = 3
 
     if clip_to_bubble and getattr(blk, "text_class", None) == "text_bubble" and getattr(blk, "bubble_xyxy", None) is not None:
-        inset = max(1, kernel_size)
+        inset = bubble_inset if bubble_inset is not None else max(1, kernel_size)
+        inset = max(1, int(inset))
         dilated_crop_mask = clip_mask_components_to_bubble(
             crop_mask,
             (cx1, cy1, cx2, cy2),
@@ -358,6 +360,7 @@ def collect_block_mask_data(
     default_padding: int = 5,
     require_text_or_translation: bool = True,
     clip_to_bubble: bool = True,
+    bubble_inset: int | None = None,
 ) -> list[dict[str, Any]]:
     entries: list[dict[str, Any]] = []
     for blk in blk_list:
@@ -367,6 +370,7 @@ def collect_block_mask_data(
             default_padding=default_padding,
             require_text_or_translation=require_text_or_translation,
             clip_to_bubble=clip_to_bubble,
+            bubble_inset=bubble_inset,
         )
         if crop_mask is None or bounds is None:
             continue
@@ -374,7 +378,12 @@ def collect_block_mask_data(
     return entries
 
 
-def generate_mask(img: np.ndarray, blk_list: list[TextBlock], default_padding: int = 5) -> np.ndarray:
+def generate_mask(
+    img: np.ndarray,
+    blk_list: list[TextBlock],
+    default_padding: int = 5,
+    bubble_inset: int | None = None,
+) -> np.ndarray:
     """
     Generate a text-removal mask from filtered connected components and
     only lightly expand it to catch antialiasing around glyph edges.
@@ -382,7 +391,9 @@ def generate_mask(img: np.ndarray, blk_list: list[TextBlock], default_padding: i
     h, w, _ = img.shape
     mask = np.zeros((h, w), dtype=np.uint8)
 
-    for entry in collect_block_mask_data(img, blk_list, default_padding=default_padding):
+    for entry in collect_block_mask_data(
+        img, blk_list, default_padding=default_padding, bubble_inset=bubble_inset
+    ):
         cx1, cy1, cx2, cy2 = entry["bounds"]
         crop_mask = entry["mask"]
         mask[cy1:cy2, cx1:cx2] = np.bitwise_or(mask[cy1:cy2, cx1:cx2], crop_mask)

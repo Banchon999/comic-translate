@@ -139,9 +139,16 @@ class GlossaryPage(QtWidgets.QWidget):
         self.log_ocr_checkbox.setChecked(self.manager.log_ocr)
         self.log_ocr_checkbox.stateChanged.connect(self._on_options_changed)
 
+        self.batch_extract_checkbox = MCheckBox(
+            self.tr("Batch mode: OCR all pages and extract glossary BEFORE translating")
+        )
+        self.batch_extract_checkbox.setChecked(self.manager.batch_extract)
+        self.batch_extract_checkbox.stateChanged.connect(self._on_options_changed)
+
         layout.addWidget(self.enabled_checkbox)
         layout.addWidget(self.match_only_checkbox)
         layout.addWidget(self.log_ocr_checkbox)
+        layout.addWidget(self.batch_extract_checkbox)
 
         # OCR log → glossary extraction
         extract_layout = QtWidgets.QHBoxLayout()
@@ -282,6 +289,7 @@ class GlossaryPage(QtWidgets.QWidget):
         self.manager.enabled = self.enabled_checkbox.isChecked()
         self.manager.match_only = self.match_only_checkbox.isChecked()
         self.manager.log_ocr = self.log_ocr_checkbox.isChecked()
+        self.manager.batch_extract = self.batch_extract_checkbox.isChecked()
         self.manager.save()
 
     # OCR log → glossary extraction
