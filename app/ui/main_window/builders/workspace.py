@@ -8,6 +8,7 @@ from app.ui.dayu_widgets.button_group import MPushButtonGroup, MToolButtonGroup
 from app.ui.dayu_widgets.check_box import MCheckBox
 from app.ui.dayu_widgets.combo_box import MComboBox, MFontComboBox
 from app.ui.dayu_widgets.divider import MDivider
+from app.ui.dayu_widgets.label import MLabel
 from app.ui.dayu_widgets.line_edit import MLineEdit
 from app.ui.dayu_widgets.loading import MLoading
 from app.ui.dayu_widgets.progress_bar import MProgressBar
@@ -82,8 +83,32 @@ class WorkspaceMixin:
         self.batch_report_button.setEnabled(False)
         self.batch_report_button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
 
+        # Layer visibility toggles: each pipeline stage's output is a layer
+        # that can be shown/hidden while editing.
+        self.layers_label = MLabel(self.tr("Layers:")).secondary()
+        self.layer_boxes_checkbox = MCheckBox(self.tr("Boxes"))
+        self.layer_boxes_checkbox.setToolTip(self.tr("Show/hide detection boxes"))
+        self.layer_strokes_checkbox = MCheckBox(self.tr("Segment"))
+        self.layer_strokes_checkbox.setToolTip(self.tr("Show/hide segmentation brush strokes"))
+        self.layer_patches_checkbox = MCheckBox(self.tr("Clean"))
+        self.layer_patches_checkbox.setToolTip(self.tr("Show/hide inpainting patches (cleaned areas)"))
+        self.layer_text_checkbox = MCheckBox(self.tr("Text"))
+        self.layer_text_checkbox.setToolTip(self.tr("Show/hide rendered translation text"))
+        for checkbox in (
+            self.layer_boxes_checkbox, self.layer_strokes_checkbox,
+            self.layer_patches_checkbox, self.layer_text_checkbox,
+        ):
+            checkbox.setChecked(True)
+            checkbox.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+
         header_layout.addWidget(self.hbutton_group)
         header_layout.addWidget(self.loading)
+        header_layout.addSpacing(15)
+        header_layout.addWidget(self.layers_label)
+        header_layout.addWidget(self.layer_boxes_checkbox)
+        header_layout.addWidget(self.layer_strokes_checkbox)
+        header_layout.addWidget(self.layer_patches_checkbox)
+        header_layout.addWidget(self.layer_text_checkbox)
         header_layout.addStretch()
         header_layout.addWidget(self.webtoon_toggle)
         header_layout.addWidget(self.manual_radio)
