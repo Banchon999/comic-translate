@@ -171,14 +171,27 @@ def _segment_no_space_paragraph(paragraph: str) -> List[str]:
     return [char for char in paragraph if char != " "]
 
 
-def _wrap_no_space_text_greedily(text: str, measure_side, max_side: float) -> str:
-    """Greedy wrapping for languages that do not rely on spaces between words."""
+def _segment_no_space_text(text: str) -> List[List[str]]:
+    """Pre-segment every paragraph of text once.
 
+    pyside_word_wrap tries multiple font sizes via binary search, and line
+    fitting doesn't change how text tokenizes (only how much fits per line).
+    Segmenting once and reusing it across that search avoids re-running
+    dictionary-based tokenization (pythainlp for Thai) on every candidate
+    font size.
+    """
     paragraphs = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    return [_segment_no_space_paragraph(paragraph) for paragraph in paragraphs]
+
+
+def _wrap_no_space_text_greedily(segmented_paragraphs: List[List[str]], measure_side, max_side: float) -> str:
+    """Greedy wrapping for languages that do not rely on spaces between words.
+
+    Takes paragraphs pre-tokenized by _segment_no_space_text.
+    """
     wrapped_paragraphs: List[str] = []
 
-    for paragraph in paragraphs:
-        tokens = _segment_no_space_paragraph(paragraph)
+    for tokens in segmented_paragraphs:
         if not tokens:
             wrapped_paragraphs.append("")
             continue
@@ -195,7 +208,12 @@ def _wrap_no_space_text_greedily(text: str, measure_side, max_side: float) -> st
 
         for token in tokens:
             candidate = f"{line}{token}"
-            if not line or measure_side(candidate) <= max_side:
+            # Note: unlike the inner piece-placement loop below, an empty
+            # `line` does NOT unconditionally accept the token here — a
+            # dictionary-tokenized word (e.g. from pythainlp) can itself be
+            # longer than max_side and must go through cluster-splitting
+            # rather than overflow the line.
+            if measure_side(candidate) <= max_side:
                 line = candidate
                 continue
 
@@ -411,6 +429,10 @@ def pyside_word_wrap(
         
         return width, height
 
+    # Segmented once and reused across every font size the search below
+    # tries, instead of re-tokenizing the same text on each attempt.
+    segmented_paragraphs = _segment_no_space_text(text) if no_space_language else None
+
     def wrap_and_size(font_size):
         def measure_side(candidate: str) -> float:
             w, h = eval_metrics(candidate, font_size, vertical)
@@ -418,7 +440,7 @@ def pyside_word_wrap(
 
         if no_space_language:
             wrapped = _wrap_no_space_text_greedily(
-                text=text,
+                segmented_paragraphs=segmented_paragraphs,
                 measure_side=measure_side,
                 max_side=roi_height if vertical else roi_width,
             )
