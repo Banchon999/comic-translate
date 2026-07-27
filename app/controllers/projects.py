@@ -1478,6 +1478,17 @@ class ProjectController:
 
         self.process_group('text_rendering', self.main.render_settings(), settings)
 
+        # Style defaults live outside TextRenderingSettings (they are the source
+        # the render settings read from, not a rendered result), so persist them
+        # explicitly.
+        settings_ui = self.main.settings_page.ui
+        settings.beginGroup('text_rendering')
+        settings.setValue('use_style_defaults', settings_ui.use_style_defaults_checkbox.isChecked())
+        settings.setValue('default_text_color', settings_ui.default_text_color_button.get_color())
+        settings.setValue('default_outline_color', settings_ui.default_outline_color_button.get_color())
+        settings.setValue('default_outline_width', settings_ui.default_outline_width_combo.currentText())
+        settings.endGroup()
+
         settings.beginGroup("main_page")
         # Save languages in English
         settings.setValue("source_language", self.main.lang_mapping[self.main.s_combo.currentText()])
@@ -1571,6 +1582,21 @@ class ProjectController:
         outline_color = settings.value('outline_color', '#FFFFFF')
         self.main.outline_font_color_button.setStyleSheet(f"background-color: {outline_color}; border: none; border-radius: 5px;")
         self.main.outline_font_color_button.setProperty('selected_color', outline_color)
+
+        # Default style preset for newly rendered text (independent of the
+        # toolbar buttons, which follow the current selection).
+        settings_ui.use_style_defaults_checkbox.setChecked(
+            settings.value('use_style_defaults', False, type=bool)
+        )
+        settings_ui.default_text_color_button.set_color(
+            settings.value('default_text_color', color)
+        )
+        settings_ui.default_outline_color_button.set_color(
+            settings.value('default_outline_color', outline_color)
+        )
+        settings_ui.default_outline_width_combo.setCurrentText(
+            settings.value('default_outline_width', '1.0')
+        )
 
         self.main.bold_button.setChecked(settings.value('bold', False, type=bool))
         self.main.italic_button.setChecked(settings.value('italic', False, type=bool))

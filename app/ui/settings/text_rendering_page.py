@@ -1,9 +1,37 @@
-from PySide6 import QtWidgets
+from PySide6 import QtWidgets, QtGui
 from ..dayu_widgets.label import MLabel
 from ..dayu_widgets.spin_box import MSpinBox
 from ..dayu_widgets.browser import MClickBrowserFileToolButton
 from ..dayu_widgets.check_box import MCheckBox
-from ..dayu_widgets.combo_box import MFontComboBox
+from ..dayu_widgets.combo_box import MComboBox, MFontComboBox
+
+
+class ColorPickerButton(QtWidgets.QPushButton):
+    """Small swatch button that opens a color dialog and remembers the choice."""
+
+    def __init__(self, color: str = "#000000", parent=None):
+        super().__init__(parent)
+        self.setFixedSize(30, 30)
+        self.set_color(color)
+        self.clicked.connect(self._pick_color)
+
+    def set_color(self, color: str) -> None:
+        color = color or "#000000"
+        self.setProperty("selected_color", color)
+        self.setStyleSheet(
+            f"background-color: {color}; border: 1px solid gray; border-radius: 5px;"
+        )
+
+    def get_color(self) -> str:
+        return self.property("selected_color") or "#000000"
+
+    def _pick_color(self):
+        dialog = QtWidgets.QColorDialog(QtGui.QColor(self.get_color()), self)
+        if dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted:
+            chosen = dialog.selectedColor()
+            if chosen.isValid():
+                self.set_color(chosen.name())
+
 
 class TextRenderingPage(QtWidgets.QWidget):
     def __init__(self, parent=None):
@@ -87,13 +115,68 @@ class TextRenderingPage(QtWidgets.QWidget):
         # Uppercase
         self.uppercase_checkbox = MCheckBox(self.tr("Render Text in UpperCase"))
 
+        # Default style for newly rendered text.
+        # The toolbar colour buttons follow whatever text item is selected, so
+        # they can't hold a "preset". These do.
+        style_label = MLabel(self.tr("Default Style for Rendered Text:")).h4()
+        self.use_style_defaults_checkbox = MCheckBox(
+            self.tr("Always render new text with the colours set here")
+        )
+        self.use_style_defaults_checkbox.setToolTip(self.tr(
+            "When enabled, translated text is rendered with these colours instead of\n"
+            "whatever the toolbar happens to show (the toolbar follows the selected text)."
+        ))
+
+        default_text_color_layout = QtWidgets.QHBoxLayout()
+        self.default_text_color_label = MLabel(self.tr("Text Colour:"))
+        self.default_text_color_button = ColorPickerButton("#000000")
+        default_text_color_layout.addWidget(self.default_text_color_label)
+        default_text_color_layout.addWidget(self.default_text_color_button)
+        default_text_color_layout.addStretch()
+
+        default_outline_layout = QtWidgets.QHBoxLayout()
+        self.default_outline_color_label = MLabel(self.tr("Outline Colour:"))
+        self.default_outline_color_button = ColorPickerButton("#FFFFFF")
+        self.default_outline_width_label = MLabel(self.tr("Width:"))
+        self.default_outline_width_combo = MComboBox().small()
+        self.default_outline_width_combo.setFixedWidth(70)
+        self.default_outline_width_combo.addItems(
+            ["0.5", "1.0", "1.15", "1.3", "1.4", "1.5", "2.0", "2.5", "3.0"]
+        )
+        self.default_outline_width_combo.setCurrentText("1.0")
+        self.default_outline_width_combo.set_editable(True)
+        default_outline_layout.addWidget(self.default_outline_color_label)
+        default_outline_layout.addWidget(self.default_outline_color_button)
+        default_outline_layout.addSpacing(10)
+        default_outline_layout.addWidget(self.default_outline_width_label)
+        default_outline_layout.addWidget(self.default_outline_width_combo)
+        default_outline_layout.addStretch()
+
+        self._style_default_widgets = (
+            self.default_text_color_label, self.default_text_color_button,
+            self.default_outline_color_label, self.default_outline_color_button,
+            self.default_outline_width_label, self.default_outline_width_combo,
+        )
+        self.use_style_defaults_checkbox.stateChanged.connect(self._sync_style_default_widgets)
+        self._sync_style_default_widgets()
+
         layout.addWidget(self.uppercase_checkbox)
         layout.addSpacing(10)
         layout.addLayout(font_layout)
+        layout.addSpacing(10)
+        layout.addWidget(style_label)
+        layout.addWidget(self.use_style_defaults_checkbox)
+        layout.addLayout(default_text_color_layout)
+        layout.addLayout(default_outline_layout)
         layout.addSpacing(10)
         layout.addStretch(1)
 
     def _sync_per_class_font_widgets(self, *args):
         enabled = self.per_class_fonts_checkbox.isChecked()
         for widget in self._per_class_font_widgets:
+            widget.setEnabled(enabled)
+
+    def _sync_style_default_widgets(self, *args):
+        enabled = self.use_style_defaults_checkbox.isChecked()
+        for widget in self._style_default_widgets:
             widget.setEnabled(enabled)

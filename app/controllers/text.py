@@ -338,11 +338,20 @@ class TextController:
     def save_src_trg(self):
         source_lang = to_canonical_language_name(self.main.s_combo.currentText(), self.main.lang_mapping)
         target_lang = to_canonical_language_name(self.main.t_combo.currentText(), self.main.lang_mapping)
-        
-        if self.main.curr_img_idx >= 0:
-            current_file = self.main.image_files[self.main.curr_img_idx]
-            self.main.image_states[current_file]['source_lang'] = source_lang
-            self.main.image_states[current_file]['target_lang'] = target_lang
+
+        # Apply to every loaded page, not just the visible one. Each page stores
+        # its own source/target language (captured from these combos when it was
+        # loaded), and batch translation reads that per-page value. Updating only
+        # the current page meant changing the language mid-project silently left
+        # the rest of the chapter on the previous language, so those pages came
+        # back translated into the old target language.
+        # Page navigation sets these combos with signals blocked, so this only
+        # runs for genuine user changes.
+        for image_path in self.main.image_files:
+            state = self.main.image_states.get(image_path)
+            if state is not None:
+                state['source_lang'] = source_lang
+                state['target_lang'] = target_lang
 
         target_en = self.main.lang_mapping.get(target_lang, target_lang)
         t_direction = get_layout_direction(target_en)
@@ -1015,16 +1024,30 @@ class TextController:
 
         settings_ui = self.main.settings_page.ui
         per_class_fonts = settings_ui.per_class_fonts_checkbox.isChecked()
+
+        # The toolbar colour buttons track the currently selected text item, so
+        # they can't act as a preset. When style defaults are enabled, use those
+        # instead so newly rendered text always gets the colours the user chose.
+        use_defaults = settings_ui.use_style_defaults_checkbox.isChecked()
+        if use_defaults:
+            text_color = settings_ui.default_text_color_button.get_color()
+            outline_color = settings_ui.default_outline_color_button.get_color()
+            outline_width = settings_ui.default_outline_width_combo.currentText()
+        else:
+            text_color = self.main.block_font_color_button.property('selected_color')
+            outline_color = self.main.outline_font_color_button.property('selected_color')
+            outline_width = self.main.outline_width_dropdown.currentText()
+
         return TextRenderingSettings(
             alignment_id = self.main.alignment_tool_group.get_dayu_checked(),
             font_family = self.main.font_dropdown.currentText(),
             min_font_size = int(settings_ui.min_font_spinbox.value()),
             max_font_size = int(settings_ui.max_font_spinbox.value()),
-            color = self.main.block_font_color_button.property('selected_color'),
+            color = text_color,
             upper_case = settings_ui.uppercase_checkbox.isChecked(),
             outline = self.main.outline_checkbox.isChecked(),
-            outline_color = self.main.outline_font_color_button.property('selected_color'),
-            outline_width = self.main.outline_width_dropdown.currentText(),
+            outline_color = outline_color,
+            outline_width = outline_width,
             bold = self.main.bold_button.isChecked(),
             italic = self.main.italic_button.isChecked(),
             underline = self.main.underline_button.isChecked(),

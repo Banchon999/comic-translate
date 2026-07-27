@@ -10,9 +10,20 @@ logger = logging.getLogger(__name__)
 # Always appended after the (editable) style template so custom prompts can
 # never break the JSON in/out contract the pipeline depends on.
 OUTPUT_CONTRACT = """Specifically, you will be translating text OCR'd from a comic. The OCR is not perfect so you may receive text with typos or other mistakes.
-To aid you and provide context, you may be given the image of the page and/or extra context about the comic. You will be given a JSON string of the detected text blocks and the text to translate. Return the JSON string with the texts translated. DO NOT translate the keys of the JSON. For each block:
-- If it's already in {target_lang} or looks like gibberish, OUTPUT IT AS IT IS instead
+To aid you and provide context, you may be given the image of the page and/or extra context about the comic. You will be given a JSON string of the detected text blocks and the text to translate. Return the JSON string with the texts translated. DO NOT translate the keys of the JSON.
+
+OUTPUT LANGUAGE IS MANDATORY: every translated value MUST be written in {target_lang}. Never leave {source_lang} (or any other language) in the output, and never copy the source text through unchanged just because it is short, stylized, or hard to read. For each block:
+- If the text is unclear, garbled, or a sound effect, still give your best {target_lang} rendering of it (transliterate into {target_lang} if there is no real word)
+- Only leave a value unchanged if it is already written in {target_lang}, or if it contains no letters at all (e.g. "!?", "...", digits)
 - DO NOT give explanations"""
+
+# Pronoun guidance that only makes sense when writing INTO that language.
+# Injecting these tokens for other targets both wastes context and nudges
+# weaker models toward emitting the wrong script.
+_TARGET_PRONOUN_RULES = {
+    "Korean": "NEVER USE the stiff textbook pronouns 당신, 그녀, 그 — rephrase the way Korean speakers actually refer to people.",
+    "Japanese": "NEVER USE stiff textbook pronouns like あなた or 彼女 — rephrase the way Japanese speakers actually refer to people.",
+}
 
 
 BUILTIN_PRESETS = {
@@ -20,7 +31,7 @@ BUILTIN_PRESETS = {
         "You are an expert translator who translates {source_lang} to {target_lang}. "
         "You pay attention to style, formality, idioms, slang etc and try to convey it in the way "
         "a {target_lang} speaker would understand. BE MORE NATURAL. "
-        "NEVER USE 당신, 그녀, 그 or their Japanese equivalents."
+        "Write the translation in natural {target_lang}, never in {source_lang}."
     ),
     "Manga": (
         "You are an expert manga translator and localizer working from {source_lang} to {target_lang}.\n"
@@ -37,7 +48,7 @@ BUILTIN_PRESETS = {
         "- Respect Korean speech levels: jondaemal (formal) vs banmal (casual) should show as tone differences in {target_lang}.\n"
         "- Address terms (hyung, noona, oppa, sunbae, ajusshi): keep only when meaningful to the story; otherwise localize.\n"
         "- Genre terms (hunter, gate, dungeon, cultivation ranks, martial arts titles) must stay consistent everywhere.\n"
-        "- NEVER USE 당신, 그녀, 그 literally; rephrase the way {target_lang} actually refers to people.\n"
+        "- Korean pronouns and address terms should be rephrased the way {target_lang} naturally refers to people, never transcribed.\n"
         "- Romanized names must stay consistent across the whole series."
     ),
     "Webtoon": (
@@ -158,6 +169,21 @@ class PromptManager:
         ).hexdigest()[:12]
 
     def build_system_prompt(self, source_lang: str, target_lang: str) -> str:
+        source_lang = source_lang or "the source language"
+        target_lang = target_lang or "the target language"
+
         style = _fill(self.get_template(), source_lang, target_lang)
         contract = _fill(OUTPUT_CONTRACT, source_lang, target_lang)
-        return f"{style}\n\n{contract}\n\nDo your best! I'm really counting on you."
+
+        parts = [style, contract]
+        # Only add script-specific pronoun guidance when writing INTO that
+        # language; otherwise it is irrelevant and its sample tokens can push
+        # weaker models into emitting the wrong script.
+        pronoun_rule = next(
+            (rule for lang, rule in _TARGET_PRONOUN_RULES.items() if lang.lower() in target_lang.lower()),
+            None,
+        )
+        if pronoun_rule:
+            parts.append(pronoun_rule)
+        parts.append("Do your best! I'm really counting on you.")
+        return "\n\n".join(parts)

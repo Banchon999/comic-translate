@@ -120,12 +120,16 @@ class SettingsPage(QtWidgets.QWidget):
             ui.uppercase_checkbox, ui.raw_text_checkbox,
             ui.translated_text_checkbox, ui.inpainted_image_checkbox,
             ui.per_class_fonts_checkbox, ui.stitch_detection_checkbox,
+            ui.use_style_defaults_checkbox,
         ]
         for checkbox in checkboxes:
             checkbox.stateChanged.connect(self._mark_settings_dirty)
 
         ui.bubble_font_combo.currentTextChanged.connect(self._mark_settings_dirty)
         ui.free_font_combo.currentTextChanged.connect(self._mark_settings_dirty)
+        ui.default_outline_width_combo.currentTextChanged.connect(self._mark_settings_dirty)
+        ui.default_text_color_button.clicked.connect(self._mark_settings_dirty)
+        ui.default_outline_color_button.clicked.connect(self._mark_settings_dirty)
 
         spinboxes = [
             ui.resize_spinbox, ui.crop_margin_spinbox, ui.crop_trigger_spinbox,

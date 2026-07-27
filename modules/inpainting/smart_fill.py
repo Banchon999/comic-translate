@@ -24,9 +24,12 @@ class SmartFill(InpaintModel):
     name = "smart_fill"
 
     # Mask growth: first step thickness, extra growth per step, total steps.
-    MIN_THICKNESS = 2
+    # A larger first step avoids razor-thin masks that only clean a glyph's
+    # outline; more steps give the ranking below more candidates to choose
+    # from, which matters for large/bold lettering.
+    MIN_THICKNESS = 4
     GROWTH_STEP = 2
-    GROWTH_STEPS = 5
+    GROWTH_STEPS = 11
     # A border is "uniform" when the std of its pixel colors is below this.
     MAX_BORDER_STD = 15.0
     # A larger mask is only preferred if its border std improves by this factor.
@@ -101,6 +104,22 @@ class SmartFill(InpaintModel):
         best_std = None
         best_color = None
 
+        def consider(candidate: np.ndarray) -> bool:
+            """Rank a candidate mask by how uniform the colours along its border
+            are. Returns False when the candidate covers the whole crop, i.e.
+            there is no border left to sample and growing further is pointless.
+            """
+            nonlocal best_mask, best_std, best_color
+            border_pixels = self._border_pixels(image_crop, candidate)
+            if border_pixels is None:
+                return False
+            std, color = self._border_stats(border_pixels)
+            # Only prefer a bigger mask when it is meaningfully more uniform,
+            # otherwise the smallest clean mask wins.
+            if best_std is None or std <= best_std * (1 - self.IMPROVEMENT_FACTOR):
+                best_std, best_color, best_mask = std, color, candidate
+            return True
+
         grown = mask_crop
         for step in range(self.GROWTH_STEPS):
             thickness = self.MIN_THICKNESS if step == 0 else self.GROWTH_STEP
@@ -108,15 +127,15 @@ class SmartFill(InpaintModel):
                 imk.MORPH_ELLIPSE, (thickness * 2 + 1, thickness * 2 + 1)
             )
             grown = imk.dilate(grown, kernel)
-
-            border_pixels = self._border_pixels(image_crop, grown)
-            if border_pixels is None:
+            if not consider(grown):
                 # The grown mask swallowed the whole crop; larger steps won't help.
                 break
 
-            std, color = self._border_stats(border_pixels)
-            if best_std is None or std <= best_std * (1 - self.IMPROVEMENT_FACTOR):
-                best_std, best_color, best_mask = std, color, grown
+        # Also consider the region's filled bounding box. Text masks derived
+        # from connected components are ragged, so on a flat bubble the solid
+        # box often has a cleaner, more uniform border than any grown outline
+        # and produces a visibly better fill.
+        consider(self._bounding_box_mask(mask_crop))
 
         if best_std is None or best_std > self.MAX_BORDER_STD:
             return False
@@ -125,6 +144,19 @@ class SmartFill(InpaintModel):
             best_color = (255, 255, 255)
         image_crop[best_mask > 0] = np.array(best_color, dtype=np.uint8)
         return True
+
+    @staticmethod
+    def _bounding_box_mask(mask_crop: np.ndarray) -> np.ndarray:
+        """A solid rectangle covering the component, padded by the minimum
+        thickness so it clears glyph antialiasing."""
+        pad = SmartFill.MIN_THICKNESS
+        height, width = mask_crop.shape[:2]
+        ys, xs = np.nonzero(mask_crop)
+        box = np.zeros_like(mask_crop)
+        y1 = max(0, ys.min() - pad); y2 = min(height, ys.max() + 1 + pad)
+        x1 = max(0, xs.min() - pad); x2 = min(width, xs.max() + 1 + pad)
+        box[y1:y2, x1:x2] = 255
+        return box
 
     @staticmethod
     def _border_pixels(image_crop: np.ndarray, mask: np.ndarray) -> np.ndarray | None:

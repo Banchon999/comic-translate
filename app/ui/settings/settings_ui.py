@@ -206,6 +206,9 @@ class SettingsPageUI(QtWidgets.QWidget):
             parent=self,
         )
         self.llms_page = LlmsPage(parent=self)
+        # Owned here (the translation pipeline reads `ui.glossary_page.manager`)
+        # but surfaced from the working page via the nav-rail Glossary button
+        # rather than as a Settings tab.
         self.glossary_page = GlossaryPage(parent=self)
         self.text_rendering_page = TextRenderingPage(parent=self)
         self.project_page = ProjectPage(parent=self)
@@ -250,6 +253,10 @@ class SettingsPageUI(QtWidgets.QWidget):
         self.per_class_fonts_checkbox = self.text_rendering_page.per_class_fonts_checkbox
         self.bubble_font_combo = self.text_rendering_page.bubble_font_combo
         self.free_font_combo = self.text_rendering_page.free_font_combo
+        self.use_style_defaults_checkbox = self.text_rendering_page.use_style_defaults_checkbox
+        self.default_text_color_button = self.text_rendering_page.default_text_color_button
+        self.default_outline_color_button = self.text_rendering_page.default_outline_color_button
+        self.default_outline_width_combo = self.text_rendering_page.default_outline_width_combo
 
         # Export
         self.raw_text_checkbox = self.export_page.raw_text_checkbox
@@ -277,7 +284,6 @@ class SettingsPageUI(QtWidgets.QWidget):
         self.stacked_widget.addWidget(self.account_page)
         self.stacked_widget.addWidget(self.tools_page)
         self.stacked_widget.addWidget(self.llms_page)
-        self.stacked_widget.addWidget(self.glossary_page)
         self.stacked_widget.addWidget(self.text_rendering_page)
         self.stacked_widget.addWidget(self.project_page)
         self.stacked_widget.addWidget(self.export_page)
@@ -333,7 +339,6 @@ class SettingsPageUI(QtWidgets.QWidget):
             {"title": self.tr("Account"), "avatar": MPixmap(".svg")},
             {"title": self.tr("Tools"), "avatar": MPixmap(".svg")},
             {"title": self.tr("LLMs"), "avatar": MPixmap(".svg")},
-            {"title": self.tr("Glossary"), "avatar": MPixmap(".svg")},
             {"title": self.tr("Text Rendering"), "avatar": MPixmap(".svg")},
             {"title": self.tr("Project"), "avatar": MPixmap(".svg")},
             {"title": self.tr("Export"), "avatar": MPixmap(".svg")},
