@@ -1,41 +1,49 @@
+"""Solid-fill cleaning stage.
+
+Uses the mask-fitting algorithm ported from PanelCleaner; see
+`mask_fitting.py` for attribution. Distributed under GPL-3.0-or-later.
+"""
+
 import logging
+from dataclasses import dataclass
 
 import numpy as np
 import imkit as imk
 
 from .base import InpaintModel
+from .mask_fitting import pick_best_mask
 from .schema import Config
 
 logger = logging.getLogger(__name__)
 
 
-class SmartFill(InpaintModel):
-    """Solid-fill cleaner inspired by PanelCleaner's masker (independent implementation).
+@dataclass
+class MaskerConfig:
+    """Tuning for mask fitting. Defaults match PanelCleaner's masker."""
 
-    For each connected region of the inpaint mask, the mask is grown in
-    small steps. At every step the colors of the image pixels along the
-    mask border are sampled; if they are uniform (low standard deviation),
-    the text sits on a flat background — typically a speech bubble — and
-    the region is filled with the border's median color for a perfectly
-    crisp result. Regions whose border never becomes uniform (busy art
-    backgrounds) are inpainted with LaMa instead.
+    mask_growth_step_pixels: int = 2
+    mask_growth_steps: int = 11
+    min_mask_thickness: int = 4
+    allow_colored_masks: bool = True
+    off_white_max_threshold: int = 240
+    mask_max_standard_deviation: float = 15.0
+    mask_improvement_threshold: float = 0.1
+    mask_selection_fast: bool = False
+
+
+class SmartFill(InpaintModel):
+    """Solid-fill cleaner using PanelCleaner's mask fitting.
+
+    For each connected region of the inpaint mask, progressively grown masks
+    are ranked by how uniform the image colours along their border are. A
+    uniform border means the text sits on flat background — typically a speech
+    bubble — so the region is filled with that border's median colour for a
+    perfectly crisp result. Regions whose border never becomes uniform (busy
+    art) are handed to LaMa for inpainting instead.
     """
 
     name = "smart_fill"
 
-    # Mask growth: first step thickness, extra growth per step, total steps.
-    # A larger first step avoids razor-thin masks that only clean a glyph's
-    # outline; more steps give the ranking below more candidates to choose
-    # from, which matters for large/bold lettering.
-    MIN_THICKNESS = 4
-    GROWTH_STEP = 2
-    GROWTH_STEPS = 11
-    # A border is "uniform" when the std of its pixel colors is below this.
-    MAX_BORDER_STD = 15.0
-    # A larger mask is only preferred if its border std improves by this factor.
-    IMPROVEMENT_FACTOR = 0.10
-    # Median border colors at least this bright snap to pure white.
-    OFF_WHITE_THRESHOLD = 240
     # Skip huge regions (full-page masks); solid fill only makes sense locally.
     MAX_REGION_AREA_RATIO = 0.5
 
@@ -43,6 +51,7 @@ class SmartFill(InpaintModel):
         self.backend = kwargs.get("backend", "onnx")
         self._fill_device = device
         self._fallback_model = None
+        self.masker_conf = kwargs.get("masker_conf") or MaskerConfig()
 
     @staticmethod
     def is_downloaded() -> bool:
@@ -91,8 +100,13 @@ class SmartFill(InpaintModel):
 
     def _fill_component(self, result: np.ndarray, component: np.ndarray) -> bool:
         """Try to solid-fill one mask component. Returns True when filled."""
+        conf = self.masker_conf
         ys, xs = np.nonzero(component)
-        margin = self.MIN_THICKNESS + self.GROWTH_STEP * self.GROWTH_STEPS + 2
+        margin = (
+            conf.min_mask_thickness
+            + conf.mask_growth_step_pixels * conf.mask_growth_steps
+            + 2
+        )
         height, width = component.shape[:2]
         y1 = max(0, ys.min() - margin); y2 = min(height, ys.max() + 1 + margin)
         x1 = max(0, xs.min() - margin); x2 = min(width, xs.max() + 1 + margin)
@@ -100,56 +114,25 @@ class SmartFill(InpaintModel):
         image_crop = result[y1:y2, x1:x2]
         mask_crop = np.where(component[y1:y2, x1:x2], 255, 0).astype(np.uint8)
 
-        best_mask = None
-        best_std = None
-        best_color = None
-
-        def consider(candidate: np.ndarray) -> bool:
-            """Rank a candidate mask by how uniform the colours along its border
-            are. Returns False when the candidate covers the whole crop, i.e.
-            there is no border left to sample and growing further is pointless.
-            """
-            nonlocal best_mask, best_std, best_color
-            border_pixels = self._border_pixels(image_crop, candidate)
-            if border_pixels is None:
-                return False
-            std, color = self._border_stats(border_pixels)
-            # Only prefer a bigger mask when it is meaningfully more uniform,
-            # otherwise the smallest clean mask wins.
-            if best_std is None or std <= best_std * (1 - self.IMPROVEMENT_FACTOR):
-                best_std, best_color, best_mask = std, color, candidate
-            return True
-
-        grown = mask_crop
-        for step in range(self.GROWTH_STEPS):
-            thickness = self.MIN_THICKNESS if step == 0 else self.GROWTH_STEP
-            kernel = imk.get_structuring_element(
-                imk.MORPH_ELLIPSE, (thickness * 2 + 1, thickness * 2 + 1)
-            )
-            grown = imk.dilate(grown, kernel)
-            if not consider(grown):
-                # The grown mask swallowed the whole crop; larger steps won't help.
-                break
-
-        # Also consider the region's filled bounding box. Text masks derived
-        # from connected components are ragged, so on a flat bubble the solid
-        # box often has a cleaner, more uniform border than any grown outline
-        # and produces a visibly better fill.
-        consider(self._bounding_box_mask(mask_crop))
-
-        if best_std is None or best_std > self.MAX_BORDER_STD:
+        # The filled bounding box is offered alongside the grown masks: masks
+        # derived from connected components are ragged, so on a flat bubble the
+        # solid box often has a more uniform border and fills more cleanly.
+        best_mask, best_color, _deviation = pick_best_mask(
+            image_crop,
+            mask_crop,
+            self._bounding_box_mask(mask_crop, conf.min_mask_thickness),
+            conf,
+        )
+        if best_mask is None or best_color is None:
             return False
 
-        if min(best_color) >= self.OFF_WHITE_THRESHOLD:
-            best_color = (255, 255, 255)
         image_crop[best_mask > 0] = np.array(best_color, dtype=np.uint8)
         return True
 
     @staticmethod
-    def _bounding_box_mask(mask_crop: np.ndarray) -> np.ndarray:
-        """A solid rectangle covering the component, padded by the minimum
-        thickness so it clears glyph antialiasing."""
-        pad = SmartFill.MIN_THICKNESS
+    def _bounding_box_mask(mask_crop: np.ndarray, pad: int) -> np.ndarray:
+        """A solid rectangle covering the component, padded so it clears glyph
+        antialiasing."""
         height, width = mask_crop.shape[:2]
         ys, xs = np.nonzero(mask_crop)
         box = np.zeros_like(mask_crop)
@@ -157,25 +140,6 @@ class SmartFill(InpaintModel):
         x1 = max(0, xs.min() - pad); x2 = min(width, xs.max() + 1 + pad)
         box[y1:y2, x1:x2] = 255
         return box
-
-    @staticmethod
-    def _border_pixels(image_crop: np.ndarray, mask: np.ndarray) -> np.ndarray | None:
-        """Image pixels along the outer edge ring of the mask."""
-        kernel = np.ones((3, 3), dtype=np.uint8)
-        eroded = imk.erode(mask, kernel)
-        ring = (mask > 0) & (eroded == 0)
-        if not ring.any():
-            return None
-        return image_crop[ring].reshape(-1, image_crop.shape[-1]).astype(np.float64)
-
-    @staticmethod
-    def _border_stats(border_pixels: np.ndarray) -> tuple[float, tuple[int, ...]]:
-        """Std of color distances from the mean, and the median border color."""
-        mean_color = border_pixels.mean(axis=0)
-        distances = np.linalg.norm(border_pixels - mean_color, axis=1)
-        std = float(distances.std())
-        median_color = tuple(int(c) for c in np.median(border_pixels, axis=0))
-        return std, median_color
 
     def _get_fallback_model(self):
         if self._fallback_model is None:
