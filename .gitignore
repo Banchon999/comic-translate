@@ -23,4 +23,6 @@ test_*.py
 demo_*.py
 benchmarks/
 
-scripts
+# Scratch scripts stay local; committed maintenance scripts are listed explicitly.
+scripts/*
+!scripts/build_translations.py

@@ -27,6 +27,12 @@ Syntax/import check the whole tree (closest thing to a build check — there is 
 python -m compileall -q modules app pipeline
 ```
 
+Regenerate UI translations (see "Localization" below — never call `lrelease` directly):
+```bash
+python scripts/build_translations.py --update --compile th   # rescan sources, then compile Thai
+python scripts/build_translations.py --compile               # recompile every language
+```
+
 Build a distributable (PyInstaller, mirrors `.github/workflows/build-*.yml`):
 ```bash
 pyinstaller --noconfirm --clean --name ComicTranslate --add-data "resources:resources" comic.py   # Linux
@@ -96,6 +102,14 @@ Undo/redo for canvas edits goes through `QUndoCommand` subclasses in `app/ui/com
 ### Webtoon (long-strip) mode
 
 Long vertical-strip images are handled separately throughout: `app/ui/canvas/webtoons/` (viewer/scene management for lazy-loaded tall strips) and `pipeline/webtoon_batch/` (chunked batch detect/OCR/inpaint/render with seam-aware stitching so text isn't cut at chunk boundaries — see `chunk.py`'s stitched-context detection and `_shift_block_vertical`).
+
+### Localization (UI language)
+
+Catalogues live in `resources/translations/ct_<lang>.ts`, compiled to `compiled/ct_<lang>.qm` and loaded by `comic.py`'s `load_translation`. Adding a language means: a `ct_<lang>.ts`, its compiled `.qm`, an entry in `load_translation`'s display-name → code dict and `get_system_language`'s code → display-name dict, plus the display name in `SettingsPageUI.languages` and `value_mappings` (`app/ui/settings/settings_ui.py`). Comic source/target language names are separately mapped back to canonical English by `ComicTranslateUI.lang_mapping` (`app/ui/main_window/window.py`), so translating them is safe — but two languages must never translate to the same string or the dict collapses.
+
+Always build the `.qm` through `scripts/build_translations.py`, not `lrelease`. PySide6 looks a string up under each class name in the object's MRO (so a string written in a mixin or base class is found from a subclass), but `lupdate` names a context after the expression at the call site — `self.main.tr(...)` is filed under the literal context `"self.main"`, which is not a class name and never matches. That silently strands ~60 strings in every language. The script appends a catch-all `@fallback` context to a temporary copy of the `.ts` — the committed `.ts` stays exactly as lupdate writes it — and `ContextFallbackTranslator` consults it when the real contexts miss. Per-context entries still win, so a word translated differently depending on where it appears keeps its specific translation.
+
+A `QTranslator` subclass must return `None`, never `""`, for a miss. An empty string is a valid translation to Qt: it blanks the widget out *and* stops PySide6 walking up the MRO to the class that actually holds the string.
 
 ### Language/direction handling
 
