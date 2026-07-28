@@ -454,7 +454,17 @@ class ImageViewer(QGraphicsView):
             
         # Set selection outlines
         item.selection_outlines = properties.selection_outlines.copy()
-        
+
+        # Text effects
+        if properties.letter_spacing:
+            item.set_letter_spacing(properties.letter_spacing)
+        item.set_shadow(
+            properties.shadow_enabled,
+            properties.shadow_color,
+            properties.shadow_offset,
+            properties.shadow_blur,
+        )
+
         # Update the item
         item.update()
 

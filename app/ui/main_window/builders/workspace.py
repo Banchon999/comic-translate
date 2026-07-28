@@ -211,9 +211,16 @@ class WorkspaceMixin:
         self.line_spacing_dropdown.setFixedWidth(60)
         self.line_spacing_dropdown.set_editable(True)
 
+        self.letter_spacing_dropdown = MComboBox().small()
+        self.letter_spacing_dropdown.setToolTip(self.tr("Letter Spacing"))
+        self.letter_spacing_dropdown.addItems(["0", "0.5", "1", "1.5", "2", "3", "4", "-0.5", "-1"])
+        self.letter_spacing_dropdown.setFixedWidth(60)
+        self.letter_spacing_dropdown.set_editable(True)
+
         font_settings_layout.addWidget(self.font_dropdown)
         font_settings_layout.addWidget(self.font_size_dropdown)
         font_settings_layout.addWidget(self.line_spacing_dropdown)
+        font_settings_layout.addWidget(self.letter_spacing_dropdown)
         font_settings_layout.addStretch()
 
         main_text_settings_layout = QtWidgets.QHBoxLayout()
@@ -277,12 +284,51 @@ class WorkspaceMixin:
         outline_settings_layout.addWidget(self.outline_width_dropdown)
         outline_settings_layout.addStretch()
 
+        shadow_settings_layout = QtWidgets.QHBoxLayout()
+
+        self.shadow_checkbox = MCheckBox(self.tr("Shadow"))
+
+        self.shadow_color_button = QtWidgets.QPushButton()
+        self.shadow_color_button.setToolTip(self.tr("Shadow Color"))
+        self.shadow_color_button.setFixedSize(30, 30)
+        self.shadow_color_button.setStyleSheet("background-color: #000000; border: none; border-radius: 5px;")
+        self.shadow_color_button.setProperty("selected_color", "#000000")
+
+        self.shadow_offset_x_dropdown = MComboBox().small()
+        self.shadow_offset_x_dropdown.setToolTip(self.tr("Shadow Offset X"))
+        self.shadow_offset_x_dropdown.addItems(["0", "1", "2", "3", "4", "6", "8", "-2", "-4"])
+        self.shadow_offset_x_dropdown.setCurrentText("4")
+        self.shadow_offset_x_dropdown.setFixedWidth(60)
+        self.shadow_offset_x_dropdown.set_editable(True)
+
+        self.shadow_offset_y_dropdown = MComboBox().small()
+        self.shadow_offset_y_dropdown.setToolTip(self.tr("Shadow Offset Y"))
+        self.shadow_offset_y_dropdown.addItems(["0", "1", "2", "3", "4", "6", "8", "-2", "-4"])
+        self.shadow_offset_y_dropdown.setCurrentText("4")
+        self.shadow_offset_y_dropdown.setFixedWidth(60)
+        self.shadow_offset_y_dropdown.set_editable(True)
+
+        self.shadow_blur_dropdown = MComboBox().small()
+        self.shadow_blur_dropdown.setToolTip(self.tr("Shadow Blur"))
+        self.shadow_blur_dropdown.addItems(["0", "2", "4", "6", "8", "12", "16", "24"])
+        self.shadow_blur_dropdown.setCurrentText("0")
+        self.shadow_blur_dropdown.setFixedWidth(60)
+        self.shadow_blur_dropdown.set_editable(True)
+
+        shadow_settings_layout.addWidget(self.shadow_checkbox)
+        shadow_settings_layout.addWidget(self.shadow_color_button)
+        shadow_settings_layout.addWidget(self.shadow_offset_x_dropdown)
+        shadow_settings_layout.addWidget(self.shadow_offset_y_dropdown)
+        shadow_settings_layout.addWidget(self.shadow_blur_dropdown)
+        shadow_settings_layout.addStretch()
+
         rendering_divider_top = MDivider()
         rendering_divider_bottom = MDivider()
         text_render_layout.addWidget(rendering_divider_top)
         text_render_layout.addLayout(font_settings_layout)
         text_render_layout.addLayout(main_text_settings_layout)
         text_render_layout.addLayout(outline_settings_layout)
+        text_render_layout.addLayout(shadow_settings_layout)
         text_render_layout.addWidget(rendering_divider_bottom)
 
         tools_widget = QtWidgets.QWidget()
