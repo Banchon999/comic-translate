@@ -85,49 +85,49 @@
 <context>
     <name>ComicTranslate</name>
     <message>
-        <location filename="../../controller.py" line="307"/>
+        <location filename="../../controller.py" line="316"/>
         <source>Open Folder</source>
         <translation>เปิดโฟลเดอร์</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="308"/>
+        <location filename="../../controller.py" line="317"/>
         <source>No supported images were found in the selected folder.</source>
         <translation>ไม่พบรูปภาพที่รองรับในโฟลเดอร์ที่เลือก</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="602"/>
-        <location filename="../../controller.py" line="612"/>
+        <location filename="../../controller.py" line="625"/>
+        <location filename="../../controller.py" line="635"/>
         <source>Error</source>
         <translation>ข้อผิดพลาด</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="852"/>
-        <location filename="../../controller.py" line="863"/>
+        <location filename="../../controller.py" line="875"/>
+        <location filename="../../controller.py" line="886"/>
         <source>Downloading model file: {filename}</source>
         <translation>กำลังดาวน์โหลดไฟล์โมเดล: {filename}</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="894"/>
+        <location filename="../../controller.py" line="917"/>
         <source>Unsaved Changes</source>
         <translation>มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="895"/>
+        <location filename="../../controller.py" line="918"/>
         <source>Save changes to this file?</source>
         <translation>บันทึกการเปลี่ยนแปลงของไฟล์นี้หรือไม่?</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="896"/>
+        <location filename="../../controller.py" line="919"/>
         <source>Save</source>
         <translation>บันทึก</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="897"/>
+        <location filename="../../controller.py" line="920"/>
         <source>Don&apos;t Save</source>
         <translation>ไม่บันทึก</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="898"/>
+        <location filename="../../controller.py" line="921"/>
         <source>Cancel</source>
         <translation>ยกเลิก</translation>
     </message>
@@ -758,6 +758,44 @@
     </message>
 </context>
 <context>
+    <name>LayerPanel</name>
+    <message>
+        <location filename="../../app/ui/canvas/layer_panel.py" line="108"/>
+        <source>Layer</source>
+        <translation>เลเยอร์</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/canvas/layer_panel.py" line="108"/>
+        <source>Show</source>
+        <translation>แสดง</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/canvas/layer_panel.py" line="108"/>
+        <source>Lock</source>
+        <translation>ล็อก</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/canvas/layer_panel.py" line="121"/>
+        <source>Opacity</source>
+        <translation>ความทึบ</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/canvas/layer_panel.py" line="254"/>
+        <source>Show/Hide Layer</source>
+        <translation>แสดง/ซ่อนเลเยอร์</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/canvas/layer_panel.py" line="263"/>
+        <source>Lock Layer</source>
+        <translation>ล็อกเลเยอร์</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/canvas/layer_panel.py" line="307"/>
+        <source>Layer Opacity</source>
+        <translation>ความทึบของเลเยอร์</translation>
+    </message>
+</context>
+<context>
     <name>LlmsPage</name>
     <message>
         <location filename="../../app/ui/settings/llms_page.py" line="22"/>
@@ -1176,12 +1214,12 @@ Open Batch Report to see all skipped images and reasons.</source>
         <translation>ตัวแปล</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="817"/>
+        <location filename="../../controller.py" line="840"/>
         <source>Processing:</source>
         <translation>กำลังประมวลผล:</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="820"/>
+        <location filename="../../controller.py" line="843"/>
         <source>Archiving:</source>
         <translation>กำลังบีบอัด:</translation>
     </message>
@@ -2391,286 +2429,291 @@ then do inpainting on the resized image.</source>
 <context>
     <name>WorkspaceMixin</name>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="32"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="33"/>
         <source>Undo</source>
         <translation>เลิกทำ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="33"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="34"/>
         <source>Redo</source>
         <translation>ทำซ้ำ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="38"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="39"/>
         <source>Detect</source>
         <translation>ตรวจจับ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="39"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="40"/>
         <source>Recognize</source>
         <translation>อ่านข้อความ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="40"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="41"/>
         <source>Translate</source>
         <translation>แปล</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="41"/>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="91"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="42"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="92"/>
         <source>Segment</source>
         <translation>แยกส่วน</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="42"/>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="93"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="43"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="94"/>
         <source>Clean</source>
         <translation>ลบข้อความ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="43"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="44"/>
         <source>Render</source>
         <translation>แสดงผล</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="60"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="61"/>
         <source>Manual</source>
         <translation>ทีละขั้น</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="63"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="64"/>
         <source>Automatic</source>
         <translation>อัตโนมัติ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="72"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="73"/>
         <source>Toggle Webtoon Mode. For comics that are read in long vertical strips</source>
         <translation>สลับโหมดเว็บตูน สำหรับการ์ตูนที่อ่านเป็นภาพยาวแนวตั้ง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="76"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="77"/>
         <source>Translate All</source>
         <translation>แปลทั้งหมด</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="79"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="80"/>
         <source>Cancel</source>
         <translation>ยกเลิก</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="82"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="83"/>
         <source>Report</source>
         <translation>รายงาน</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="88"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="89"/>
         <source>Layers:</source>
         <translation>เลเยอร์:</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="89"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="90"/>
         <source>Boxes</source>
         <translation>กล่อง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="90"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="91"/>
         <source>Show/hide detection boxes</source>
         <translation>แสดง/ซ่อนกล่องที่ตรวจจับได้</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="92"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="93"/>
         <source>Show/hide segmentation brush strokes</source>
         <translation>แสดง/ซ่อนเส้นแปรงที่ใช้แยกส่วน</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="94"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="95"/>
         <source>Show/hide inpainting patches (cleaned areas)</source>
         <translation>แสดง/ซ่อนแผ่นปะจากการเติมภาพ (บริเวณที่ลบข้อความแล้ว)</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="95"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="96"/>
         <source>Text</source>
         <translation>ข้อความ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="96"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="97"/>
         <source>Show/hide rendered translation text</source>
         <translation>แสดง/ซ่อนข้อความคำแปลที่วางบนภาพ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="137"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="107"/>
+        <source>Show the layer list for individual items</source>
+        <translation>แสดงรายการเลเยอร์ของแต่ละชิ้น</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="155"/>
         <source>Click or drag files here</source>
         <translation>คลิกหรือลากไฟล์มาที่นี่</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="159"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="177"/>
         <source>Import Images, PDFs, Epubs or Comic Book Archive Files(cbr, cbz, etc)</source>
         <translation>นำเข้ารูปภาพ, PDF, EPUB หรือไฟล์อาร์ไคฟ์การ์ตูน (cbr, cbz ฯลฯ)</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="177"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="195"/>
         <source>Source Language</source>
         <translation>ภาษาต้นทาง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="187"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="205"/>
         <source>Target Language</source>
         <translation>ภาษาปลายทาง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="198"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="216"/>
         <source>Font</source>
         <translation>ฟอนต์</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="200"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="218"/>
         <source>Font Size</source>
         <translation>ขนาดฟอนต์</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="209"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="227"/>
         <source>Line Spacing</source>
         <translation>ระยะห่างบรรทัด</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="215"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="233"/>
         <source>Letter Spacing</source>
         <translation>ระยะห่างตัวอักษร</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="235"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="253"/>
         <source>Font Color</source>
         <translation>สีฟอนต์</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="250"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="268"/>
         <source>Bold</source>
         <translation>ตัวหนา</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="252"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="270"/>
         <source>Italic</source>
         <translation>ตัวเอียง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="254"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="272"/>
         <source>Underline</source>
         <translation>ขีดเส้นใต้</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="265"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="283"/>
         <source>Outline</source>
         <translation>เส้นขอบ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="269"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="287"/>
         <source>Outline Color</source>
         <translation>สีเส้นขอบ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="276"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="294"/>
         <source>Outline Width</source>
         <translation>ความหนาเส้นขอบ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="289"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="307"/>
         <source>Shadow</source>
         <translation>เงา</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="292"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="310"/>
         <source>Shadow Color</source>
         <translation>สีเงา</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="298"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="316"/>
         <source>Shadow Offset X</source>
         <translation>ระยะเงาแนวนอน</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="305"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="323"/>
         <source>Shadow Offset Y</source>
         <translation>ระยะเงาแนวตั้ง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="312"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="330"/>
         <source>Shadow Blur</source>
         <translation>ความฟุ้งของเงา</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="340"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="358"/>
         <source>Pan Image</source>
         <translation>เลื่อนภาพ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="344"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="362"/>
         <source>Set for all</source>
         <translation>ใช้กับทุกหน้า</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="346"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="364"/>
         <source>Sets the Source and Target Language on the current page for all pages</source>
         <translation>ตั้งภาษาต้นทางและปลายทางของหน้าปัจจุบันให้กับทุกหน้า</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="356"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="374"/>
         <source>Draw or Select Text Boxes</source>
         <translation>วาดหรือเลือกกล่องข้อความ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="361"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="379"/>
         <source>Delete Selected Box</source>
         <translation>ลบกล่องที่เลือก</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="364"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="382"/>
         <source>Remove all the Boxes on the Image</source>
         <translation>ลบกล่องทั้งหมดบนภาพ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="369"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="387"/>
         <source>Draws all the Text Blocks in the existing Text Block List
 back on the Image (for further editing)</source>
         <translation>วาดกล่องข้อความทั้งหมดในรายการกลับลงบนภาพ
 (เพื่อแก้ไขต่อ)</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="380"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="398"/>
         <source>Reduce the size of all blocks</source>
         <translation>ลดขนาดกล่องทั้งหมด</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="391"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="409"/>
         <source>Increase the size of all blocks</source>
         <translation>เพิ่มขนาดกล่องทั้งหมด</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="402"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="420"/>
         <source>Draw Brush Strokes for Cleaning Image</source>
         <translation>วาดเส้นแปรงเพื่อลบข้อความออกจากภาพ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="407"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="425"/>
         <source>Erase Brush Strokes</source>
         <translation>ลบเส้นแปรง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="412"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="430"/>
         <source>Remove all the brush strokes on the Image</source>
         <translation>ลบเส้นแปรงทั้งหมดบนภาพ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="423"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="441"/>
         <source>Brush/Eraser Size Slider</source>
         <translation>แถบปรับขนาดแปรง/ยางลบ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="427"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="445"/>
         <source>Box Drawing</source>
         <translation>การวาดกล่อง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="431"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="449"/>
         <source>Inpainting</source>
         <translation>การเติมภาพ</translation>
     </message>

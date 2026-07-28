@@ -6,7 +6,7 @@ import tempfile
 from typing import Callable, Tuple
 
 from PySide6 import QtCore, QtWidgets
-from PySide6.QtCore import QCoreApplication, QThreadPool
+from PySide6.QtCore import QCoreApplication, QThreadPool, QTimer
 from PySide6.QtGui import QUndoGroup, QUndoStack, QIcon
 
 from app.ui.dayu_widgets.qt import MPixmap
@@ -192,6 +192,15 @@ class ComicTranslate(ComicTranslateUI):
             lambda visible: self.image_viewer.set_layer_visibility('patches', visible))
         self.layer_text_checkbox.toggled.connect(
             lambda visible: self.image_viewer.set_layer_visibility('text', visible))
+
+        # Per-item layer list
+        self.layer_panel.attach(self.image_viewer, self.undo_group.activeStack)
+        self.layer_panel_button.toggled.connect(self.toggle_layer_panel)
+        self._layer_panel_refresh_timer = QTimer(self)
+        self._layer_panel_refresh_timer.setSingleShot(True)
+        self._layer_panel_refresh_timer.setInterval(250)
+        self._layer_panel_refresh_timer.timeout.connect(self.layer_panel.refresh)
+        self.image_viewer._scene.changed.connect(self.schedule_layer_panel_refresh)
 
         # Connect buttons from button_groups
         self.hbutton_group.get_button_group().buttons()[0].clicked.connect(lambda: self.block_detect())
@@ -440,6 +449,20 @@ class ComicTranslate(ComicTranslateUI):
     def _finish_close_after_save(self):
         self._skip_close_prompt = True
         self.close()
+
+    def toggle_layer_panel(self, visible: bool):
+        self.layer_panel.setVisible(visible)
+        if visible:
+            self.layer_panel.refresh()
+
+    def schedule_layer_panel_refresh(self, *_):
+        """Rebuild the layer list shortly after the scene settles.
+
+        The scene reports every repaint, so this coalesces bursts and does no work
+        at all while the panel is hidden.
+        """
+        if self.layer_panel.isVisible():
+            self._layer_panel_refresh_timer.start()
 
     def push_command(self, command):
         if self.undo_group.activeStack():
