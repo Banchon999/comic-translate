@@ -200,6 +200,14 @@ class NavRailMixin:
         )
         self.insert_button.clicked.connect(self.insert_browser_button.clicked)
 
+        # Glossary lives on the working page (not buried in Settings) since it
+        # is edited constantly while translating a series.
+        self.glossary_button = MToolButton()
+        self.glossary_button.set_dayu_svg("list_view.svg")
+        self.glossary_button.setToolTip(self.tr("Glossary — terms for this series"))
+        self.glossary_button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+        self.glossary_button.clicked.connect(self.show_glossary_dialog)
+
         nav_rail_layout.addWidget(self.new_project_button)
         nav_rail_layout.addWidget(self.tool_browser)
         nav_rail_layout.addWidget(self.insert_button)
@@ -209,6 +217,7 @@ class NavRailMixin:
         nav_rail_layout.addWidget(self.save_all_button)
         nav_rail_layout.addWidget(nav_divider)
         nav_rail_layout.addWidget(self.search_sidebar_button)
+        nav_rail_layout.addWidget(self.glossary_button)
         nav_rail_layout.addWidget(nav_tool_group)
         nav_rail_layout.addStretch()
         nav_rail_layout.setContentsMargins(0, 0, 0, 0)
@@ -306,6 +315,34 @@ class NavRailMixin:
         project_ctrl = getattr(self, "project_ctrl", None)
         if project_ctrl is not None and hasattr(project_ctrl, "export_translations_dialog"):
             project_ctrl.export_translations_dialog()
+
+    def show_glossary_dialog(self):
+        """Open the glossary editor from the working page.
+
+        The page widget itself is owned by SettingsPageUI (the translation
+        pipeline reads `settings_page.ui.glossary_page.manager`), so it is
+        re-parented into this dialog rather than duplicated.
+        """
+        glossary_page = getattr(getattr(self, "settings_page", None), "ui", None)
+        glossary_page = getattr(glossary_page, "glossary_page", None)
+        if glossary_page is None:
+            return
+
+        dialog = getattr(self, "_glossary_dialog", None)
+        if dialog is None:
+            dialog = QtWidgets.QDialog(self)
+            dialog.setWindowTitle(self.tr("Glossary"))
+            dialog.resize(900, 620)
+            dialog_layout = QtWidgets.QVBoxLayout(dialog)
+            dialog_layout.addWidget(glossary_page)
+            self._glossary_dialog = dialog
+
+        # Refresh in case another series/profile became active meanwhile.
+        if hasattr(glossary_page, "refresh_table"):
+            glossary_page.refresh_table()
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
 
     def create_push_button(self, text: str, clicked=None):
         button = MPushButton(text)
