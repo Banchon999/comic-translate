@@ -405,41 +405,67 @@ class TextBlockItem(QGraphicsTextItem):
         widget: QWidget = None
     ):
 
-        # Then handle any selection outlines
+        # Outline pass: draw the glyphs underneath, displaced around a circle, so
+        # their union is the glyph dilated by the outline width. The fill is then
+        # painted on top and stays intact.
         if self.selection_outlines:
             painter.save()
-            for outline_info in self.selection_outlines:
-                doc = self._clone_outline_document()
-
-                cursor = QTextCursor(doc)
-                cursor.select(QTextCursor.SelectionType.Document)
-                fmt = QTextCharFormat()
-                fmt.setForeground(QColor(0, 0, 0, 0))
-                cursor.mergeCharFormat(fmt)
-
-                cursor.setPosition(outline_info.start)
-                cursor.setPosition(outline_info.end, QTextCursor.KeepAnchor)
-                fmt = QTextCharFormat()
-                fmt.setForeground(outline_info.color)
-                cursor.mergeCharFormat(fmt)
-
-                # Draw the outline for this selection
-                offsets = [(dx, dy) 
-                    for dx in (-outline_info.width, 0, outline_info.width)
-                    for dy in (-outline_info.width, 0, outline_info.width)
-                    if dx != 0 or dy != 0
-                ]
-                
-                for dx, dy in offsets:
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            for width, doc in self._outline_documents():
+                for dx, dy in self._outline_offsets(width):
                     painter.save()
                     painter.translate(dx, dy)
                     doc.drawContents(painter)
                     painter.restore()
-
             painter.restore()
 
         # Draw the normal text on top
         super().paint(painter, option, widget)
+
+    # Enough displacements that the gap left between neighbours, width*(1-cos(pi/n)),
+    # stays under 2% of the outline width — well below a pixel at any usable size.
+    OUTLINE_SAMPLES = 16
+
+    @classmethod
+    def _outline_offsets(cls, width: float) -> list[tuple[float, float]]:
+        step = 2 * math.pi / cls.OUTLINE_SAMPLES
+        return [
+            (width * math.cos(i * step), width * math.sin(i * step))
+            for i in range(cls.OUTLINE_SAMPLES)
+        ]
+
+    def _outline_documents(self):
+        """Yield (width, document) for each distinct outline width in use.
+
+        Ranges sharing a width are drawn together since they are displaced by the
+        same amount. Everything outside the ranges is made transparent so only the
+        outlined text contributes. Drawing through a copy of the document — rather
+        than re-laying the text out — keeps word wrap, per-range character formats
+        and the vertical CJK layout intact.
+        """
+        # Widest first, so a narrower outline layered on top stays visible.
+        widths = sorted({outline_info.width for outline_info in self.selection_outlines},
+                        reverse=True)
+
+        for width in widths:
+            doc = self._clone_outline_document()
+
+            cursor = QTextCursor(doc)
+            cursor.select(QTextCursor.SelectionType.Document)
+            hidden = QTextCharFormat()
+            hidden.setForeground(QColor(0, 0, 0, 0))
+            cursor.mergeCharFormat(hidden)
+
+            for outline_info in self.selection_outlines:
+                if outline_info.width != width:
+                    continue
+                fmt = QTextCharFormat()
+                fmt.setForeground(outline_info.color)
+                cursor.setPosition(outline_info.start)
+                cursor.setPosition(outline_info.end, QTextCursor.KeepAnchor)
+                cursor.mergeCharFormat(fmt)
+
+            yield width, doc
 
     def _clone_outline_document(self):
         source = self.document()

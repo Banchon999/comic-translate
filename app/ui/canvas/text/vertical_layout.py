@@ -6,7 +6,7 @@ from typing import Iterator, Optional
 from PySide6.QtCore import Qt, QRectF, QPointF, Signal, QSizeF
 from PySide6.QtGui import QTextDocument, QTransform, QPainter, \
                            QTextFrame, QTextBlock, QTextOption, \
-                           QAbstractTextDocumentLayout, QTextLine
+                           QAbstractTextDocumentLayout, QTextLine, QPalette
 
 from .metrics import CharacterStyle, GlyphPlacement, PlacementRule
 
@@ -679,6 +679,14 @@ class VerticalTextDocumentLayout(QAbstractTextDocumentLayout):
 
     def draw(self, painter: QPainter, context: QAbstractTextDocumentLayout.PaintContext) -> None:
         painter.save()
+
+        # Characters without an explicit foreground fall back to the painter's pen.
+        # The stock layout seeds it from the paint context; doing the same here is
+        # what makes setDefaultTextColor apply to vertical text as well.
+        text_color = context.palette.color(QPalette.ColorRole.Text)
+        if text_color.isValid():
+            painter.setPen(text_color)
+
         context_sel = context.selections
         has_selection = len(context_sel) > 0
         selection = context_sel[0] if has_selection else None
