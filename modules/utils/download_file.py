@@ -13,10 +13,12 @@ have defaults appended to the signature.
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import http.client
 import os
 import random
+import ssl
 import sys
 import time
 import urllib.error
@@ -27,10 +29,43 @@ from typing import Optional
 CHUNK_SIZE = 64 * 1024  # 64KB per read
 
 
+@functools.lru_cache(maxsize=1)
+def _ssl_context() -> ssl.SSLContext:
+    """Certificate store to verify model download hosts against.
+
+    Python ships no CA certificates of its own and borrows the platform's. A
+    frozen Windows build routinely cannot reach that store, so every model
+    download died with CERTIFICATE_VERIFY_FAILED.
+
+    Both stores are loaded rather than either one. certifi's bundle covers the
+    public hosts we download from when the platform store is unreachable, and
+    the platform store carries the extra roots that make a corporate TLS-
+    inspecting proxy work — trusting only certifi would break those users.
+    Verification itself stays on in every case.
+    """
+    context = ssl.create_default_context()
+
+    try:
+        import certifi
+    except ImportError:
+        return context
+
+    try:
+        context.load_verify_locations(cafile=certifi.where())
+    except (OSError, ssl.SSLError):
+        # Bundle missing or unreadable, e.g. not collected into a frozen build.
+        pass
+
+    return context
+
+
 @contextmanager
 def _open_url(url: str, *, headers: Optional[dict] = None, timeout: Optional[float] = None):
     req = urllib.request.Request(url, headers=headers or {})
-    response = urllib.request.urlopen(req, timeout=timeout)  # nosec - controlled sources
+    # Passing a context is harmless for plain http; only HTTPSHandler reads it.
+    response = urllib.request.urlopen(  # nosec - controlled sources
+        req, timeout=timeout, context=_ssl_context()
+    )
     try:
         yield response
     finally:
