@@ -32,9 +32,16 @@ class TextItemProperties:
     height: Optional[float] = None
     vertical: bool = False
     
+    # Text effects
+    letter_spacing: float = 0.0
+    shadow_enabled: bool = False
+    shadow_color: Optional[QColor] = None
+    shadow_offset: tuple = (4.0, 4.0)
+    shadow_blur: float = 0.0
+
     # Advanced properties
     selection_outlines: list = field(default_factory=list)
-            
+
     @classmethod
     def from_dict(cls, data: dict) -> 'TextItemProperties':
         """Create TextItemProperties from dictionary state"""
@@ -98,9 +105,22 @@ class TextItemProperties:
         props.height = data.get('height')
         props.vertical = data.get('vertical', False)
         
+        # Text effects
+        props.letter_spacing = data.get('letter_spacing', 0.0)
+        props.shadow_enabled = bool(data.get('shadow_enabled', False))
+        if 'shadow_color' in data:
+            if isinstance(data['shadow_color'], QColor):
+                props.shadow_color = data['shadow_color']
+            elif data['shadow_color']:
+                props.shadow_color = QColor(data['shadow_color'])
+        shadow_offset = data.get('shadow_offset')
+        if shadow_offset:
+            props.shadow_offset = (float(shadow_offset[0]), float(shadow_offset[1]))
+        props.shadow_blur = float(data.get('shadow_blur', 0.0))
+
         # Advanced
         props.selection_outlines = data.get('selection_outlines', [])
-        
+
         return props
     
     @classmethod
@@ -136,9 +156,16 @@ class TextItemProperties:
         props.height = item.boundingRect().height()
         props.vertical = getattr(item, 'vertical', False)
         
+        # Text effects
+        props.letter_spacing = getattr(item, 'letter_spacing', 0.0)
+        props.shadow_enabled = bool(getattr(item, 'shadow_enabled', False))
+        props.shadow_color = getattr(item, 'shadow_color', None)
+        props.shadow_offset = getattr(item, 'shadow_offset', (4.0, 4.0))
+        props.shadow_blur = getattr(item, 'shadow_blur', 0.0)
+
         # Advanced properties
         props.selection_outlines = getattr(item, 'selection_outlines', []).copy()
-        
+
         return props
     
     def to_dict(self) -> dict:
@@ -164,6 +191,11 @@ class TextItemProperties:
             'width': self.width,
             'height': self.height,
             'vertical': self.vertical,
+            'letter_spacing': self.letter_spacing,
+            'shadow_enabled': self.shadow_enabled,
+            'shadow_color': self.shadow_color,
+            'shadow_offset': self.shadow_offset,
+            'shadow_blur': self.shadow_blur,
             'selection_outlines': self.selection_outlines,
         }
 

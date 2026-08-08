@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QGraphicsTextItem, QGraphicsItem, \
-     QApplication, QWidget, QStyleOptionGraphicsItem
+     QApplication, QWidget, QStyleOptionGraphicsItem, QGraphicsDropShadowEffect
 from PySide6.QtGui import QFont, QCursor, QColor, \
      QTextCharFormat, QTextBlockFormat, QTextCursor, QPainter
 from PySide6.QtCore import Qt, QRectF, Signal, QPointF
@@ -74,6 +74,13 @@ class TextBlockItem(QGraphicsTextItem):
 
         self.layout = None
         self.vertical = False
+
+        # Text effects
+        self.letter_spacing = 0.0
+        self.shadow_enabled = False
+        self.shadow_color = QColor(0, 0, 0, 160)
+        self.shadow_offset = (4.0, 4.0)
+        self.shadow_blur = 0.0
 
         self.selected = False
         self.resizing = False
@@ -213,8 +220,98 @@ class TextBlockItem(QGraphicsTextItem):
 
         # Fallback to application default font family if none provided
         effective_family = font_family.strip() if isinstance(font_family, str) and font_family.strip() else QApplication.font().family()
-        font = QFont(effective_family, font_size)
+        font = self._with_letter_spacing(QFont(effective_family, font_size))
         self.update_text_format('font', font)
+
+    def _with_letter_spacing(self, font: QFont) -> QFont:
+        """Stamp the current letter spacing onto a font about to be applied.
+
+        Spacing lives on the font, so it has to be re-applied every time the family
+        or size changes or it would be dropped.
+        """
+        if self.letter_spacing:
+            font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, self.letter_spacing)
+        else:
+            font.setLetterSpacing(QFont.SpacingType.PercentageSpacing, 100.0)
+        return font
+
+    def set_letter_spacing(self, spacing: float):
+        """Extra space between characters in points; 0 restores the font's own."""
+        self.letter_spacing = float(spacing)
+        self.apply_letter_spacing()
+
+    def apply_letter_spacing(self):
+        """Stamp the spacing onto every run without disturbing its own font.
+
+        Merging a document-wide font would flatten per-selection families and sizes,
+        so each fragment keeps its font and only gains the spacing.
+        """
+        doc = self.document()
+        doc.setDefaultFont(self._with_letter_spacing(QFont(doc.defaultFont())))
+
+        cursor = QTextCursor(doc)
+        cursor.beginEditBlock()
+        block = doc.firstBlock()
+        while block.isValid():
+            fragment_iter = block.begin()
+            while not fragment_iter.atEnd():
+                fragment = fragment_iter.fragment()
+                if fragment.isValid():
+                    char_format = QTextCharFormat()
+                    char_format.setFont(
+                        self._with_letter_spacing(fragment.charFormat().font())
+                    )
+                    cursor.setPosition(fragment.position())
+                    cursor.setPosition(
+                        fragment.position() + fragment.length(), QTextCursor.KeepAnchor
+                    )
+                    cursor.mergeCharFormat(char_format)
+                fragment_iter += 1
+            block = block.next()
+        cursor.endEditBlock()
+
+        # The vertical layout positions each glyph itself and tracks spacing separately.
+        if self.vertical and self.layout:
+            self.layout.set_letter_spacing(self.letter_spacing)
+
+    def apply_effects(self):
+        """Re-apply the effects that do not survive a plain attribute restore.
+
+        Undo/redo swaps the item's __dict__ and reloads its HTML; the shadow lives on
+        a graphics effect and Qt's HTML writer does not emit letter spacing, so both
+        have to be put back explicitly.
+        """
+        self.apply_shadow()
+        self.apply_letter_spacing()
+
+    def set_shadow(self, enabled: bool, color: QColor = None, offset=None, blur: float = None):
+        """Drop shadow behind the whole item, outline included.
+
+        Uses a graphics effect rather than a hand-drawn offset copy so the blur is
+        a real gaussian and so the shadow follows the item's own transform — and so
+        it comes out of the save renderer identically, since that renders the same
+        scene items.
+        """
+        self.shadow_enabled = bool(enabled)
+        if color is not None:
+            self.shadow_color = QColor(color)
+        if offset is not None:
+            self.shadow_offset = (float(offset[0]), float(offset[1]))
+        if blur is not None:
+            self.shadow_blur = max(0.0, float(blur))
+
+        self.apply_shadow()
+
+    def apply_shadow(self):
+        if not self.shadow_enabled:
+            self.setGraphicsEffect(None)
+            return
+
+        effect = QGraphicsDropShadowEffect()
+        effect.setColor(self.shadow_color)
+        effect.setOffset(*self.shadow_offset)
+        effect.setBlurRadius(self.shadow_blur)
+        self.setGraphicsEffect(effect)
 
     def set_font_size(self, font_size):
         font_size = max(1, font_size)
@@ -405,41 +502,67 @@ class TextBlockItem(QGraphicsTextItem):
         widget: QWidget = None
     ):
 
-        # Then handle any selection outlines
+        # Outline pass: draw the glyphs underneath, displaced around a circle, so
+        # their union is the glyph dilated by the outline width. The fill is then
+        # painted on top and stays intact.
         if self.selection_outlines:
             painter.save()
-            for outline_info in self.selection_outlines:
-                doc = self._clone_outline_document()
-
-                cursor = QTextCursor(doc)
-                cursor.select(QTextCursor.SelectionType.Document)
-                fmt = QTextCharFormat()
-                fmt.setForeground(QColor(0, 0, 0, 0))
-                cursor.mergeCharFormat(fmt)
-
-                cursor.setPosition(outline_info.start)
-                cursor.setPosition(outline_info.end, QTextCursor.KeepAnchor)
-                fmt = QTextCharFormat()
-                fmt.setForeground(outline_info.color)
-                cursor.mergeCharFormat(fmt)
-
-                # Draw the outline for this selection
-                offsets = [(dx, dy) 
-                    for dx in (-outline_info.width, 0, outline_info.width)
-                    for dy in (-outline_info.width, 0, outline_info.width)
-                    if dx != 0 or dy != 0
-                ]
-                
-                for dx, dy in offsets:
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            for width, doc in self._outline_documents():
+                for dx, dy in self._outline_offsets(width):
                     painter.save()
                     painter.translate(dx, dy)
                     doc.drawContents(painter)
                     painter.restore()
-
             painter.restore()
 
         # Draw the normal text on top
         super().paint(painter, option, widget)
+
+    # Enough displacements that the gap left between neighbours, width*(1-cos(pi/n)),
+    # stays under 2% of the outline width — well below a pixel at any usable size.
+    OUTLINE_SAMPLES = 16
+
+    @classmethod
+    def _outline_offsets(cls, width: float) -> list[tuple[float, float]]:
+        step = 2 * math.pi / cls.OUTLINE_SAMPLES
+        return [
+            (width * math.cos(i * step), width * math.sin(i * step))
+            for i in range(cls.OUTLINE_SAMPLES)
+        ]
+
+    def _outline_documents(self):
+        """Yield (width, document) for each distinct outline width in use.
+
+        Ranges sharing a width are drawn together since they are displaced by the
+        same amount. Everything outside the ranges is made transparent so only the
+        outlined text contributes. Drawing through a copy of the document — rather
+        than re-laying the text out — keeps word wrap, per-range character formats
+        and the vertical CJK layout intact.
+        """
+        # Widest first, so a narrower outline layered on top stays visible.
+        widths = sorted({outline_info.width for outline_info in self.selection_outlines},
+                        reverse=True)
+
+        for width in widths:
+            doc = self._clone_outline_document()
+
+            cursor = QTextCursor(doc)
+            cursor.select(QTextCursor.SelectionType.Document)
+            hidden = QTextCharFormat()
+            hidden.setForeground(QColor(0, 0, 0, 0))
+            cursor.mergeCharFormat(hidden)
+
+            for outline_info in self.selection_outlines:
+                if outline_info.width != width:
+                    continue
+                fmt = QTextCharFormat()
+                fmt.setForeground(outline_info.color)
+                cursor.setPosition(outline_info.start)
+                cursor.setPosition(outline_info.end, QTextCursor.KeepAnchor)
+                cursor.mergeCharFormat(fmt)
+
+            yield width, doc
 
     def _clone_outline_document(self):
         source = self.document()

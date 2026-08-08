@@ -366,12 +366,50 @@ def get_system_language():
         'es': 'Español',
         'it': 'Italiano',
         'tr': 'Türkçe',
+        'th': 'ไทย',
     }
     
     return lang_map.get(lang_code, 'English')  # Default to English if not found
 
+
+class ContextFallbackTranslator(QTranslator):
+    """Translator that retries a failed lookup in a catch-all context.
+
+    `lupdate` names a context after the expression at the call site, so
+    `self.main.tr("X")` is filed under the literal context "self.main". PySide6
+    looks a string up under each class name in the object's MRO, and "self.main"
+    is not one, so those strings stay untranslated in every language.
+
+    `scripts/build_translations.py` appends a catch-all context holding every
+    string in the catalogue, which this class consults whenever the real contexts
+    miss. Per-context entries still win, so words translated differently
+    depending on where they appear keep their specific translation.
+
+    Returning None (not "") on a miss matters twice over: an empty string is a
+    valid translation as far as Qt is concerned, so it both blanks the widget out
+    and stops PySide6 from continuing up the MRO to the base class that actually
+    holds the string.
+    """
+
+    FALLBACK_CONTEXT = "@fallback"
+
+    def translate(self, context, source_text, disambiguation=None, n=-1):
+        translated = super().translate(context, source_text, disambiguation, n)
+        if translated:
+            return translated
+
+        if context != self.FALLBACK_CONTEXT:
+            translated = super().translate(
+                self.FALLBACK_CONTEXT, source_text, disambiguation, n
+            )
+            if translated:
+                return translated
+
+        return None
+
+
 def load_translation(app, language: str):
-    translator = QTranslator(app)
+    translator = ContextFallbackTranslator(app)
     lang_code = {
         '한국어': 'ko',
         'Français': 'fr',
@@ -382,6 +420,7 @@ def load_translation(app, language: str):
         'Español': 'es',
         'Italiano': 'it',
         'Türkçe': 'tr',
+        'ไทย': 'th',
     }.get(language)
 
     if not lang_code:

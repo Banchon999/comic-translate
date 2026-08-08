@@ -38,7 +38,13 @@ class TextController:
             self.main.block_font_color_button,
             self.main.outline_font_color_button,
             self.main.outline_width_dropdown,
-            self.main.outline_checkbox
+            self.main.outline_checkbox,
+            self.main.letter_spacing_dropdown,
+            self.main.shadow_checkbox,
+            self.main.shadow_color_button,
+            self.main.shadow_offset_x_dropdown,
+            self.main.shadow_offset_y_dropdown,
+            self.main.shadow_blur_dropdown,
         ]
         self._text_change_timer = QtCore.QTimer(self.main)
         self._text_change_timer.setSingleShot(True)
@@ -619,6 +625,54 @@ class TextController:
             command.finalize_new_state()
             self.main.push_command(command)
 
+    # Text effects
+    def _shadow_settings(self):
+        def value(dropdown, fallback=0.0):
+            try:
+                return float(dropdown.currentText())
+            except (TypeError, ValueError):
+                return fallback
+
+        return (
+            QColor(self.main.shadow_color_button.property('selected_color')),
+            (value(self.main.shadow_offset_x_dropdown), value(self.main.shadow_offset_y_dropdown)),
+            max(0.0, value(self.main.shadow_blur_dropdown)),
+        )
+
+    def apply_shadow_settings(self, *_):
+        if not self.main.curr_tblock_item:
+            return
+        item = self.main.curr_tblock_item
+        command = TextFormatCommand(self.main.image_viewer, item)
+        color, offset, blur = self._shadow_settings()
+        item.set_shadow(self.main.shadow_checkbox.isChecked(), color, offset, blur)
+        command.finalize_new_state()
+        self.main.push_command(command)
+
+    def on_shadow_color_change(self):
+        shadow_color = self.main.get_color()
+        if not (shadow_color and shadow_color.isValid()):
+            return
+        self.main.shadow_color_button.setStyleSheet(
+            f"background-color: {shadow_color.name()}; border: none; border-radius: 5px;"
+        )
+        self.main.shadow_color_button.setProperty('selected_color', shadow_color.name())
+        if self.main.shadow_checkbox.isChecked():
+            self.apply_shadow_settings()
+
+    def on_letter_spacing_change(self, _value=None):
+        if not self.main.curr_tblock_item:
+            return
+        try:
+            spacing = float(self.main.letter_spacing_dropdown.currentText())
+        except (TypeError, ValueError):
+            return
+        item = self.main.curr_tblock_item
+        command = TextFormatCommand(self.main.image_viewer, item)
+        item.set_letter_spacing(spacing)
+        command.finalize_new_state()
+        self.main.push_command(command)
+
     # Widget helpers
     def block_text_item_widgets(self, widgets):
         # Block signals
@@ -676,6 +730,21 @@ class TextController:
 
             self.main.outline_width_dropdown.setCurrentText(str(text_item.outline_width))
             self.main.outline_checkbox.setChecked(text_item.outline)
+
+            self.main.letter_spacing_dropdown.setCurrentText(
+                str(getattr(text_item, 'letter_spacing', 0.0))
+            )
+
+            shadow_color = getattr(text_item, 'shadow_color', None) or QColor(0, 0, 0)
+            self.main.shadow_color_button.setStyleSheet(
+                f"background-color: {shadow_color.name()}; border: none; border-radius: 5px;"
+            )
+            self.main.shadow_color_button.setProperty('selected_color', shadow_color.name())
+            offset_x, offset_y = getattr(text_item, 'shadow_offset', (4.0, 4.0))
+            self.main.shadow_offset_x_dropdown.setCurrentText(str(offset_x))
+            self.main.shadow_offset_y_dropdown.setCurrentText(str(offset_y))
+            self.main.shadow_blur_dropdown.setCurrentText(str(getattr(text_item, 'shadow_blur', 0.0)))
+            self.main.shadow_checkbox.setChecked(bool(getattr(text_item, 'shadow_enabled', False)))
 
             self.main.bold_button.setChecked(text_item.bold)
             self.main.italic_button.setChecked(text_item.italic)
