@@ -85,6 +85,32 @@ class ToolsPage(QtWidgets.QWidget):
         bubble_inset_layout.addWidget(self.bubble_inset_spinbox)
         bubble_inset_layout.addStretch()
 
+        ocr_padding_layout = QtWidgets.QHBoxLayout()
+        ocr_padding_label = MLabel(self.tr("OCR Box Padding (%):"))
+        self.ocr_padding_spinbox = MSpinBox().small()
+        self.ocr_padding_spinbox.setFixedWidth(70)
+        self.ocr_padding_spinbox.setRange(0, 60)
+        self.ocr_padding_spinbox.setValue(5)
+        self.ocr_padding_spinbox.setToolTip(self.tr(
+            "How much larger than the detected box the crop sent to text recognition is.\n"
+            "Raise it when recognised text comes back clipped or garbled."
+        ))
+        ocr_padding_layout.addWidget(ocr_padding_label)
+        ocr_padding_layout.addWidget(self.ocr_padding_spinbox)
+
+        ocr_min_padding_label = MLabel(self.tr("Minimum (px):"))
+        self.ocr_min_padding_spinbox = MSpinBox().small()
+        self.ocr_min_padding_spinbox.setFixedWidth(70)
+        self.ocr_min_padding_spinbox.setRange(0, 40)
+        self.ocr_min_padding_spinbox.setValue(4)
+        self.ocr_min_padding_spinbox.setToolTip(self.tr(
+            "A percentage of a small box is still a small number of pixels, which is\n"
+            "why tight boxes around short lines get clipped. This is the floor in pixels."
+        ))
+        ocr_padding_layout.addWidget(ocr_min_padding_label)
+        ocr_padding_layout.addWidget(self.ocr_min_padding_spinbox)
+        ocr_padding_layout.addStretch()
+
         inpainter_widget, self.inpainter_combo = create_title_and_combo(self.tr("Inpainter"), self.inpainters, h4=False)
         set_combo_box_width(self.inpainter_combo, self.inpainters)
         self.inpainter_combo.setCurrentText(self.tr("AOT"))
@@ -164,6 +190,7 @@ class ToolsPage(QtWidgets.QWidget):
         layout.addWidget(self.stitch_detection_checkbox)
         layout.addSpacing(10)
         layout.addWidget(ocr_widget)
+        layout.addLayout(ocr_padding_layout)
         layout.addSpacing(10)
         layout.addWidget(inpainting_label)
         layout.addLayout(mask_padding_layout)

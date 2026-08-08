@@ -51,7 +51,7 @@ class MangaOCREngineONNX(OCREngine):
                     blk.xyxy,
                     self.expansion_percentage,
                     self.expansion_percentage,
-                    img,
+                    img, getattr(self, "min_expansion_px", 0),
                 )
 
             # Validate coordinates

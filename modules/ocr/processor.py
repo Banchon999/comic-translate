@@ -65,7 +65,7 @@ class OCRProcessor:
             result = self._process_auto(img, blk_list)
         else:
             engine = OCRFactory.create_engine(self.settings, self.source_lang_english, self.ocr_key)
-            result = self._dispatch_with_override(img, blk_list, engine)
+            result = self._dispatch_with_override(img, blk_list, self._apply_padding(engine))
 
         self._log_ocr_texts(blk_list)
         return result
@@ -92,9 +92,28 @@ class OCRProcessor:
 
         for bucket, blks in groups.items():
             engine = OCRFactory.create_engine(self.settings, bucket, self.ocr_key)
-            self._dispatch_with_override(img, blks, engine)
+            self._dispatch_with_override(img, blks, self._apply_padding(engine))
 
         return blk_list
+
+    def _apply_padding(self, engine):
+        """Push the user's crop padding onto an engine before it runs.
+
+        Engines are cached by the factory and each carries its own default, so
+        the setting is applied on every use rather than at construction.
+        """
+        settings = self.settings
+        if settings is None:
+            return engine
+
+        try:
+            percent, min_px = settings.get_ocr_padding()
+        except AttributeError:
+            return engine
+
+        engine.expansion_percentage = percent
+        engine.min_expansion_px = min_px
+        return engine
 
     def _set_source_language(self, blk_list: list[TextBlock]) -> None:
         if self.source_lang_english == 'Auto':

@@ -1638,199 +1638,199 @@ This folder is separate from Auto-Recover snapshots.</source>
 <context>
     <name>SettingsPage</name>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="623"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="635"/>
         <source>OK</source>
         <translation>ตกลง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="636"/>
-        <location filename="../../app/ui/settings/settings_page.py" line="981"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="648"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="993"/>
         <source>Yes</source>
         <translation>ใช่</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="637"/>
-        <location filename="../../app/ui/settings/settings_page.py" line="982"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="649"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="994"/>
         <source>No</source>
         <translation>ไม่</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="646"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="658"/>
         <source>Restart Required</source>
         <translation>ต้องเริ่มโปรแกรมใหม่</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="647"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="659"/>
         <source>The application needs to restart for the language changes to take effect.
 Restart now?</source>
         <translation>ต้องเริ่มโปรแกรมใหม่เพื่อให้การเปลี่ยนภาษามีผล
 เริ่มใหม่ตอนนี้หรือไม่?</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="690"/>
-        <location filename="../../app/ui/settings/settings_page.py" line="1026"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="702"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="1038"/>
         <source>Cancel</source>
         <translation>ยกเลิก</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="698"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="710"/>
         <source>Failed to initiate sign-in process.</source>
         <translation>ไม่สามารถเริ่มขั้นตอนการเข้าสู่ระบบได้</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="715"/>
-        <location filename="../../app/ui/settings/settings_page.py" line="943"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="727"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="955"/>
         <source>Sign In</source>
         <translation>เข้าสู่ระบบ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="732"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="744"/>
         <source>Sign In Required</source>
         <translation>ต้องเข้าสู่ระบบ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="733"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="745"/>
         <source>Please sign in to purchase or manage credits.</source>
         <translation>กรุณาเข้าสู่ระบบเพื่อซื้อหรือจัดการเครดิต</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="742"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="754"/>
         <source>Unable to Open Browser</source>
         <translation>ไม่สามารถเปิดเบราว์เซอร์ได้</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="743"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="755"/>
         <source>Please open the pricing page in your browser: {url}</source>
         <translation>กรุณาเปิดหน้าราคาในเบราว์เซอร์ของคุณ: {url}</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="815"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="827"/>
         <source>Sign In Error</source>
         <translation>เข้าสู่ระบบผิดพลาด</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="816"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="828"/>
         <source>Authentication failed: {error}</source>
         <translation>ยืนยันตัวตนไม่สำเร็จ: {error}</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="830"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="842"/>
         <source>Confirm Sign Out</source>
         <translation>ยืนยันการออกจากระบบ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="831"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="843"/>
         <source>Are you sure you want to sign out?</source>
         <translation>ต้องการออกจากระบบใช่หรือไม่?</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="835"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="847"/>
         <source>Signing Out...</source>
         <translation>กำลังออกจากระบบ...</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="858"/>
-        <location filename="../../app/ui/settings/settings_page.py" line="936"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="870"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="948"/>
         <source>Sign Out</source>
         <translation>ออกจากระบบ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="874"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="886"/>
         <source>Session Expired</source>
         <translation>เซสชันหมดอายุ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="875"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="887"/>
         <source>Your session has expired. Please sign in again.</source>
         <translation>เซสชันของคุณหมดอายุแล้ว กรุณาเข้าสู่ระบบอีกครั้ง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="889"/>
-        <location filename="../../app/ui/settings/settings_page.py" line="892"/>
-        <location filename="../../app/ui/settings/settings_page.py" line="911"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="901"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="904"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="923"/>
         <source>N/A</source>
         <translation>ไม่มี</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="903"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="915"/>
         <source>Free</source>
         <translation>ฟรี</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="918"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="930"/>
         <source>Subscription</source>
         <translation>สมาชิกรายเดือน</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="921"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="933"/>
         <source>One-time</source>
         <translation>ครั้งเดียว</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="924"/>
-        <location filename="../../app/ui/settings/settings_page.py" line="929"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="936"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="941"/>
         <source>Total</source>
         <translation>รวม</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="958"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="970"/>
         <source>Checking...</source>
         <translation>กำลังตรวจสอบ...</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="964"/>
-        <location filename="../../app/ui/settings/settings_page.py" line="1001"/>
-        <location filename="../../app/ui/settings/settings_page.py" line="1014"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="976"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="1013"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="1026"/>
         <source>Check for Updates</source>
         <translation>ตรวจหาอัปเดต</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="974"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="986"/>
         <source>Update Available</source>
         <translation>มีอัปเดตใหม่</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="977"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="989"/>
         <source>A new version {version} is available.</source>
         <translation>มีเวอร์ชันใหม่ {version} พร้อมให้ใช้งาน</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="978"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="990"/>
         <source>Release Notes</source>
         <translation>บันทึกการเปลี่ยนแปลง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="986"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="998"/>
         <source>Skip This Version</source>
         <translation>ข้ามเวอร์ชันนี้</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="1004"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="1016"/>
         <source>Up to Date</source>
         <translation>เป็นเวอร์ชันล่าสุดแล้ว</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="1005"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="1017"/>
         <source>You are using the latest version.</source>
         <translation>คุณกำลังใช้เวอร์ชันล่าสุดอยู่แล้ว</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="1020"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="1032"/>
         <source>Update Error</source>
         <translation>อัปเดตผิดพลาด</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="1026"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="1038"/>
         <source>Downloading update...</source>
         <translation>กำลังดาวน์โหลดอัปเดต...</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="1043"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="1055"/>
         <source>Download Complete</source>
         <translation>ดาวน์โหลดเสร็จสิ้น</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="1044"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="1056"/>
         <source>Installer downloaded to {path}. Run it now?</source>
         <translation>ดาวน์โหลดตัวติดตั้งไปที่ {path} แล้ว เรียกใช้เลยหรือไม่?</translation>
     </message>
@@ -2007,52 +2007,52 @@ Restart now?</source>
         <translation>Anthropic Claude</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_ui.py" line="340"/>
+        <location filename="../../app/ui/settings/settings_ui.py" line="342"/>
         <source>Personalization</source>
         <translation>การปรับแต่งส่วนตัว</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_ui.py" line="341"/>
+        <location filename="../../app/ui/settings/settings_ui.py" line="343"/>
         <source>Account</source>
         <translation>บัญชี</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_ui.py" line="342"/>
+        <location filename="../../app/ui/settings/settings_ui.py" line="344"/>
         <source>Tools</source>
         <translation>เครื่องมือ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_ui.py" line="343"/>
+        <location filename="../../app/ui/settings/settings_ui.py" line="345"/>
         <source>LLMs</source>
         <translation>โมเดลภาษา (LLM)</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_ui.py" line="344"/>
+        <location filename="../../app/ui/settings/settings_ui.py" line="346"/>
         <source>Text Rendering</source>
         <translation>การแสดงผลข้อความ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_ui.py" line="345"/>
+        <location filename="../../app/ui/settings/settings_ui.py" line="347"/>
         <source>Project</source>
         <translation>โปรเจกต์</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_ui.py" line="346"/>
+        <location filename="../../app/ui/settings/settings_ui.py" line="348"/>
         <source>Export</source>
         <translation>ส่งออก</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_ui.py" line="347"/>
+        <location filename="../../app/ui/settings/settings_ui.py" line="349"/>
         <source>Shortcuts</source>
         <translation>คีย์ลัด</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_ui.py" line="348"/>
+        <location filename="../../app/ui/settings/settings_ui.py" line="350"/>
         <source>Advanced</source>
         <translation>ขั้นสูง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_ui.py" line="349"/>
+        <location filename="../../app/ui/settings/settings_ui.py" line="351"/>
         <source>About</source>
         <translation>เกี่ยวกับ</translation>
     </message>
@@ -2363,65 +2363,89 @@ Increase it if cleaning eats into bubble borders.</source>
 เพิ่มค่านี้หากการลบข้อความกินเข้าไปในเส้นขอบฟอง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="88"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="89"/>
+        <source>OCR Box Padding (%):</source>
+        <translation>ระยะขยายกล่องก่อน OCR (%):</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/settings/tools_page.py" line="95"/>
+        <source>How much larger than the detected box the crop sent to text recognition is.
+Raise it when recognised text comes back clipped or garbled.</source>
+        <translation>ภาพที่ตัดส่งให้ระบบอ่านข้อความจะใหญ่กว่ากล่องที่ตรวจจับได้เท่าใด
+เพิ่มค่านี้เมื่อข้อความที่อ่านได้ขาดหายหรืออ่านออกมามั่ว</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/settings/tools_page.py" line="101"/>
+        <source>Minimum (px):</source>
+        <translation>อย่างน้อย (พิกเซล):</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/settings/tools_page.py" line="107"/>
+        <source>A percentage of a small box is still a small number of pixels, which is
+why tight boxes around short lines get clipped. This is the floor in pixels.</source>
+        <translation>เปอร์เซ็นต์ของกล่องเล็กก็ยังเป็นพิกเซลจำนวนน้อยอยู่ดี กล่องที่รัดข้อความสั้น ๆ
+จึงถูกตัดขาด ค่านี้คือขั้นต่ำที่รับประกันเป็นพิกเซล</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/settings/tools_page.py" line="114"/>
         <source>Inpainter</source>
         <translation>ตัวเติมภาพ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="90"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="116"/>
         <source>AOT</source>
         <translation>AOT</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="92"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="118"/>
         <source>HD Strategy</source>
         <translation>กลยุทธ์สำหรับภาพความละเอียดสูง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="94"/>
-        <location filename="../../app/ui/settings/tools_page.py" line="182"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="120"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="209"/>
         <source>Resize</source>
         <translation>ย่อ/ขยาย</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="104"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="130"/>
         <source>Resize Limit:</source>
         <translation>ขีดจำกัดการย่อขนาด:</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="105"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="131"/>
         <source>Resize the longer side of the image to a specific size,
 then do inpainting on the resized image.</source>
         <translation>ย่อด้านที่ยาวกว่าของภาพให้เหลือขนาดที่กำหนด
 แล้วจึงเติมภาพบนภาพที่ย่อแล้ว</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="121"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="147"/>
         <source>Crop masking area from the original image to do inpainting.</source>
         <translation>ครอบตัดเฉพาะบริเวณมาสก์จากภาพต้นฉบับเพื่อนำไปเติมภาพ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="123"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="149"/>
         <source>Crop Margin:</source>
         <translation>ระยะขอบการครอบตัด:</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="133"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="159"/>
         <source>Crop Trigger Size:</source>
         <translation>ขนาดที่เริ่มครอบตัด:</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="155"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="181"/>
         <source>Use GPU</source>
         <translation>ใช้ GPU</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="183"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="210"/>
         <source>Crop</source>
         <translation>ครอบตัด</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="184"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="211"/>
         <source>Original</source>
         <translation>ขนาดเดิม</translation>
     </message>
@@ -3254,28 +3278,28 @@ It may have been moved, renamed, or deleted.
 <context>
     <name>self.settings.ui</name>
     <message>
-        <location filename="../../modules/ocr/processor.py" line="143"/>
+        <location filename="../../modules/ocr/processor.py" line="162"/>
         <location filename="../../modules/translation/processor.py" line="62"/>
         <source>GPT-4.1-mini</source>
         <translation>GPT-4.1-mini</translation>
     </message>
     <message>
-        <location filename="../../modules/ocr/processor.py" line="144"/>
+        <location filename="../../modules/ocr/processor.py" line="163"/>
         <source>Microsoft OCR</source>
         <translation>Microsoft OCR</translation>
     </message>
     <message>
-        <location filename="../../modules/ocr/processor.py" line="145"/>
+        <location filename="../../modules/ocr/processor.py" line="164"/>
         <source>Google Cloud Vision</source>
         <translation>Google Cloud Vision</translation>
     </message>
     <message>
-        <location filename="../../modules/ocr/processor.py" line="146"/>
+        <location filename="../../modules/ocr/processor.py" line="165"/>
         <source>Gemini-2.5-Flash-Lite</source>
         <translation>Gemini-2.5-Flash-Lite</translation>
     </message>
     <message>
-        <location filename="../../modules/ocr/processor.py" line="147"/>
+        <location filename="../../modules/ocr/processor.py" line="166"/>
         <source>Default</source>
         <translation>ค่าเริ่มต้น</translation>
     </message>
@@ -3347,12 +3371,12 @@ It may have been moved, renamed, or deleted.
 <context>
     <name>self.ui</name>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="276"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="284"/>
         <source>Resize</source>
         <translation>ย่อ/ขยาย</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="278"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="286"/>
         <source>Crop</source>
         <translation>ครอบตัด</translation>
     </message>

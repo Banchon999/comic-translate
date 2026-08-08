@@ -168,7 +168,7 @@ class UserOCR(OCREngine):
             elif blk.xyxy is not None:
                 expansion_percentage = 5 
                 x1, y1, x2, y2 = adjust_text_line_coordinates(
-                    blk.xyxy, expansion_percentage, expansion_percentage, img
+                    blk.xyxy, expansion_percentage, expansion_percentage, img, getattr(self, "min_expansion_px", 0)
                 )
             else:
                 logger.warning(f"Block {i} has no coordinates, skipping.")
