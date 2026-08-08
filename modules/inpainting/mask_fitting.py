@@ -64,6 +64,71 @@ def make_mask_steps(mask: np.ndarray, growth_step: int, steps: int, min_thicknes
         yield grown, min_thickness + (index + 1) * growth_step
 
 
+def fit_mask_growth(
+    image: np.ndarray,
+    mask: np.ndarray,
+    max_growth: int,
+    *,
+    step: int = 2,
+    off_white_threshold: int = 240,
+    allow_color: bool = True,
+    max_deviation: float = 15.0,
+    min_growth: int = 1,
+) -> np.ndarray:
+    """Grow `mask` only as far as its border stays on flat background.
+
+    Text sitting in a speech bubble can be grown generously — the border stays on
+    the bubble fill the whole way, so the mask safely covers glyph antialiasing.
+    Text sitting on artwork cannot: growing it there drags the mask over drawing,
+    which the cleaning stage then destroys. Dilating by a fixed amount cannot tell
+    those two cases apart, so it has to be tuned for the worse one and is wrong
+    for both.
+
+    Each candidate is scored the same way `pick_best_mask` scores its own: the
+    spread of the image colours the mask's outline sits on. The largest growth
+    whose border is still uniform wins, and when even the tightest candidate sits
+    on busy pixels the mask is grown by `min_growth` only — enough for
+    antialiasing, not enough to eat the art behind it.
+    """
+    if max_growth <= 0 or not mask.any():
+        return np.where(mask > 0, 255, 0).astype(np.uint8)
+
+    binary = np.where(mask > 0, 255, 0).astype(np.uint8)
+
+    # The ungrown mask is never a candidate. Its outline runs through the glyph's
+    # own pixels, which are a single colour, so it always scores as perfectly
+    # uniform and would win everywhere — leaving the glyph's antialiased fringe
+    # behind. Every candidate is grown by at least `min_growth`.
+    floor = max(1, min(min_growth, max_growth))
+    grown = imk.dilate(binary, make_growth_kernel(floor))
+    tightest = grown
+    candidates: list[tuple[int, np.ndarray]] = [(floor, grown)]
+
+    growth = floor
+    kernel = make_growth_kernel(step)
+    while growth + step <= max_growth:
+        grown = imk.dilate(grown, kernel)
+        growth += step
+        candidates.append((growth, grown))
+
+    best = None
+    for growth, candidate in candidates:
+        try:
+            deviation, _ = border_std_deviation(
+                image, candidate, off_white_threshold, allow_color
+            )
+        except BlankMaskError:
+            # Candidate fills the crop; nothing left to sample and growing
+            # further cannot help.
+            break
+        if deviation <= max_deviation:
+            best = candidate
+
+    # Every candidate's border landed on busy pixels: keep the mask tight, but
+    # still grown enough to swallow the glyph's antialiased fringe.
+    return best if best is not None else tightest
+
+
 def heuristic_median_color(colors: np.ndarray) -> np.ndarray | None:
     """Return the colour occupying more than half the samples, if any.
 
