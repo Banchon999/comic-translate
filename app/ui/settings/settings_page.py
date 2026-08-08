@@ -136,6 +136,7 @@ class SettingsPage(QtWidgets.QWidget):
             ui.min_font_spinbox, ui.max_font_spinbox,
             ui.project_autosave_interval_spinbox,
             ui.detector_conf_spinbox, ui.mask_padding_spinbox, ui.bubble_inset_spinbox,
+            ui.ocr_padding_spinbox, ui.ocr_min_padding_spinbox,
         ]
         for spinbox in spinboxes:
             spinbox.valueChanged.connect(self._mark_settings_dirty)
@@ -200,6 +201,13 @@ class SettingsPage(QtWidgets.QWidget):
 
     def get_bubble_inset(self) -> int:
         return int(self.ui.bubble_inset_spinbox.value())
+
+    def get_ocr_padding(self) -> tuple[int, int]:
+        """(percentage, minimum pixels) to expand a box by before OCR crops it."""
+        return (
+            int(self.ui.ocr_padding_spinbox.value()),
+            int(self.ui.ocr_min_padding_spinbox.value()),
+        )
 
     def get_llm_settings(self):
         return {
@@ -303,6 +311,8 @@ class SettingsPage(QtWidgets.QWidget):
                 'detector_confidence': int(self.ui.detector_conf_spinbox.value()),
                 'mask_padding': self.get_mask_padding(),
                 'bubble_inset': self.get_bubble_inset(),
+                'ocr_padding': self.get_ocr_padding()[0],
+                'ocr_min_padding': self.get_ocr_padding()[1],
                 'stitch_detection': self.ui.stitch_detection_checkbox.isChecked(),
                 'hd_strategy': self.get_hd_strategy_settings()
             },
@@ -467,6 +477,8 @@ class SettingsPage(QtWidgets.QWidget):
         self.ui.detector_conf_spinbox.setValue(settings.value('detector_confidence', 30, type=int))
         self.ui.mask_padding_spinbox.setValue(settings.value('mask_padding', 5, type=int))
         self.ui.bubble_inset_spinbox.setValue(settings.value('bubble_inset', 5, type=int))
+        self.ui.ocr_padding_spinbox.setValue(settings.value('ocr_padding', 5, type=int))
+        self.ui.ocr_min_padding_spinbox.setValue(settings.value('ocr_min_padding', 4, type=int))
         self.ui.stitch_detection_checkbox.setChecked(settings.value('stitch_detection', False, type=bool))
 
         # Load HD strategy settings

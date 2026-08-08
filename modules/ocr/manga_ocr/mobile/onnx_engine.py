@@ -66,7 +66,7 @@ class MangaOCRMobileONNXEngine(OCREngine):
                     blk.xyxy,
                     self.expansion_percentage,
                     self.expansion_percentage,
-                    img,
+                    img, getattr(self, "min_expansion_px", 0),
                 )
 
             if x1 < x2 and y1 < y2 and x1 >= 0 and y1 >= 0 and x2 <= img.shape[1] and y2 <= img.shape[0]:

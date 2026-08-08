@@ -316,6 +316,7 @@ def build_block_mask_data(
     bubble_inset: int | None = None,
 ) -> tuple[np.ndarray | None, tuple[int, int, int, int] | None]:
     from modules.detection.utils.content import detect_content_mask_in_bbox
+    from modules.inpainting.mask_fitting import fit_mask_growth
 
     if require_text_or_translation and not blk.text and not blk.translation:
         return None, None
@@ -347,8 +348,13 @@ def build_block_mask_data(
             dilate_iterations=dilate_iterations,
         )
     else:
-        dil_kernel = np.ones((kernel_size, kernel_size), np.uint8)
-        dilated_crop_mask = imk.dilate(crop_mask, dil_kernel, iterations=dilate_iterations)
+        # Free text has no bubble to clip against, so a fixed dilation is bounded
+        # by nothing: over a drawing it drags the mask across artwork, which the
+        # cleaning stage then wipes out. Grow it only as far as the mask's border
+        # stays on flat pixels instead.
+        dilated_crop_mask = fit_mask_growth(
+            crop, crop_mask, max_growth=max(1, kernel_size * dilate_iterations // 2)
+        )
 
     return dilated_crop_mask, (cx1, cy1, cx2, cy2)
 

@@ -51,7 +51,7 @@ class EasyOCREngine(OCREngine):
                 blk.text = ""
                 continue
             x1, y1, x2, y2 = adjust_text_line_coordinates(
-                blk.xyxy, self.expansion_percentage, self.expansion_percentage, img
+                blk.xyxy, self.expansion_percentage, self.expansion_percentage, img, getattr(self, "min_expansion_px", 0)
             )
             if not (0 <= x1 < x2 <= img.shape[1] and 0 <= y1 < y2 <= img.shape[0]):
                 blk.text = ""

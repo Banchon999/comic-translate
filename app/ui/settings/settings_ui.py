@@ -234,6 +234,8 @@ class SettingsPageUI(QtWidgets.QWidget):
         self.stitch_detection_checkbox = self.tools_page.stitch_detection_checkbox
         self.mask_padding_spinbox = self.tools_page.mask_padding_spinbox
         self.bubble_inset_spinbox = self.tools_page.bubble_inset_spinbox
+        self.ocr_padding_spinbox = self.tools_page.ocr_padding_spinbox
+        self.ocr_min_padding_spinbox = self.tools_page.ocr_min_padding_spinbox
         self.resize_spinbox = self.tools_page.resize_spinbox
         self.crop_margin_spinbox = self.tools_page.crop_margin_spinbox
         self.crop_trigger_spinbox = self.tools_page.crop_trigger_spinbox
