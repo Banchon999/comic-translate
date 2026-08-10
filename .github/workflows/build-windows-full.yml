@@ -1,0 +1,93 @@
+# Same app as build-windows.yml, plus the PyTorch stack, so the bundle can run
+# the PaddleOCR-VL text recognition engine without a Python install.
+#
+# Kept as a separate workflow rather than folded into the normal build because
+# torch multiplies the download from a few hundred megabytes to several
+# gigabytes, and most people never touch that engine. Ship the lean build as
+# the default; offer this one to whoever wants PaddleOCR-VL.
+#
+# CPU wheels only. A CUDA build would be larger again and would still be wrong
+# for anyone without a matching driver, so GPU users are better served running
+# from source with the CUDA index.
+name: Build Windows App (with PaddleOCR-VL)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-windows-full:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14.5'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          pip install "transformers>=5"
+          pip install pyinstaller
+
+      - name: Build app with PyInstaller
+        run: |
+          pyinstaller --noconfirm --clean --windowed `
+            --name ComicTranslate `
+            --icon resources/icons/icon.ico `
+            --add-data "resources;resources" `
+            --collect-all torch `
+            --collect-all torchvision `
+            --collect-all transformers `
+            --collect-all tokenizers `
+            --collect-all safetensors `
+            --hidden-import transformers.models.paddleocr_vl `
+            comic.py
+
+      - name: Smoke test bundle
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath "dist/ComicTranslate/ComicTranslate.exe" -PassThru
+          Start-Sleep -Seconds 30
+          if ($p.HasExited) {
+            Write-Error "App exited early with code $($p.ExitCode)"
+            exit 1
+          }
+          Stop-Process -Id $p.Id -Force
+          Write-Output "Smoke test passed"
+
+      # The point of this build is that the engine is actually reachable, which
+      # the app's own availability check decides. Assert it here rather than
+      # discovering after release that a collect-all silently missed something.
+      - name: Verify the PyTorch stack is bundled
+        shell: pwsh
+        run: |
+          $missing = @()
+          foreach ($pkg in @('torch', 'torchvision', 'transformers')) {
+            if (-not (Get-ChildItem -Path dist/ComicTranslate -Recurse -Directory -Filter $pkg -ErrorAction SilentlyContinue)) {
+              $missing += $pkg
+            }
+          }
+          if ($missing.Count -gt 0) {
+            Write-Error "Not bundled: $($missing -join ', ') - PaddleOCR-VL would be unavailable in this build"
+            exit 1
+          }
+          Write-Output "torch, torchvision and transformers are all present"
+
+      - name: Package zip
+        shell: pwsh
+        run: Compress-Archive -Path dist/ComicTranslate -DestinationPath dist/ComicTranslate-Windows-x86_64-full.zip
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: Comic-Translate-Windows-Full
+          path: dist/ComicTranslate-Windows-x86_64-full.zip
+          if-no-files-found: error
+          retention-days: 30
