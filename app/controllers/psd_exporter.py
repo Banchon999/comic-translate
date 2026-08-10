@@ -11,11 +11,34 @@ logger = logging.getLogger(__name__)
 
 import imkit as imk
 import numpy as np
-import photoshopapi as psapi
 from PySide6 import QtCore, QtGui
 
 from app.ui.canvas.text.text_item_properties import TextItemProperties
 from app.path_materialization import ensure_path_materialized
+
+try:
+	import photoshopapi as psapi
+except ImportError as exc:  # pragma: no cover - depends on the install
+	# No wheel for this Python or platform. Importing this module must still
+	# work: app/controllers/projects.py pulls it in at start-up, and a missing
+	# optional dependency should disable PSD support, not the whole app.
+	psapi = None
+	_psapi_import_error = exc
+else:
+	_psapi_import_error = None
+
+
+def psd_support_available() -> bool:
+	"""Whether PSD files can be read and written in this install."""
+	return psapi is not None
+
+
+def _require_psapi() -> None:
+	if psapi is None:
+		raise RuntimeError(
+			"PSD support needs the PhotoshopAPI package, which is not installed "
+			f"for this Python build ({_psapi_import_error})."
+		)
 
 
 def _u16_len(text: str) -> int:
@@ -29,6 +52,9 @@ class PsdPageData:
 	rgb_image: np.ndarray
 	viewer_state: dict[str, Any]
 	patches: list[dict[str, Any]]
+	# The page as it looks on the canvas — base art, patches and rendered text.
+	# Written into the PSD's flattened preview; see _write_flattened_preview.
+	composite_image: np.ndarray | None = None
 
 
 @dataclass
@@ -82,6 +108,7 @@ def export_psd_pages(
 
 
 def _write_page_psd(page: PsdPageData, out_path: str) -> None:
+	_require_psapi()
 	image = _ensure_rgb_uint8(page.rgb_image)
 	height, width, _ = image.shape
 	doc = psapi.LayeredFile_8bit(psapi.enum.ColorMode.rgb, width, height)
@@ -136,6 +163,182 @@ def _write_page_psd(page: PsdPageData, out_path: str) -> None:
 		invalidate()
 
 	doc.write(out_path, force_overwrite=True)
+
+	preview = page.composite_image
+	if preview is None:
+		preview = _compose_preview(image, page.patches)
+	try:
+		_write_flattened_preview(out_path, _ensure_rgb_uint8(preview))
+	except Exception:
+		# A wrong preview is worse than the black one, so only replace it when
+		# the file parses exactly as expected. The layers are already correct.
+		logger.exception("Could not write the flattened preview for %s", out_path)
+
+	try:
+		_strip_layer_name_terminators(out_path)
+	except Exception:
+		logger.exception("Could not clean up layer names in %s", out_path)
+
+
+def _strip_layer_name_terminators(path: str) -> None:
+	"""Drop the NUL PhotoshopAPI appends to every Unicode layer name.
+
+	Photoshop shows the 'luni' name rather than the legacy Pascal one, so every
+	layer in the exported file reads "Raw Image" followed by a stray character.
+	The count is lowered by one rather than the bytes moved, which leaves the
+	block's declared length untouched — the last two bytes simply become
+	padding, which readers skip.
+	"""
+	with open(path, "r+b") as handle:
+		data = handle.read()
+
+		position = 0
+		while True:
+			position = data.find(b"8BIMluni", position)
+			if position < 0:
+				return
+
+			length_at = position + 8
+			block_length = struct.unpack(">I", data[length_at:length_at + 4])[0]
+			count_at = length_at + 4
+			char_count = struct.unpack(">I", data[count_at:count_at + 4])[0]
+			name_at = count_at + 4
+			name_bytes = 2 * char_count
+
+			# Verify this really is a name block before touching anything: its
+			# declared size has to cover the string, and the string has to end
+			# with the terminator we are removing.
+			plausible = (
+				char_count > 0
+				and 4 + name_bytes <= block_length <= 4 + name_bytes + 3
+				and name_at + name_bytes <= len(data)
+				and data[name_at + name_bytes - 2:name_at + name_bytes] == b"\x00\x00"
+			)
+			if plausible:
+				handle.seek(count_at)
+				handle.write(struct.pack(">I", char_count - 1))
+
+			position = length_at
+
+
+def _compose_preview(base: np.ndarray, patches: list[dict[str, Any]]) -> np.ndarray:
+	"""Base art with the inpaint patches pasted over it.
+
+	The fallback for when the caller did not render the page — it misses the
+	translated text, but it is still the artwork rather than a black rectangle.
+	"""
+	preview = base.copy()
+	height, width = preview.shape[:2]
+	for patch in patches:
+		bbox = patch.get("bbox")
+		if not bbox or len(bbox) != 4:
+			continue
+		x, y, w, h = [int(round(v)) for v in bbox]
+		if w <= 0 or h <= 0:
+			continue
+
+		png_path = patch.get("png_path")
+		if png_path:
+			ensure_path_materialized(png_path)
+			if not os.path.isfile(png_path):
+				continue
+			patch_img = imk.read_image(png_path)
+		else:
+			patch_img = patch.get("image")
+		if patch_img is None:
+			continue
+
+		patch_img = _ensure_rgb_uint8(patch_img)
+		ph, pw = patch_img.shape[:2]
+		x2, y2 = min(x + pw, width), min(y + ph, height)
+		x1, y1 = max(x, 0), max(y, 0)
+		if x2 <= x1 or y2 <= y1:
+			continue
+		preview[y1:y2, x1:x2] = patch_img[y1 - y : y2 - y, x1 - x : x2 - x]
+	return preview
+
+
+def _pack_bits(data: bytes) -> bytes:
+	"""PackBits run-length encoding, which is PSD's compression method 1."""
+	out = bytearray()
+	length = len(data)
+	index = 0
+	while index < length:
+		run = 1
+		while index + run < length and data[index + run] == data[index] and run < 128:
+			run += 1
+		if run >= 3:
+			out.append(257 - run)
+			out.append(data[index])
+			index += run
+			continue
+
+		# Literal run, ending just before the next run of three or more.
+		start = index
+		index += 1
+		while index < length and index - start < 128:
+			if index + 2 < length and data[index] == data[index + 1] == data[index + 2]:
+				break
+			index += 1
+		out.append(index - start - 1)
+		out += data[start:index]
+	return bytes(out)
+
+
+def _write_flattened_preview(path: str, image: np.ndarray) -> None:
+	"""Replace the PSD's merged image section with a real composite.
+
+	PhotoshopAPI writes the layers but leaves this section black, and it is the
+	only thing anything other than Photoshop reads: file thumbnails, Preview,
+	Krita, Clip Studio and every web viewer show that black rectangle instead
+	of the page. Photoshop itself re-composites from the layers, which is why
+	the export looks fine there and broken everywhere else.
+	"""
+	with open(path, "r+b") as handle:
+		header = handle.read(26)
+		if len(header) < 26 or header[:4] != b"8BPS":
+			raise ValueError("Not a PSD file")
+
+		version = struct.unpack(">H", header[4:6])[0]
+		channels, height, width, depth, color_mode = struct.unpack(">H I I H H", header[12:26])
+		if depth != 8 or color_mode != 3:
+			raise ValueError(f"Unsupported PSD: depth={depth} color_mode={color_mode}")
+		if image.shape[0] != height or image.shape[1] != width:
+			raise ValueError("Preview does not match the document size")
+
+		# Walk past colour mode data, image resources, and layer and mask info.
+		offset = 26
+		for _ in range(3):
+			handle.seek(offset)
+			section_length = struct.unpack(">I", handle.read(4))[0]
+			offset += 4 + section_length
+
+		# PSB stores the per-row byte counts as 32-bit values.
+		count_format = ">I" if version == 2 else ">H"
+		count_max = 0xFFFFFFFF if version == 2 else 0xFFFF
+
+		planes = [np.ascontiguousarray(image[:, :, i]) for i in range(3)]
+		if channels > 3:
+			# An alpha channel the layers do not have; opaque is the only
+			# sensible value for a flattened page.
+			planes += [np.full((height, width), 255, dtype=np.uint8)] * (channels - 3)
+		planes = planes[:channels]
+
+		row_counts = bytearray()
+		body = bytearray()
+		for plane in planes:
+			for row in plane:
+				encoded = _pack_bits(row.tobytes())
+				if len(encoded) > count_max:
+					raise ValueError("Row does not fit the PSD row-count field")
+				row_counts += struct.pack(count_format, len(encoded))
+				body += encoded
+
+		handle.seek(offset)
+		handle.write(struct.pack(">H", 1))  # compression: RLE
+		handle.write(bytes(row_counts))
+		handle.write(bytes(body))
+		handle.truncate()
 
 
 def _build_patch_layer(patch: dict[str, Any], index: int) -> Any | None:
