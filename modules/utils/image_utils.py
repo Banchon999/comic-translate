@@ -307,6 +307,47 @@ def _resolve_block_crop_bounds(
     return cx1, cy1, cx2, cy2
 
 
+def _precise_block_mask(
+    img: np.ndarray,
+    crop: np.ndarray,
+    bounds: tuple[int, int, int, int],
+    page_text_mask: np.ndarray | None,
+) -> np.ndarray | None:
+    """Which pixels inside the crop are glyph.
+
+    With a page-level text prediction available, the crop's binarisation is
+    scored against it and only the parts that agree survive — see
+    `modules.inpainting.text_mask_refine`. Without one, the crop is thresholded
+    on its own, which is all the information there is.
+    """
+    from modules.detection.utils.content import detect_content_mask_in_bbox
+
+    if page_text_mask is not None:
+        from modules.inpainting.text_mask_refine import (
+            REFINEMASK_ANNOTATION,
+            merge_mask_list,
+            get_otsuthresh_masklist,
+            get_topk_masklist,
+        )
+
+        cx1, cy1, cx2, cy2 = bounds
+        crop_pred = np.ascontiguousarray(page_text_mask[cy1:cy2, cx1:cx2])
+        if crop_pred.any():
+            candidates = get_topk_masklist(crop, crop_pred)
+            candidates += get_otsuthresh_masklist(crop, crop_pred, per_channel=False)
+            if candidates:
+                refined = merge_mask_list(
+                    candidates, crop_pred, refine_mode=REFINEMASK_ANNOTATION
+                )
+                if refined.any():
+                    return refined
+        # The network saw no text here. Falling back would reinstate exactly the
+        # false positives it is here to suppress, so leave the block alone.
+        return None
+
+    return detect_content_mask_in_bbox(crop)
+
+
 def build_block_mask_data(
     img: np.ndarray,
     blk: TextBlock,
@@ -314,8 +355,8 @@ def build_block_mask_data(
     require_text_or_translation: bool = True,
     clip_to_bubble: bool = False,
     bubble_inset: int | None = None,
+    page_text_mask: np.ndarray | None = None,
 ) -> tuple[np.ndarray | None, tuple[int, int, int, int] | None]:
-    from modules.detection.utils.content import detect_content_mask_in_bbox
     from modules.inpainting.mask_fitting import fit_mask_growth
 
     if require_text_or_translation and not blk.text and not blk.translation:
@@ -324,7 +365,7 @@ def build_block_mask_data(
     cx1, cy1, cx2, cy2 = _resolve_block_crop_bounds(img, blk, default_padding)
     crop = img[cy1:cy2, cx1:cx2]
 
-    crop_mask = detect_content_mask_in_bbox(crop)
+    crop_mask = _precise_block_mask(img, crop, (cx1, cy1, cx2, cy2), page_text_mask)
     if crop_mask is None or not np.any(crop_mask):
         return None, None
 
@@ -367,6 +408,7 @@ def collect_block_mask_data(
     require_text_or_translation: bool = True,
     clip_to_bubble: bool = True,
     bubble_inset: int | None = None,
+    page_text_mask: np.ndarray | None = None,
 ) -> list[dict[str, Any]]:
     entries: list[dict[str, Any]] = []
     for blk in blk_list:
@@ -377,6 +419,7 @@ def collect_block_mask_data(
             require_text_or_translation=require_text_or_translation,
             clip_to_bubble=clip_to_bubble,
             bubble_inset=bubble_inset,
+            page_text_mask=page_text_mask,
         )
         if crop_mask is None or bounds is None:
             continue
@@ -389,6 +432,7 @@ def generate_mask(
     blk_list: list[TextBlock],
     default_padding: int = 5,
     bubble_inset: int | None = None,
+    page_text_mask: np.ndarray | None = None,
 ) -> np.ndarray:
     """
     Generate a text-removal mask from filtered connected components and
@@ -398,7 +442,11 @@ def generate_mask(
     mask = np.zeros((h, w), dtype=np.uint8)
 
     for entry in collect_block_mask_data(
-        img, blk_list, default_padding=default_padding, bubble_inset=bubble_inset
+        img,
+        blk_list,
+        default_padding=default_padding,
+        bubble_inset=bubble_inset,
+        page_text_mask=page_text_mask,
     ):
         cx1, cy1, cx2, cy2 = entry["bounds"]
         crop_mask = entry["mask"]

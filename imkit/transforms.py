@@ -422,14 +422,14 @@ def connected_components_with_stats(image: np.ndarray, connectivity: int = 4) ->
 
     # 4. Assemble the 'stats' array to match the OpenCV format
     # Format: [CC_STAT_LEFT, CC_STAT_TOP, CC_STAT_WIDTH, CC_STAT_HEIGHT, CC_STAT_AREA]
+    # mahotas returns exclusive maxima — labeled[ymin:ymax, xmin:xmax] is the
+    # component's bounding box — so the extent is the plain difference. Adding
+    # one made every component report a pixel wider and taller than it is, which
+    # also made the zero-area guard below necessary.
     ymin, ymax, xmin, xmax = bboxes.T
-    width = xmax - xmin + 1
-    height = ymax - ymin + 1
-    
-    # For labels with 0 area, their bbox is [0,0,0,0], making width/height 1. Fix this.
-    width[sizes == 0] = 0
-    height[sizes == 0] = 0
-    
+    width = xmax - xmin
+    height = ymax - ymin
+
     stats = np.stack([xmin, ymin, width, height, sizes], axis=1).astype(np.int32)
 
     return num_labels+1, labeled, stats, centroids

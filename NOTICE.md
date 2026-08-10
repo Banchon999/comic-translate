@@ -19,11 +19,17 @@ original authors. Apache-2.0 is one-way compatible with GPLv3, so the
 
 Parts of the image cleaning pipeline are derived from
 [PanelCleaner](https://github.com/VoxelCubes/PanelCleaner) by VoxelCubes,
-which is licensed under GPL-3.0-or-later. Files containing derived code carry
-an attribution header naming the upstream source.
+which is licensed under GPL-3.0-or-later
+(`modules/inpainting/mask_fitting.py`).
 
-Because GPLv3 is copyleft, incorporating this code is what requires the
-combined work to be distributed under GPLv3.
+The text mask refinement in `modules/inpainting/text_mask_refine.py` is
+derived from [comic-text-detector](https://github.com/dmMaze/comic-text-detector)
+by dmMaze, which is licensed under GPL-3.0 and which PanelCleaner vendors for
+the same purpose.
+
+Files containing derived code carry an attribution header naming the upstream
+source. Because GPLv3 is copyleft, incorporating this code is what requires
+the combined work to be distributed under GPLv3.
 
 ## Practical consequences
 

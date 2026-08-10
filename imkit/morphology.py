@@ -87,19 +87,19 @@ def get_structuring_element(shape: int, ksize: tuple) -> np.ndarray:
         elem[:, w//2] = True
 
     elif shape == MORPH_ELLIPSE:
-        # use Mahotas' disk
-        # we approximate ellipse by a disk with radius = min(h, w)//2
-        radius = min(h, w) // 2
-        elem = mh.disk(radius, dim=2).astype(bool)
-
-        # ensure output matches requested size
-        # pad or crop to (h, w)
-        ph = max(0, h - elem.shape[0])
-        pw = max(0, w - elem.shape[1])
-        elem = np.pad(elem,
-                      ((ph//2, ph - ph//2), (pw//2, pw - pw//2)),
-                      mode='constant')
-        elem = elem[:h, :w]
+        # Rasterised the way OpenCV does it, one row at a time. mh.disk(r) was
+        # used here before, but it draws a disk of radius r-1 inside an r*2+1
+        # box: a (3, 3) element came out as a single pixel, i.e. an identity
+        # kernel that dilated nothing, and every larger one grew a pixel short.
+        elem = np.zeros((h, w), dtype=bool)
+        r, c = h // 2, w // 2
+        inv_r2 = 1.0 / (r * r) if r else 0.0
+        for i in range(h):
+            dy = i - r
+            if abs(dy) > r:
+                continue
+            dx = int(c * np.sqrt((r * r - dy * dy) * inv_r2) + 0.5) if r else c
+            elem[i, max(c - dx, 0):min(c + dx + 1, w)] = True
 
     else:
         raise ValueError("Unknown shape flag")

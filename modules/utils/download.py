@@ -65,6 +65,7 @@ class ModelID(Enum):
     RTDETR_V2_ONNX = "rtdetr-v2-onnx"
     RTDETR_INT8_ONNX = "rtdetr-int8-onnx"
     SPEECH_BUBBLE_SEG_ONNX = "speech-bubble-seg-onnx"
+    COMIC_TEXT_SEG_ONNX = "comic-text-detector-onnx"
     
     # PPOCRv5 Detection Models
     PPOCR_V5_DET_MOBILE = "ppocr-v5-det-mobile"
@@ -485,6 +486,17 @@ def _register_defaults():
         sha256=['36c26bdefe150226acd9669772e9ff5a011fa0dd4622469b49d3d5e359f3251c'],
         save_dir=os.path.join(models_base_dir, 'detection'),
         save_as={'model_dynamic.onnx': 'speech-bubble-seg-yolov8m.onnx'}
+    ))
+
+    # comic-text-detector: a pixel-level text segmentation head, used to seed
+    # the precise cleaning mask. Same weights and hash PanelCleaner pins.
+    ModelDownloader.register(ModelSpec(
+        id=ModelID.COMIC_TEXT_SEG_ONNX,
+        url='https://github.com/zyddnys/manga-image-translator/releases/download/beta-0.3/',
+        files=['comictextdetector.pt.onnx'],
+        sha256=['1a86ace74961413cbd650002e7bb4dcec4980ffa21b2f19b86933372071d718f'],
+        save_dir=os.path.join(models_base_dir, 'detection'),
+        save_as={'comictextdetector.pt.onnx': 'comic-text-detector.onnx'}
     ))
 
     # PPOCRv5 Detection Models

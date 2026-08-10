@@ -15,6 +15,7 @@ from modules.utils.device import resolve_device
 from modules.utils.exceptions import InsufficientCreditsException
 from modules.utils.glossary import collect_source_text
 from modules.utils.image_utils import generate_mask
+from modules.utils.text_segmentation import segment_page
 from modules.utils.pipeline_config import get_config, get_inpainter_backend, inpaint_map
 from modules.utils.textblock import TextBlock, sort_blk_list
 from modules.utils.translator_utils import is_renderable_translation
@@ -211,6 +212,7 @@ class ChunkMixin:
             image, mask_blocks,
             default_padding=settings_page.get_mask_padding(),
             bubble_inset=settings_page.get_bubble_inset(),
+            page_text_mask=segment_page(image, settings_page),
         )
         if mask is None or not np.any(mask):
             return None, None
