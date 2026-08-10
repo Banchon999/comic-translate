@@ -13,7 +13,7 @@ from modules.utils.device import get_providers
 from modules.utils.onnx import make_session
 from modules.utils.textblock import TextBlock
 from modules.utils.language_utils import is_no_space_lang
-from modules.utils.textblock import adjust_text_line_coordinates
+from modules.ocr.crop_utils import crop_with_bounds, expanded_ocr_block_bounds, expanded_ocr_line_bounds
 from modules.ocr.ppocr.preprocessing import crop_quad
 from .pororo.models.brainOCR.brainocr import Reader
 from .pororo.models.brainOCR.detection import (
@@ -274,7 +274,13 @@ class PororoOCREngineONNX(OCREngine):
                 lines = getattr(blk, 'lines', None) or [blk.xyxy]
                 image_list = []
                 for line in lines:
-                    crop = _crop_line_grey(img_cv_grey, line)
+                    crop = _crop_line_grey(
+                        img_cv_grey,
+                        line,
+                        blk,
+                        getattr(self, 'expansion_percentage', 5),
+                        getattr(self, "min_expansion_px", 0),
+                    )
                     if crop is not None and crop.size > 0:
                         image_list.append((line, crop))
                 if not image_list:
@@ -288,17 +294,14 @@ class PororoOCREngineONNX(OCREngine):
             return blk_list
 
         for blk in blk_list:
-            if getattr(blk, 'bubble_xyxy', None) is not None:
-                x1, y1, x2, y2 = blk.bubble_xyxy
-            else:
-                x1, y1, x2, y2 = adjust_text_line_coordinates(
-                    blk.xyxy,
-                    getattr(self, 'expansion_percentage', 5),
-                    getattr(self, 'expansion_percentage', 5),
-                    img, getattr(self, "min_expansion_px", 0),
-                )
-            if x1 < x2 and y1 < y2 and x1 >= 0 and y1 >= 0 and x2 <= img.shape[1] and y2 <= img.shape[0]:
-                cropped = img[y1:y2, x1:x2]
+            bounds = expanded_ocr_block_bounds(
+                img,
+                blk,
+                getattr(self, 'expansion_percentage', 5),
+                getattr(self, "min_expansion_px", 0),
+            )
+            cropped = crop_with_bounds(img, bounds)
+            if cropped is not None:
                 # run full pipeline on cropped region
                 # detection+recognition expects color or grey; keep as is
                 res = self.read(cropped)
@@ -314,22 +317,43 @@ class PororoOCREngineONNX(OCREngine):
         return blk_list
 
 
-def _crop_line_grey(img_cv_grey: np.ndarray, line) -> np.ndarray | None:
+def _crop_line_grey(
+    img_cv_grey: np.ndarray,
+    line,
+    blk: TextBlock | None = None,
+    expansion_percentage: int = 5,
+    min_padding: int = 0,
+) -> np.ndarray | None:
     arr = np.asarray(line)
-    if arr.ndim == 2 and arr.shape[0] >= 4 and arr.shape[1] == 2:
+    if blk is None and arr.ndim == 2 and arr.shape[0] >= 4 and arr.shape[1] == 2:
         return crop_quad(img_cv_grey, arr[:4].astype(np.float32))
-    elif arr.size == 4:
-        x1, y1, x2, y2 = [int(round(float(v))) for v in arr.reshape(-1)[:4]]
-    else:
-        return None
 
-    x1 = max(0, min(img_cv_grey.shape[1], x1))
-    x2 = max(0, min(img_cv_grey.shape[1], x2))
-    y1 = max(0, min(img_cv_grey.shape[0], y1))
-    y2 = max(0, min(img_cv_grey.shape[0], y2))
-    if x2 <= x1 or y2 <= y1:
+    if blk is not None:
+        crop = crop_with_bounds(
+            img_cv_grey,
+            expanded_ocr_line_bounds(
+                img_cv_grey,
+                blk,
+                line,
+                expansion_percentage=expansion_percentage,
+                min_padding=min_padding,
+            ),
+        )
+    else:
+        if arr.size != 4:
+            return None
+        x1, y1, x2, y2 = [int(round(float(v))) for v in arr.reshape(-1)[:4]]
+
+        x1 = max(0, min(img_cv_grey.shape[1], x1))
+        x2 = max(0, min(img_cv_grey.shape[1], x2))
+        y1 = max(0, min(img_cv_grey.shape[0], y1))
+        y2 = max(0, min(img_cv_grey.shape[0], y2))
+        if x2 <= x1 or y2 <= y1:
+            return None
+        crop = img_cv_grey[y1:y2, x1:x2]
+
+    if crop is None or crop.size == 0:
         return None
-    crop = img_cv_grey[y1:y2, x1:x2]
     h, w = crop.shape[:2]
     if h > 0 and w > 0 and h / float(w) >= 1.5:
         crop = np.rot90(crop)
