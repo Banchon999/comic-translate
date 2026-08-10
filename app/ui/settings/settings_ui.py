@@ -68,6 +68,12 @@ class SettingsPageUI(QtWidgets.QWidget):
         # EasyOCR is an optional torch-based dependency; only offer it when installed
         if importlib.util.find_spec("easyocr") is not None:
             self.ocr_engines.insert(4, 'EasyOCR')
+        # PaddleOCR-VL needs transformers 5, torch and torchvision, none of which
+        # this project depends on, so it is only offered when all are importable.
+        # Checked by spec rather than by importing the engine, which would drag
+        # the whole model stack into building the settings dialog.
+        if all(importlib.util.find_spec(n) for n in ("torch", "torchvision", "transformers")):
+            self.ocr_engines.insert(4, 'PaddleOCR-VL')
         self.inpaint_strategy = [self.tr('Resize'), self.tr('Original'), self.tr('Crop')]
         self.themes = [self.tr('Dark'), self.tr('Light')]
         self.alignment = [self.tr("Left"), self.tr("Center"), self.tr("Right")]
@@ -143,6 +149,7 @@ class SettingsPageUI(QtWidgets.QWidget):
             "PaddleOCR (Server)": "PaddleOCR (Server)",
             "Pororo (Korean)": "Pororo (Korean)",
             "EasyOCR": "EasyOCR",
+            "PaddleOCR-VL": "PaddleOCR-VL",
 
             # Inpainter mappings
             "LaMa": "LaMa",

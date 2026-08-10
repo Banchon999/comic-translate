@@ -220,6 +220,9 @@ class OCRFactory:
         if ocr_model == 'EasyOCR':
             return cls._create_easyocr(settings, source_lang_english)
 
+        if ocr_model == 'PaddleOCR-VL':
+            return cls._create_paddle_vl(settings)
+
         # For Default, use language-specific engines
         if ocr_model == 'Default' and source_lang_english in language_factories:
             return language_factories[source_lang_english](settings)
@@ -301,6 +304,14 @@ class OCRFactory:
         engine.initialize(source_lang_english=source_lang_english, device=device)
         return engine
     
+    @staticmethod
+    def _create_paddle_vl(settings) -> OCREngine:
+        from .paddle_vl import PaddleOCRVLEngine
+        device = resolve_device(settings.is_gpu_enabled(), 'torch')
+        engine = PaddleOCRVLEngine()
+        engine.initialize(device=device)
+        return engine
+
     @staticmethod
     def _create_gemini_ocr(settings, model) -> OCREngine:
         engine = GeminiOCR()

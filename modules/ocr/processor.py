@@ -175,5 +175,6 @@ class OCRProcessor:
             'PaddleOCR (Server)': 'PaddleOCR (Server)',
             'Pororo (Korean)': 'Pororo (Korean)',
             'EasyOCR': 'EasyOCR',
+            'PaddleOCR-VL': 'PaddleOCR-VL',
         }
         return translator_map.get(localized_ocr, localized_ocr)
