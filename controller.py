@@ -78,6 +78,10 @@ class ComicTranslate(ComicTranslateUI):
         self.curr_tblock_item: TextBlockItem = None     
 
         self.image_files = []
+        # Working path -> where the page came from. Only populated when a
+        # project is reopened: its pages are materialized into per-id temp
+        # directories, which say nothing about the series layout.
+        self.path_originals: dict[str, str] = {}
         self.selected_batch = []
         self.curr_img_idx = -1
         self.image_states = {}

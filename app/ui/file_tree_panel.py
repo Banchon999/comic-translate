@@ -46,6 +46,7 @@ class FileTreePanel(QtWidgets.QWidget):
 
         self._paths: list[str] = []
         self._states: dict[str, dict] = {}
+        self._originals: dict[str, str] = {}
         self._items_by_path: dict[str, QtWidgets.QTreeWidgetItem] = {}
         self._selecting = False
         self.workspaces = WorkspaceManager.instance()
@@ -199,10 +200,23 @@ class FileTreePanel(QtWidgets.QWidget):
 
     # Building
 
-    def set_pages(self, file_paths: list[str], image_states: dict[str, dict]) -> None:
-        """Rebuild from the current page list."""
+    def set_pages(
+        self,
+        file_paths: list[str],
+        image_states: dict[str, dict],
+        path_originals: dict[str, str] | None = None,
+    ) -> None:
+        """Rebuild from the current page list.
+
+        `path_originals` maps a page's working path to where it originally came
+        from. Pages restored from a saved project live in per-id temp
+        directories — grouping by those shows one numbered folder per page —
+        so grouping and labels use the original path while every emitted
+        action still carries the working path.
+        """
         self._paths = list(file_paths)
         self._states = image_states or {}
+        self._originals = dict(path_originals or {})
 
         expanded = {
             self.tree.topLevelItem(i).data(0, PATH_ROLE)
@@ -243,11 +257,15 @@ class FileTreePanel(QtWidgets.QWidget):
         if selected:
             self.select_paths(selected)
 
+    def _display_path(self, path: str) -> str:
+        return self._originals.get(path, path)
+
     def _group_by_folder(self, paths: list[str]) -> dict[str, list[str]]:
         """Folders in the order their first page appears, keeping page order."""
         groups: dict[str, list[str]] = {}
         for path in paths:
-            groups.setdefault(os.path.dirname(path) or os.sep, []).append(path)
+            folder = os.path.dirname(self._display_path(path)) or os.sep
+            groups.setdefault(folder, []).append(path)
         return groups
 
     def _folder_label(self, folder: str) -> str:
@@ -281,8 +299,9 @@ class FileTreePanel(QtWidgets.QWidget):
         )
 
     def _style_page(self, item: QtWidgets.QTreeWidgetItem, path: str) -> None:
-        item.setText(0, os.path.basename(path))
-        item.setToolTip(0, path)
+        display = self._display_path(path)
+        item.setText(0, os.path.basename(display))
+        item.setToolTip(0, display)
 
         state = self._states.get(path, {}) or {}
         font = item.font(0)

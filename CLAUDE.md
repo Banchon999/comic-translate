@@ -100,11 +100,15 @@ All model weights are declared centrally in `modules/utils/download.py`: `ModelI
 
 Glossary (`modules/utils/glossary.py`'s `GlossaryManager`) and translation prompts (`modules/utils/prompts.py`'s `PromptManager`) are separate JSON-file-backed stores (under the user data dir, not QSettings) with their own profile/preset systems — glossary is per-series-profile, prompts are per-style-preset (Manga/Manhwa/Webtoon/Comic/custom). Both are injected into the LLM system/user prompt via `SettingsPage.get_extra_context(...)` and `BaseLLMTranslation.get_system_prompt(...)` respectively, and both participate in translation cache keys (`pipeline/cache_manager.py`) so switching profile/preset invalidates stale cached translations.
 
+Glossary extraction has three entry points, all landing in `modules/utils/glossary_extractor.py`: the whole OCR log on demand, the current page on demand, and — with `auto_extract` on — each page as `OCRProcessor._log_ocr_texts` finishes it. That last one crosses a thread boundary, so it goes through `GlossaryPage.page_text_recognized` (a Qt signal, queued onto the GUI thread) into a one-at-a-time queue; extraction is an LLM call, and one per page in parallel would rate-limit the account immediately.
+
 `modules/utils/workspaces.py`'s `WorkspaceManager` is a third store of the same shape (one JSON per workspace under `<user data>/workspaces/`, plus a `config.json` naming the active one). A workspace bundles the per-series choices that otherwise have to be changed in four places at once: source folders, glossary profile, prompt preset, and language pair. `controller.py`'s `apply_workspace`/`capture_workspace_state` are the only places that read/write those UI widgets from a workspace; the picker lives at the top of the file tree panel.
 
 ### Pages sidebar
 
 `app/ui/list_view.py`'s `PageListView` is the flat page strip and stays the ordering model — row index is the index into `main.image_files`. `app/ui/file_tree_panel.py`'s `FileTreePanel` shows the same pages grouped by source folder and is a pure view: `ImageController.refresh_file_tree()` rebuilds it from `image_files`/`image_states` and it does nothing while hidden. Its actions emit **file paths**; the flat list still emits base names, so every handler routes through `ImageController.resolve_page_paths()` (exact path wins, base name is the fallback) — two chapters of a series routinely share `002.png`.
+
+Reopening a saved project materializes each page into its own `<temp>/unique_images/<id>/` directory, so a page's working path says nothing about the series layout. Both project loaders populate `main.path_originals` (working path → original path) and the tree groups and labels by that, while every path it emits stays the working one.
 
 ### Editor canvas & layers
 

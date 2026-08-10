@@ -561,6 +561,11 @@ def _materialize_from_manifest_and_pages(
 
     original_image_files = manifest.get("original_image_files", [])
     comic_translate.image_files = [original_to_temp.get(file, file) for file in original_image_files]
+    # Restored pages live under per-id temp directories; remember where each
+    # came from so the folder tree can keep grouping by the real series layout.
+    comic_translate.path_originals = {
+        temp: original for original, temp in original_to_temp.items()
+    }
 
     comic_translate.image_states = {
         original_to_temp.get(page, page): (row.get("image_state", {}) or {})

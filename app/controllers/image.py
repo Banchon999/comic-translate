@@ -295,6 +295,7 @@ class ImageStateController:
         self._suppress_dismiss_message_ids.clear()
         self.main.batch_report_ctrl.clear_latest_batch_report()
         self.main.image_files = []
+        self.main.path_originals.clear()
         self.main.image_states.clear()
         self.main.image_data.clear()
         self.main.image_history.clear()
@@ -820,7 +821,11 @@ class ImageStateController:
         panel = getattr(self.main, 'file_tree_panel', None)
         if panel is None or not panel.isVisible():
             return
-        panel.set_pages(self.main.image_files, self.main.image_states)
+        panel.set_pages(
+            self.main.image_files,
+            self.main.image_states,
+            getattr(self.main, 'path_originals', None),
+        )
         if 0 <= self.main.curr_img_idx < len(self.main.image_files):
             panel.follow_current_page(self.main.image_files[self.main.curr_img_idx])
 
