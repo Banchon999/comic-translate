@@ -10,6 +10,7 @@ from PySide6.QtGui import QColor, QImage, QPainter, QPen, QBrush
 from modules.utils.device import resolve_device
 from modules.utils.image_utils import build_block_mask_data, build_bubble_clip_mask, clip_mask_to_bubble, clip_mask_components_to_bubble
 from modules.utils.pipeline_config import inpaint_map, get_config, get_inpainter_backend
+from modules.utils.text_segmentation import segment_page
 from modules.utils.textblock import adjust_text_line_coordinates
 from pipeline.inpainting_boxes import merge_overlapping_padded_boxes
 from pipeline.webtoon_utils import filter_and_convert_visible_blocks, restore_original_block_coordinates
@@ -451,6 +452,7 @@ class InpaintingHandler:
                     block,
                     require_text_or_translation=False,
                     clip_to_bubble=True,
+                    page_text_mask=segment_page(image, self.main_page.settings_page),
                 )
                 if fallback_mask is None or fallback_bounds is None:
                     logger.info(

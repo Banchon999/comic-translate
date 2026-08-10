@@ -69,6 +69,9 @@ class GlossaryManager:
         self.match_only: bool = True  # only send terms found in the source text
         self.log_ocr: bool = True  # keep OCR'd text for glossary extraction
         self.batch_extract: bool = False  # batch mode: OCR all pages + extract before translating
+        # Extract terms from each page as soon as it is recognised, so the
+        # glossary fills in while you work instead of only at the end.
+        self.auto_extract: bool = False
         self.active_profile: str = self.DEFAULT_PROFILE
         self.entries: list[GlossaryEntry] = []
         self._load_meta_and_migrate()
@@ -152,6 +155,7 @@ class GlossaryManager:
                 self.match_only = bool(meta.get("match_only", True))
                 self.log_ocr = bool(meta.get("log_ocr", True))
                 self.batch_extract = bool(meta.get("batch_extract", False))
+                self.auto_extract = bool(meta.get("auto_extract", False))
                 self.active_profile = self._safe_filename(
                     str(meta.get("active_profile", self.DEFAULT_PROFILE))
                 )
@@ -185,6 +189,7 @@ class GlossaryManager:
                         "match_only": self.match_only,
                         "log_ocr": self.log_ocr,
                         "batch_extract": self.batch_extract,
+                        "auto_extract": self.auto_extract,
                         "active_profile": self.active_profile,
                     },
                     f, ensure_ascii=False, indent=2,

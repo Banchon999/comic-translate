@@ -65,6 +65,7 @@ class ModelID(Enum):
     RTDETR_V2_ONNX = "rtdetr-v2-onnx"
     RTDETR_INT8_ONNX = "rtdetr-int8-onnx"
     SPEECH_BUBBLE_SEG_ONNX = "speech-bubble-seg-onnx"
+    COMIC_TEXT_SEG_ONNX = "comic-text-detector-onnx"
     
     # PPOCRv5 Detection Models
     PPOCR_V5_DET_MOBILE = "ppocr-v5-det-mobile"
@@ -88,6 +89,9 @@ class ModelID(Enum):
     PPOCR_V5_REC_KOREAN_MOBILE_TORCH = "ppocr-v5-rec-korean-mobile-torch"
     PPOCR_V5_REC_LATIN_MOBILE_TORCH = "ppocr-v5-rec-latin-mobile-torch"
     PPOCR_V5_REC_ESLAV_MOBILE_TORCH = "ppocr-v5-rec-eslav-mobile-torch"
+
+    # PaddleOCR-VL (vision-language document parser)
+    PADDLEOCR_VL = "paddleocr-vl-1.6"
 
     # PPOCRv4 Classifier
     PPOCR_V4_CLS = "ppocr-v4-cls"
@@ -152,6 +156,17 @@ class ModelDownloader:
     def primary_path(cls, model: Union[ModelID, ModelSpec]) -> str:
         """Return the first file path for a model (common for single-file specs)."""
         return cls.file_paths(model)[0]
+
+    @classmethod
+    def get_save_dir(cls, model: Union[ModelID, ModelSpec]) -> str:
+        """Ensure a model is present then return the directory holding it.
+
+        For checkpoints that are loaded as a folder rather than a single file,
+        such as a transformers model with its config and tokenizer alongside.
+        """
+        spec = cls.registry[model] if isinstance(model, ModelID) else model
+        cls.get(spec.id)
+        return spec.save_dir
 
     @classmethod
     def get_file_path(cls, model: Union[ModelID, ModelSpec], file_name: str) -> str:
@@ -485,6 +500,61 @@ def _register_defaults():
         sha256=['36c26bdefe150226acd9669772e9ff5a011fa0dd4622469b49d3d5e359f3251c'],
         save_dir=os.path.join(models_base_dir, 'detection'),
         save_as={'model_dynamic.onnx': 'speech-bubble-seg-yolov8m.onnx'}
+    ))
+
+    # comic-text-detector: a pixel-level text segmentation head, used to seed
+    # the precise cleaning mask. Same weights and hash PanelCleaner pins.
+    ModelDownloader.register(ModelSpec(
+        id=ModelID.COMIC_TEXT_SEG_ONNX,
+        url='https://github.com/zyddnys/manga-image-translator/releases/download/beta-0.3/',
+        files=['comictextdetector.pt.onnx'],
+        sha256=['1a86ace74961413cbd650002e7bb4dcec4980ffa21b2f19b86933372071d718f'],
+        save_dir=os.path.join(models_base_dir, 'detection'),
+        save_as={'comictextdetector.pt.onnx': 'comic-text-detector.onnx'}
+    ))
+
+    # PaddleOCR-VL-1.6: a 0.9B vision-language document parser, run through
+    # transformers. Its modelling code ships in the repo and is loaded with
+    # trust_remote_code, so those .py files are hash-pinned like the weights —
+    # the pin is what makes executing them defensible.
+    ModelDownloader.register(ModelSpec(
+        id=ModelID.PADDLEOCR_VL,
+        url='https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.6/resolve/main/',
+        files=[
+            'model.safetensors',
+            'tokenizer.json',
+            'tokenizer.model',
+            'config.json',
+            'generation_config.json',
+            'preprocessor_config.json',
+            'processor_config.json',
+            'special_tokens_map.json',
+            'tokenizer_config.json',
+            'added_tokens.json',
+            'chat_template.jinja',
+            'configuration_paddleocr_vl.py',
+            'image_processing_paddleocr_vl.py',
+            'modeling_paddleocr_vl.py',
+            'processing_paddleocr_vl.py',
+        ],
+        sha256=[
+            '85a479d506a11e724e7285d395c551be69f41dbc16b6342d3cacfb189aed71db',
+            'c8a215a59183d0d0781adc33bacd3ce6162716f7fd568fb30234a74d69803a7d',
+            '34ef7db83df785924fb83d7b887b6e822a031c56e15cff40aaf9b982988180df',
+            'ce7f4565f8b1db78532ad5d1b9ebe55c2139d49bd4cb04778b580a08a598f171',
+            'a6701d78ab3b4d972307cdec3b69d4c13f46e0d5140514f50ab7d84259324b94',
+            '111872ab1e8bb7fd040ac5087bfced7ab8f011f02139b088cba294964c3b1d0e',
+            '1568858960a9760c54431dae693a6152e601ff55cdf6d2eab97a4a99958faea0',
+            'd3a125c03103deb2acaf7730791bdbbf196f620e5a2213b664511ff9b4b25bab',
+            '1f979337347cc0cb72a6282d8a23ed183539aa81a87a906f022aee2bab83c7c5',
+            'f59f889088e0fe21c523e7cf121bb6dca3b0bb148cb7159fbb4572c74dfc5644',
+            '2f27812dab7f333e471884e0c803d807f11953d5453140dfb1aaba234f872bc8',
+            '753dd93654c3a9c8c85a3eaee1e3092dd12591b0f2dce0305e1abfb7a41ff160',
+            'a4fa521b9cb16e207f94b7f2d16427771776dfc634420d319fc4916ee58049ec',
+            'c5013dff57ca8b87dc1de64d0fd839a44313de09d230a4fb2d08289d2cad5111',
+            'e29cb1e5f275f2bd3ce051bd5c9983a33894e693b2823a0e13d4c07c8c4f9e13',
+        ],
+        save_dir=os.path.join(models_base_dir, 'ocr', 'paddleocr-vl-1.6')
     ))
 
     # PPOCRv5 Detection Models

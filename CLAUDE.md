@@ -15,6 +15,7 @@ Setup (uses `uv`, Python 3.12):
 uv init --python 3.12
 uv add -r requirements.txt --compile-bytecode
 uv pip install onnxruntime-gpu   # optional, only if an NVIDIA GPU is available
+uv pip install torch torchvision "transformers>=5"   # optional, enables the PaddleOCR-VL engine
 ```
 
 Run the app:
@@ -65,9 +66,21 @@ Two run modes share the same `modules/*` engines but have separate driving code:
 Every pipeline stage that has multiple interchangeable implementations follows the same shape: an abstract base class, per-implementation subclasses, and a `Factory` class with a `create_engine(...)` classmethod plus an internal `_engines` cache keyed by a hash of the model/settings so switching engines mid-session doesn't require re-initializing unrelated ones.
 
 - `modules/detection/factory.py` (`DetectionEngineFactory`) — `base.py` defines `DetectionEngine`; implementations include `rtdetr_v2_onnx.py`/`rtdetr_v2.py` (RT-DETR-v2, onnx/torch backends) and `bubble_seg_onnx.py` (YOLOv8-seg speech bubble detector, hybrid with RT-DETR text boxes).
-- `modules/ocr/factory.py` (`OCRFactory`) — `base.py` defines `OCREngine`; implementations per-language/engine live in `manga_ocr/`, `pororo/`, `ppocr/`, plus API-based engines (`gpt_ocr.py`, `gemini_ocr.py`, `google_ocr.py`, `microsoft_ocr.py`, `easy_ocr.py`) and `user_ocr.py` for the hosted/managed backend.
+- `modules/ocr/factory.py` (`OCRFactory`) — `base.py` defines `OCREngine`; implementations per-language/engine live in `manga_ocr/`, `pororo/`, `ppocr/`, plus API-based engines (`gpt_ocr.py`, `gemini_ocr.py`, `google_ocr.py`, `microsoft_ocr.py`, `easy_ocr.py`) and `user_ocr.py` for the hosted/managed backend. Two engines are **optional** and appear in the settings list only when their dependencies import — `easy_ocr.py` (needs `easyocr`) and `paddle_vl.py` (needs `torch`, `torchvision` and `transformers>=5`); `SettingsPageUI.__init__` does that check with `importlib.util.find_spec` rather than importing the engine.
+  `paddle_vl.py` is the odd one out architecturally: a 0.9B generative VLM that *writes out* what a crop says instead of decoding CTC logits, so it reads vertical CJK and stylised lettering with no special handling, at ~20s per block on a weak CPU. All 15 checkpoint files are sha256-pinned, and it loads through transformers' native `paddleocr_vl` support — passing `trust_remote_code=True` picks up the repo's own config class, which the built-in model class then rejects for a missing `text_config`.
 - `modules/translation/factory.py` (`TranslationFactory`) — `base.py` defines `TranslationEngine`/`LLMTranslation`/`TraditionalTranslation`; `llm/base.py`'s `BaseLLMTranslation` is the shared LLM engine base (handles image encoding, system prompt via `PromptManager`, JSON-in/JSON-out translation contract). LLM engines (`llm/gpt.py`, `claude.py`, `gemini.py`, `deepseek.py`, `custom.py`, `openrouter.py`) subclass it; `openrouter.py` and `custom.py` both subclass `gpt.py`'s `GPTTranslation` since they're OpenAI-compatible APIs (note `GPTTranslation.MAX_TOKENS_PARAM` — OpenRouter needs `max_tokens` instead of `max_completion_tokens`). `deepl.py`, `microsoft.py`, `yandex.py` are non-LLM `TraditionalTranslation` engines. `user.py` (`UserTranslator`) is used instead of any of the above when the user is signed in to the managed/hosted account (checked via `app/account/auth/token_storage.get_token`).
 - `modules/inpainting/` (`pipeline_config.py`'s `inpaint_map` dict, not a factory class) — `base.py` defines `InpaintModel`/`DiffusionInpaintModel`; implementations: `lama.py`, `aot.py`, `mi_gan.py`, and `smart_fill.py` (solid-fill cleaning: ranks progressively grown masks by border-colour uniformity and fills flat regions with the border's median colour, falling back to LaMa for non-uniform ones). The ranking itself lives in `mask_fitting.py`, ported from PanelCleaner.
+
+### Text mask generation (what gets cleaned)
+
+`modules/utils/image_utils.py`'s `build_block_mask_data` decides which pixels inside a detected box are lettering. Two sources, chosen by `Settings > Tools > Use the AI text segmentation model` and dispatched through `modules/utils/text_segmentation.py`:
+
+- **Thresholding** (`modules/detection/utils/content.py`'s `detect_content_mask_in_bbox`) — Otsu plus connected-component filtering, per crop. Cheap and wrong whenever the lettering is not simply the darkest or lightest thing in the box.
+- **Model** (default) — `modules/detection/text_seg_onnx.py` runs comic-text-detector's `seg` head over the whole page once (cached per page), and `modules/inpainting/text_mask_refine.py` uses that prediction to referee several candidate binarisations per box, keeping only components that improve agreement with it. This is the same algorithm PanelCleaner runs, ported to `imkit`; the file carries GPL-3.0 attribution.
+
+Callers pass the page prediction down as `page_text_mask=` (see `pipeline/batch_processor.py`, `pipeline/webtoon_batch/chunk.py`, `pipeline/inpainting.py`). Interactive paths use `peek_page_mask()` instead, which returns the cached prediction or `None` and never runs inference — a brush stroke must not wait seconds for a model.
+
+`imkit` is a partial `cv2` replacement and its semantics are not always OpenCV's; when porting cv2 code, check the specific function first (`erode`/`dilate` binarise their output, so grayscale morphology has to be reordered into a threshold plus binary morphology).
 
 ## Licensing
 
@@ -88,6 +101,16 @@ All model weights are declared centrally in `modules/utils/download.py`: `ModelI
 `app/ui/settings/settings_page.py` (`SettingsPage`) is the single source of truth for all user-configurable state, backed by `QSettings("ComicLabs", "ComicTranslate")`. It composes per-tab widget classes from `app/ui/settings/*_page.py` (tools, credentials, LLMs, glossary, text rendering, project, export, shortcuts, account, about) via `SettingsPageUI` (`settings_ui.py`), which also owns the canonical lists of translator/OCR/detector/inpainter names and the localized-label ↔ internal-name `value_mappings`/`reverse_mappings`. Settings autosave ~1.5s after any change (debounced `QTimer` wired in `SettingsPage.__init__`) in addition to the save-on-close in `controller.py`'s `closeEvent`.
 
 Glossary (`modules/utils/glossary.py`'s `GlossaryManager`) and translation prompts (`modules/utils/prompts.py`'s `PromptManager`) are separate JSON-file-backed stores (under the user data dir, not QSettings) with their own profile/preset systems — glossary is per-series-profile, prompts are per-style-preset (Manga/Manhwa/Webtoon/Comic/custom). Both are injected into the LLM system/user prompt via `SettingsPage.get_extra_context(...)` and `BaseLLMTranslation.get_system_prompt(...)` respectively, and both participate in translation cache keys (`pipeline/cache_manager.py`) so switching profile/preset invalidates stale cached translations.
+
+Glossary extraction has three entry points, all landing in `modules/utils/glossary_extractor.py`: the whole OCR log on demand, the current page on demand, and — with `auto_extract` on — each page as `OCRProcessor._log_ocr_texts` finishes it. That last one crosses a thread boundary, so it goes through `GlossaryPage.page_text_recognized` (a Qt signal, queued onto the GUI thread) into a one-at-a-time queue; extraction is an LLM call, and one per page in parallel would rate-limit the account immediately.
+
+`modules/utils/workspaces.py`'s `WorkspaceManager` is a third store of the same shape (one JSON per workspace under `<user data>/workspaces/`, plus a `config.json` naming the active one). A workspace bundles the per-series choices that otherwise have to be changed in four places at once: source folders, glossary profile, prompt preset, and language pair. `controller.py`'s `apply_workspace`/`capture_workspace_state` are the only places that read/write those UI widgets from a workspace; the picker lives at the top of the file tree panel.
+
+### Pages sidebar
+
+`app/ui/list_view.py`'s `PageListView` is the flat page strip and stays the ordering model — row index is the index into `main.image_files`. `app/ui/file_tree_panel.py`'s `FileTreePanel` shows the same pages grouped by source folder and is a pure view: `ImageController.refresh_file_tree()` rebuilds it from `image_files`/`image_states` and it does nothing while hidden. Its actions emit **file paths**; the flat list still emits base names, so every handler routes through `ImageController.resolve_page_paths()` (exact path wins, base name is the fallback) — two chapters of a series routinely share `002.png`.
+
+Reopening a saved project materializes each page into its own `<temp>/unique_images/<id>/` directory, so a page's working path says nothing about the series layout. Both project loaders populate `main.path_originals` (working path → original path) and the tree groups and labels by that, while every path it emits stays the working one.
 
 ### Editor canvas & layers
 

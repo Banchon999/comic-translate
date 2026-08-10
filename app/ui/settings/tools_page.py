@@ -58,6 +58,17 @@ class ToolsPage(QtWidgets.QWidget):
 
         inpainting_label = MLabel(self.tr("Image Cleaning")).h4()
 
+        self.text_segmentation_checkbox = MCheckBox(
+            self.tr("Use the AI text segmentation model (more precise cleaning)")
+        )
+        self.text_segmentation_checkbox.setChecked(True)
+        self.text_segmentation_checkbox.setToolTip(self.tr(
+            "Works out which pixels are lettering with a neural model instead of by\n"
+            "thresholding each box on its own. Much more accurate on text over artwork,\n"
+            "gradients and screentone, and on coloured text.\n"
+            "Downloads a 90 MB model once, and adds a few seconds per page on CPU."
+        ))
+
         mask_padding_layout = QtWidgets.QHBoxLayout()
         mask_padding_label = MLabel(self.tr("Text Mask Expansion (px):"))
         self.mask_padding_spinbox = MSpinBox().small()
@@ -193,6 +204,7 @@ class ToolsPage(QtWidgets.QWidget):
         layout.addLayout(ocr_padding_layout)
         layout.addSpacing(10)
         layout.addWidget(inpainting_label)
+        layout.addWidget(self.text_segmentation_checkbox)
         layout.addLayout(mask_padding_layout)
         layout.addLayout(bubble_inset_layout)
         layout.addWidget(inpainter_widget)

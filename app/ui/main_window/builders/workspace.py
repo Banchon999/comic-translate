@@ -18,6 +18,7 @@ from app.ui.dayu_widgets.slider import MSlider
 from app.ui.dayu_widgets.text_edit import MTextEdit
 from app.ui.dayu_widgets.tool_button import MToolButton
 from app.ui.canvas.layer_panel import LayerPanel
+from app.ui.file_tree_panel import FileTreePanel
 from app.ui.search_replace_panel import SearchReplacePanel
 from app.ui.main_window.constants import supported_source_languages, supported_target_languages
 
@@ -107,6 +108,11 @@ class WorkspaceMixin:
         self.layer_panel_button.setToolTip(self.tr("Show the layer list for individual items"))
         self.layer_panel_button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
 
+        self.file_tree_button = MToolButton().svg("folder-open.svg").icon_only()
+        self.file_tree_button.setCheckable(True)
+        self.file_tree_button.setToolTip(self.tr("Group the pages by the folder they came from"))
+        self.file_tree_button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+
         header_layout.addWidget(self.hbutton_group)
         header_layout.addWidget(self.loading)
         header_layout.addSpacing(15)
@@ -116,6 +122,7 @@ class WorkspaceMixin:
         header_layout.addWidget(self.layer_patches_checkbox)
         header_layout.addWidget(self.layer_text_checkbox)
         header_layout.addWidget(self.layer_panel_button)
+        header_layout.addWidget(self.file_tree_button)
         header_layout.addStretch()
         header_layout.addWidget(self.webtoon_toggle)
         header_layout.addWidget(self.manual_radio)
@@ -138,12 +145,18 @@ class WorkspaceMixin:
         self.layer_panel = LayerPanel()
         self.layer_panel.setVisible(False)
 
-        # Pages and layers share the column; a splitter lets either take the space.
+        self.file_tree_panel = FileTreePanel()
+        self.file_tree_panel.setVisible(False)
+
+        # Pages, the folder tree and layers share the column; a splitter lets
+        # whichever the user is working in take the space.
         left_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
+        left_splitter.addWidget(self.file_tree_panel)
         left_splitter.addWidget(self.page_list)
         left_splitter.addWidget(self.layer_panel)
         left_splitter.setStretchFactor(0, 2)
-        left_splitter.setStretchFactor(1, 1)
+        left_splitter.setStretchFactor(1, 2)
+        left_splitter.setStretchFactor(2, 1)
 
         left_layout.addWidget(left_splitter)
         left_layout.addWidget(self.search_panel)

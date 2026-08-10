@@ -1,3 +1,5 @@
+import logging
+
 from PySide6 import QtWidgets, QtCore
 from PySide6.QtCore import QThreadPool
 
@@ -12,6 +14,8 @@ from ..dayu_widgets.text_edit import MTextEdit
 from modules.utils.glossary import (
     GlossaryManager, GlossaryEntry, GLOSSARY_PRESET_TYPES, GLOSSARY_GENDERS
 )
+
+logger = logging.getLogger(__name__)
 
 
 class GlossaryEntryDialog(QtWidgets.QDialog):
@@ -97,9 +101,17 @@ class GlossaryPage(QtWidgets.QWidget):
 
     COLUMNS = ["source", "target", "type", "gender", "note"]
 
+    # Emitted from the OCR worker thread once a page's text is recognised.
+    # Qt queues it onto the GUI thread, which is where the extraction queue lives.
+    page_text_recognized = QtCore.Signal(list)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.manager = GlossaryManager()
+
+        self._pending_pages: list[str] = []
+        self._page_extraction_running = False
+        self.page_text_recognized.connect(self._on_page_text_recognized)
 
         layout = QtWidgets.QVBoxLayout(self)
 
@@ -145,19 +157,37 @@ class GlossaryPage(QtWidgets.QWidget):
         self.batch_extract_checkbox.setChecked(self.manager.batch_extract)
         self.batch_extract_checkbox.stateChanged.connect(self._on_options_changed)
 
+        self.auto_extract_checkbox = MCheckBox(
+            self.tr("Extract terms from each page as soon as it is recognised")
+        )
+        self.auto_extract_checkbox.setChecked(self.manager.auto_extract)
+        self.auto_extract_checkbox.setToolTip(self.tr(
+            "Names and special terms are added to this series' glossary while you work,\n"
+            "so by the time the last page is recognised the glossary is already complete.\n"
+            "One page is extracted at a time in the background; it never blocks the pipeline."
+        ))
+        self.auto_extract_checkbox.stateChanged.connect(self._on_options_changed)
+
         layout.addWidget(self.enabled_checkbox)
         layout.addWidget(self.match_only_checkbox)
         layout.addWidget(self.log_ocr_checkbox)
         layout.addWidget(self.batch_extract_checkbox)
+        layout.addWidget(self.auto_extract_checkbox)
 
         # OCR log → glossary extraction
         extract_layout = QtWidgets.QHBoxLayout()
         self.extract_button = MPushButton(self.tr("Extract Glossary from OCR Log")).small()
         self.extract_button.clicked.connect(self.extract_from_log)
+        self.extract_page_button = MPushButton(self.tr("Extract from This Page")).small()
+        self.extract_page_button.setToolTip(self.tr(
+            "Extract terms from the text recognised on the page you are editing."
+        ))
+        self.extract_page_button.clicked.connect(self.extract_from_current_page)
         clear_log_button = MPushButton(self.tr("Clear Log")).small()
         clear_log_button.clicked.connect(self.clear_ocr_log)
         self.log_status_label = MLabel("").secondary()
         extract_layout.addWidget(self.extract_button)
+        extract_layout.addWidget(self.extract_page_button)
         extract_layout.addWidget(clear_log_button)
         extract_layout.addWidget(self.log_status_label)
         extract_layout.addStretch(1)
@@ -290,6 +320,7 @@ class GlossaryPage(QtWidgets.QWidget):
         self.manager.match_only = self.match_only_checkbox.isChecked()
         self.manager.log_ocr = self.log_ocr_checkbox.isChecked()
         self.manager.batch_extract = self.batch_extract_checkbox.isChecked()
+        self.manager.auto_extract = self.auto_extract_checkbox.isChecked()
         self.manager.save()
 
     # OCR log → glossary extraction
@@ -308,6 +339,25 @@ class GlossaryPage(QtWidgets.QWidget):
             self.manager.clear_ocr_log()
             self._refresh_log_status()
 
+    def _main_window(self):
+        """The application main window, however this page is hosted.
+
+        This page lives in the Settings stack but is re-parented into a plain
+        QDialog when opened from the editor's nav rail, so `self.window()` is
+        sometimes that dialog. The extractor needs the real main window (its
+        language combos and translator config), so walk up out of any wrapper,
+        and fall back to scanning the top-level widgets.
+        """
+        widget = self.window()
+        while widget is not None:
+            if hasattr(widget, 's_combo'):
+                return widget
+            widget = widget.parentWidget()
+        for top_level in QtWidgets.QApplication.topLevelWidgets():
+            if hasattr(top_level, 's_combo'):
+                return top_level
+        return None
+
     def extract_from_log(self):
         log_text = self.manager.read_ocr_log()
         if not log_text.strip():
@@ -318,7 +368,13 @@ class GlossaryPage(QtWidgets.QWidget):
             return
 
         from modules.utils.glossary_extractor import extract_glossary_terms
-        main_page = self.window()
+        main_page = self._main_window()
+        if main_page is None:
+            QtWidgets.QMessageBox.warning(
+                self, self.tr("Glossary"),
+                self.tr("The main window is not available yet."),
+            )
+            return
         existing = {entry.source for entry in self.manager.entries}
 
         self.extract_button.setEnabled(False)
@@ -328,6 +384,87 @@ class GlossaryPage(QtWidgets.QWidget):
         worker.signals.result.connect(self._on_extraction_done)
         worker.signals.error.connect(self._on_extraction_error)
         QThreadPool.globalInstance().start(worker)
+
+    # Per-page extraction
+
+    def extract_from_current_page(self):
+        """Extract terms from the page currently open in the editor."""
+        main_page = self._main_window()
+        lines = []
+        if main_page is not None:
+            lines = [
+                blk.text for blk in (getattr(main_page, 'blk_list', None) or [])
+                if getattr(blk, 'text', '')
+            ]
+        if not lines:
+            QtWidgets.QMessageBox.information(
+                self, self.tr("Glossary"),
+                self.tr("This page has no recognised text yet. Run Recognize first."),
+            )
+            return
+        self._queue_page("\n".join(lines))
+
+    def _on_page_text_recognized(self, lines: list):
+        """A page finished OCR. Queue it when auto-extraction is on."""
+        if not self.manager.auto_extract:
+            return
+        text = "\n".join(line for line in lines if line)
+        if text.strip():
+            self._queue_page(text)
+
+    def _queue_page(self, text: str):
+        self._pending_pages.append(text)
+        self._start_next_page_extraction()
+
+    def _start_next_page_extraction(self):
+        # One page at a time: each extraction is an LLM call, and firing one per
+        # page of a batch in parallel would rate-limit the account instantly.
+        if self._page_extraction_running or not self._pending_pages:
+            return
+
+        main_page = self._main_window()
+        if main_page is None:
+            self._pending_pages.clear()
+            return
+
+        text = self._pending_pages.pop(0)
+        existing = {entry.source for entry in self.manager.entries}
+        self._page_extraction_running = True
+        self._update_queue_status()
+
+        from modules.utils.glossary_extractor import extract_glossary_terms
+        worker = GenericWorker(extract_glossary_terms, main_page, text, existing)
+        worker.signals.result.connect(self._on_page_extraction_done)
+        worker.signals.error.connect(self._on_page_extraction_error)
+        QThreadPool.globalInstance().start(worker)
+
+    def _on_page_extraction_done(self, entries):
+        self._page_extraction_running = False
+        for entry in entries or []:
+            self.manager.upsert(entry, save=False)
+        if entries:
+            self.manager.save()
+            self._refresh_type_filter()
+            self.refresh_table()
+        self._update_queue_status()
+        self._start_next_page_extraction()
+
+    def _on_page_extraction_error(self, error_info):
+        # A failed page must not stop the rest, and must not interrupt the user
+        # with a dialog mid-batch: the log status line carries the news.
+        self._page_extraction_running = False
+        _, value, _ = error_info
+        logger.warning("Per-page glossary extraction failed: %s", value)
+        self._update_queue_status()
+        self._start_next_page_extraction()
+
+    def _update_queue_status(self):
+        if self._page_extraction_running or self._pending_pages:
+            self.log_status_label.setText(
+                self.tr("Extracting terms… {0} page(s) queued").format(len(self._pending_pages))
+            )
+        else:
+            self._refresh_log_status()
 
     def _reset_extract_button(self):
         self.extract_button.setText(self.tr("Extract Glossary from OCR Log"))

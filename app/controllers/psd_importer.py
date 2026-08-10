@@ -10,10 +10,10 @@ from typing import Any
 
 import imkit as imk
 import numpy as np
-import photoshopapi as psapi
 from PySide6 import QtCore, QtGui
 
 from app.ui.canvas.text_item import OutlineInfo, OutlineType
+from app.controllers.psd_exporter import psapi, _require_psapi
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +39,8 @@ class PsdImportContext:
 def import_psd_files(paths: list[str]) -> list[ImportedPsdPage]:
     if not paths:
         return []
+
+    _require_psapi()
 
     out_dir = tempfile.mkdtemp(prefix="comic_translate_psd_import_")
     used_names: set[str] = set()

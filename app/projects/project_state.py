@@ -186,6 +186,12 @@ def load_state_from_proj_file(comic_translate: ComicTranslate, file_name: str):
     comic_translate.image_files = [
         original_to_temp.get(file, file) for file in original_image_files
     ]
+    # Pages restored from the archive live under a per-id temp directory, so
+    # their on-disk location says nothing about the series layout. Keep the
+    # original path for anything that groups or labels pages (the folder tree).
+    comic_translate.path_originals = {
+        temp: original for original, temp in original_to_temp.items()
+    }
 
     image_states = state.get('image_states', {})
     comic_translate.image_states = {

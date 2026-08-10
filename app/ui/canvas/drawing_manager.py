@@ -11,6 +11,7 @@ from app.ui.commands.brush import BrushStrokeCommand, ClearBrushStrokesCommand, 
 from app.ui.commands.base import PathCommandBase as pcb
 import imkit as imk
 from modules.utils.image_utils import build_block_mask_data, clip_mask_to_bubble, clip_mask_components_to_bubble
+from modules.utils.text_segmentation import peek_page_mask
 
 
 class DrawingManager:
@@ -32,6 +33,11 @@ class DrawingManager:
         
         self.before_erase_state = []
         self.after_erase_state = []
+
+    def _settings_page(self):
+        """The app's settings, or None when the viewer is used standalone."""
+        window = self.viewer.window()
+        return getattr(window, "settings_page", None)
 
     def start_stroke(self, scene_pos: QPointF):
         """Starts a new drawing or erasing stroke."""
@@ -414,6 +420,7 @@ class DrawingManager:
                         default_padding=5,
                         require_text_or_translation=False,
                         clip_to_bubble=True,
+                        page_text_mask=peek_page_mask(image, self._settings_page()),
                     )
                     if crop_mask is not None and bounds is not None:
                         cx1, cy1, _cx2, _cy2 = [int(v) for v in bounds]

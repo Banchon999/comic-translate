@@ -74,10 +74,17 @@ class OCRProcessor:
         """Record recognized text in the active glossary profile's OCR log."""
         try:
             glossary_page = getattr(self.settings.ui, 'glossary_page', None)
-            if glossary_page is not None:
-                glossary_page.manager.append_ocr_log(
-                    [blk.text for blk in blk_list if getattr(blk, 'text', '')]
-                )
+            if glossary_page is None:
+                return
+
+            texts = [blk.text for blk in blk_list if getattr(blk, 'text', '')]
+            glossary_page.manager.append_ocr_log(texts)
+
+            # Hand the page's text to the glossary so it can pull terms out of
+            # it while the rest of the run continues. This is a Qt signal, so it
+            # hops to the GUI thread and returns immediately — OCR never waits.
+            if texts:
+                glossary_page.page_text_recognized.emit(texts)
         except Exception:
             pass  # logging must never break OCR
 
@@ -168,5 +175,6 @@ class OCRProcessor:
             'PaddleOCR (Server)': 'PaddleOCR (Server)',
             'Pororo (Korean)': 'Pororo (Korean)',
             'EasyOCR': 'EasyOCR',
+            'PaddleOCR-VL': 'PaddleOCR-VL',
         }
         return translator_map.get(localized_ocr, localized_ocr)

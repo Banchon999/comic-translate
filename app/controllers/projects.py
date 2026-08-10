@@ -1031,6 +1031,7 @@ class ProjectController:
                 renderer.add_spanning_text_items(viewer_state, page_idx, temp_main_page_context)
 
             patch_list = copy.deepcopy(self.main.image_patches.get(file_path, []))
+            composite = self._render_psd_preview(rgb_img, viewer_state, patch_list)
             text_items = viewer_state.get('text_items_state', [])
             logger.info(
                 "PSD page %d (%s): patches=%d, text_items=%d, viewer_state_keys=%s",
@@ -1045,10 +1046,27 @@ class ProjectController:
                     rgb_image=rgb_img,
                     viewer_state=viewer_state,
                     patches=patch_list,
+                    composite_image=composite,
                 )
             )
 
         return pages
+
+    @staticmethod
+    def _render_psd_preview(rgb_img, viewer_state: dict, patches: list[dict]):
+        """The page as it looks on the canvas, for the PSD's flattened preview.
+
+        Everything except Photoshop reads that preview rather than compositing
+        the layers, so it has to carry the translated text too.
+        """
+        try:
+            renderer = ImageSaveRenderer(rgb_img)
+            renderer.apply_patches(patches)
+            renderer.add_state_to_image(viewer_state)
+            return renderer.render_to_image()
+        except Exception:
+            logger.exception("Could not render the PSD preview; falling back to the artwork")
+            return None
 
     def _build_all_pages_current_state(self) -> dict[str, dict]:
         all_pages_current_state: dict[str, dict] = {}
