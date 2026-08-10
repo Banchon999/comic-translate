@@ -202,6 +202,14 @@ class ComicTranslate(ComicTranslateUI):
         self._layer_panel_refresh_timer.timeout.connect(self.layer_panel.refresh)
         self.image_viewer._scene.changed.connect(self.schedule_layer_panel_refresh)
 
+        # Pages grouped by source folder
+        self.file_tree_button.toggled.connect(self.toggle_file_tree_panel)
+        self.file_tree_panel.page_activated.connect(self.image_ctrl.show_page_by_path)
+        self.file_tree_panel.delete_requested.connect(self.image_ctrl.handle_image_deletion)
+        self.file_tree_panel.skip_requested.connect(self.image_ctrl.handle_toggle_skip_images)
+        self.file_tree_panel.translate_requested.connect(self.batch_translate_selected)
+        self.file_tree_panel.add_folder_requested.connect(self.folder_browser_button.clicked)
+
         # Connect buttons from button_groups
         self.hbutton_group.get_button_group().buttons()[0].clicked.connect(lambda: self.block_detect())
         self.hbutton_group.get_button_group().buttons()[1].clicked.connect(self.ocr)
@@ -455,6 +463,11 @@ class ComicTranslate(ComicTranslateUI):
         if visible:
             self.layer_panel.refresh()
 
+    def toggle_file_tree_panel(self, visible: bool):
+        self.file_tree_panel.setVisible(visible)
+        if visible:
+            self.image_ctrl.refresh_file_tree()
+
     def schedule_layer_panel_refresh(self, *_):
         """Rebuild the layer list shortly after the scene settles.
 
@@ -663,11 +676,7 @@ class ComicTranslate(ComicTranslateUI):
                 self._memlogger.emit("batch_start_selected")
         except Exception:
             pass
-        # map base‐name back to full paths
-        selected_paths = [
-            p for p in self.image_files
-            if os.path.basename(p) in selected_file_names
-        ]
+        selected_paths = self.image_ctrl.resolve_page_paths(selected_file_names)
         self._run_batch_for_paths(selected_paths)
 
     def retry_skipped_batch_images(self):

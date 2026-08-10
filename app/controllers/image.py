@@ -556,6 +556,10 @@ class ImageStateController:
             page_list.setUpdatesEnabled(True)
             page_list.viewport().update()
 
+        # The folder tree is a view over the same pages, so it is rebuilt
+        # wherever the list is — and does nothing while it is hidden.
+        self.refresh_file_tree()
+
     def remove_page_list_rows(self, removed_indices: list[int]):
         """Remove list rows in place to avoid rebuilding the entire sidebar."""
         if not removed_indices:
@@ -716,6 +720,10 @@ class ImageStateController:
 
         self._show_page_skip_error_for_file(file_path)
 
+        panel = getattr(self.main, 'file_tree_panel', None)
+        if panel is not None and panel.isVisible():
+            panel.follow_current_page(file_path)
+
     def navigate_images(self, direction: int):
         if self.main.image_files:
             new_index = self.main.curr_img_idx + direction
@@ -806,6 +814,45 @@ class ImageStateController:
             finally:
                 page_list.blockSignals(was_blocked)
             page_list.viewport().update()
+
+    def refresh_file_tree(self) -> None:
+        """Rebuild the folder tree from the current pages, when it is showing."""
+        panel = getattr(self.main, 'file_tree_panel', None)
+        if panel is None or not panel.isVisible():
+            return
+        panel.set_pages(self.main.image_files, self.main.image_states)
+        if 0 <= self.main.curr_img_idx < len(self.main.image_files):
+            panel.follow_current_page(self.main.image_files[self.main.curr_img_idx])
+
+    def show_page_by_path(self, file_path: str) -> None:
+        """Open the page with this path, driving the real page list."""
+        if file_path not in self.main.image_files:
+            return
+        index = self.main.image_files.index(file_path)
+        if index == self.main.curr_img_idx:
+            return
+        self.main.page_list.setCurrentRow(index)
+
+    def resolve_page_paths(self, tokens: list[str]) -> list[str]:
+        """Turn a mix of file paths and bare file names into file paths.
+
+        The folder tree emits paths, the flat page list emits base names, and
+        two chapters of the same series routinely contain the same base name —
+        so an exact path always wins over a name match.
+        """
+        known = set(self.main.image_files)
+        resolved: list[str] = []
+        for token in tokens:
+            if token in known:
+                resolved.append(token)
+                continue
+            match = next(
+                (path for path in self.main.image_files if os.path.basename(path) == token),
+                None,
+            )
+            if match is not None:
+                resolved.append(match)
+        return resolved
 
     def handle_image_deletion(self, file_names: list[str]):
         """Handles the deletion of images based on the provided file names."""
@@ -923,12 +970,7 @@ class ImageStateController:
             file_names: List of file names to update
             skip_status: If True, mark as skipped; if False, mark as not skipped
         """
-        file_paths = []
-        for name in file_names:
-            path = next((p for p in self.main.image_files if os.path.basename(p) == name), None)
-            if path:
-                file_paths.append(path)
-
+        file_paths = self.resolve_page_paths(file_names)
         if not file_paths:
             return
 
