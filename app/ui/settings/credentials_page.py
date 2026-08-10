@@ -2,6 +2,7 @@ from PySide6 import QtWidgets, QtCore
 from ..dayu_widgets.label import MLabel
 from ..dayu_widgets.line_edit import MLineEdit
 from ..dayu_widgets.check_box import MCheckBox
+from .model_selector import OpenRouterModelSelector
 from .utils import set_label_width
 
 class CredentialsPage(QtWidgets.QWidget):
@@ -10,6 +11,7 @@ class CredentialsPage(QtWidgets.QWidget):
         self.services = services
         self.value_mappings = value_mappings
         self.credential_widgets: dict[str, MLineEdit] = {}
+        self.openrouter_model_selector: OpenRouterModelSelector | None = None
 
         # main layout (no internal scroll here — outer settings scroll handles it)
         main_layout = QtWidgets.QVBoxLayout(self)
@@ -124,15 +126,10 @@ class CredentialsPage(QtWidgets.QWidget):
                 service_layout.addWidget(api_key_input)
                 self.credential_widgets[f"{normalized}_api_key"] = api_key_input
 
-                model_input = MLineEdit()
-                model_input.setFixedWidth(400)
-                model_input.setPlaceholderText("e.g. openai/gpt-4o, anthropic/claude-sonnet-4.5")
-                model_prefix = MLabel(self.tr("Model")).border()
-                set_label_width(model_prefix)
-                model_prefix.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-                model_input.set_prefix_widget(model_prefix)
-                service_layout.addWidget(model_input)
-                self.credential_widgets[f"{normalized}_model"] = model_input
+                self.openrouter_model_selector = OpenRouterModelSelector()
+                self.openrouter_model_selector.set_api_key_source(api_key_input)
+                service_layout.addWidget(self.openrouter_model_selector)
+                self.credential_widgets[f"{normalized}_model"] = self.openrouter_model_selector
 
             elif normalized == "Yandex":
                 api_key_input = MLineEdit()
@@ -170,3 +167,10 @@ class CredentialsPage(QtWidgets.QWidget):
 
         content_layout.addStretch(1)
         main_layout.addLayout(content_layout)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        # Fetching the OpenRouter catalogue is deferred to the first time this
+        # page is looked at, so opening the app never waits on the network.
+        if self.openrouter_model_selector is not None:
+            self.openrouter_model_selector.ensure_catalogue_loaded()

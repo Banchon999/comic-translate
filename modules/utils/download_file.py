@@ -60,7 +60,7 @@ def _ssl_context() -> ssl.SSLContext:
 
 
 @contextmanager
-def _open_url(url: str, *, headers: Optional[dict] = None, timeout: Optional[float] = None):
+def open_url(url: str, *, headers: Optional[dict] = None, timeout: Optional[float] = None):
     req = urllib.request.Request(url, headers=headers or {})
     # Passing a context is harmless for plain http; only HTTPSHandler reads it.
     response = urllib.request.urlopen(  # nosec - controlled sources
@@ -151,7 +151,7 @@ def download_url_to_file(
         total = None
 
         try:
-            with _open_url(url, headers=headers, timeout=timeout) as response:
+            with open_url(url, headers=headers, timeout=timeout) as response:
                 # If we requested a Range and got 200 instead of 206, server ignored resume -> restart
                 if partial_size and getattr(response, 'status', getattr(response, 'code', None)) not in (206,):
                     partial_size = 0
