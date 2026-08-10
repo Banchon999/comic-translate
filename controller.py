@@ -209,6 +209,8 @@ class ComicTranslate(ComicTranslateUI):
         self.file_tree_panel.skip_requested.connect(self.image_ctrl.handle_toggle_skip_images)
         self.file_tree_panel.translate_requested.connect(self.batch_translate_selected)
         self.file_tree_panel.add_folder_requested.connect(self.folder_browser_button.clicked)
+        self.file_tree_panel.workspace_activated.connect(self.apply_workspace)
+        self.file_tree_panel.workspace_folder_opened.connect(self._load_images_from_folder)
 
         # Connect buttons from button_groups
         self.hbutton_group.get_button_group().buttons()[0].clicked.connect(lambda: self.block_detect())
@@ -325,6 +327,15 @@ class ComicTranslate(ComicTranslateUI):
                 self.tr("No supported images were found in the selected folder.")
             )
             return
+
+        # Chapters opened while a workspace is active belong to it, so it can
+        # offer them again next time without another trip through the browser.
+        panel = getattr(self, 'file_tree_panel', None)
+        if panel is not None:
+            active = panel.current_workspace_name()
+            if active:
+                panel.workspaces.add_folder(active, folder)
+
         self._guarded_thread_load_images(paths)
 
     def _on_new_project_clicked(self):
@@ -465,8 +476,79 @@ class ComicTranslate(ComicTranslateUI):
 
     def toggle_file_tree_panel(self, visible: bool):
         self.file_tree_panel.setVisible(visible)
-        if visible:
-            self.image_ctrl.refresh_file_tree()
+        if not visible:
+            return
+
+        self.file_tree_panel.refresh_workspaces()
+        # The combo restores the workspace that was active last session with its
+        # signals blocked. Applying it once here keeps the name it shows honest —
+        # otherwise it claims a series whose glossary and languages are not loaded.
+        if not getattr(self, "_workspace_applied", False):
+            self._workspace_applied = True
+            active = self.file_tree_panel.current_workspace_name()
+            if active:
+                self.apply_workspace(active)
+        self.image_ctrl.refresh_file_tree()
+
+    def apply_workspace(self, name: str):
+        """Switch every per-series setting over to this workspace at once.
+
+        Pages are not loaded here — that would throw away unsaved work on
+        whatever is open. The workspace's folders are one click away in its
+        menu instead.
+        """
+        manager = self.file_tree_panel.workspaces
+        manager.set_active(name)
+        if not name:
+            return
+
+        workspace = manager.load(name)
+        if workspace is None:
+            return
+        manager.touch(name)
+
+        glossary_page = getattr(self.settings_page.ui, 'glossary_page', None)
+        if glossary_page is not None:
+            profile = workspace.glossary_profile or name
+            if profile not in glossary_page.manager.list_profiles():
+                glossary_page.manager.create_profile(profile)
+            glossary_page.profile_combo.setCurrentText(profile)
+            if workspace.glossary_profile != profile:
+                workspace.glossary_profile = profile
+                manager.save(workspace)
+
+        if workspace.prompt_preset:
+            prompt_combo = getattr(self.settings_page.ui, 'prompt_preset_combo', None)
+            if prompt_combo is not None:
+                prompt_combo.setCurrentText(workspace.prompt_preset)
+
+        if workspace.source_language:
+            self.s_combo.setCurrentText(workspace.source_language)
+        if workspace.target_language:
+            self.t_combo.setCurrentText(workspace.target_language)
+
+    def capture_workspace_state(self):
+        """Store the current language and preset choices on the active workspace."""
+        panel = getattr(self, 'file_tree_panel', None)
+        if panel is None:
+            return
+        name = panel.current_workspace_name()
+        if not name:
+            return
+
+        workspace = panel.workspaces.load(name)
+        if workspace is None:
+            return
+
+        workspace.source_language = self.s_combo.currentText()
+        workspace.target_language = self.t_combo.currentText()
+        prompt_combo = getattr(self.settings_page.ui, 'prompt_preset_combo', None)
+        if prompt_combo is not None:
+            workspace.prompt_preset = prompt_combo.currentText()
+        glossary_page = getattr(self.settings_page.ui, 'glossary_page', None)
+        if glossary_page is not None:
+            workspace.glossary_profile = glossary_page.manager.active_profile
+        panel.workspaces.save(workspace)
 
     def schedule_layer_panel_refresh(self, *_):
         """Rebuild the layer list shortly after the scene settles.
@@ -982,6 +1064,11 @@ class ComicTranslate(ComicTranslateUI):
         try:
             self.threadpool.clear()
             self.threadpool.waitForDone(2000)
+        except Exception:
+            pass
+
+        try:
+            self.capture_workspace_state()
         except Exception:
             pass
 

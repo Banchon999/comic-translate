@@ -17,6 +17,9 @@ import os
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
+from modules.utils.workspaces import WorkspaceManager
+
+from .dayu_widgets.combo_box import MComboBox
 from .dayu_widgets.line_edit import MLineEdit
 from .dayu_widgets.menu import MMenu
 from .dayu_widgets.push_button import MPushButton
@@ -24,15 +27,19 @@ from .dayu_widgets.push_button import MPushButton
 PATH_ROLE = QtCore.Qt.ItemDataRole.UserRole
 KIND_ROLE = QtCore.Qt.ItemDataRole.UserRole + 1
 
+NO_WORKSPACE = ""
+
 
 class FileTreePanel(QtWidgets.QWidget):
-    """Pages grouped by source folder."""
+    """Pages grouped by source folder, under the workspace they belong to."""
 
     page_activated = QtCore.Signal(str)
     delete_requested = QtCore.Signal(list)
     skip_requested = QtCore.Signal(list, bool)
     translate_requested = QtCore.Signal(list)
     add_folder_requested = QtCore.Signal()
+    workspace_activated = QtCore.Signal(str)
+    workspace_folder_opened = QtCore.Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -41,10 +48,27 @@ class FileTreePanel(QtWidgets.QWidget):
         self._states: dict[str, dict] = {}
         self._items_by_path: dict[str, QtWidgets.QTreeWidgetItem] = {}
         self._selecting = False
+        self.workspaces = WorkspaceManager.instance()
 
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
+
+        workspace_row = QtWidgets.QHBoxLayout()
+        workspace_row.setSpacing(4)
+        self.workspace_combo = MComboBox().small()
+        self.workspace_combo.setToolTip(self.tr(
+            "The series being worked on. Switching one loads its chapters and\n"
+            "its glossary, prompt preset and languages together."
+        ))
+        self.workspace_combo.currentIndexChanged.connect(self._on_workspace_chosen)
+        workspace_row.addWidget(self.workspace_combo, 1)
+
+        self.workspace_menu_button = MPushButton("⋯").small()
+        self.workspace_menu_button.setToolTip(self.tr("Manage workspaces"))
+        self.workspace_menu_button.clicked.connect(self._show_workspace_menu)
+        workspace_row.addWidget(self.workspace_menu_button)
+        layout.addLayout(workspace_row)
 
         controls = QtWidgets.QHBoxLayout()
         controls.setSpacing(4)
@@ -72,6 +96,106 @@ class FileTreePanel(QtWidgets.QWidget):
         self.summary_label = QtWidgets.QLabel("")
         self.summary_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(self.summary_label)
+
+        self.refresh_workspaces()
+
+    # Workspaces
+
+    def refresh_workspaces(self) -> None:
+        """Reload the list of workspaces and show the active one."""
+        names = self.workspaces.list_names()
+        self.workspace_combo.blockSignals(True)
+        try:
+            self.workspace_combo.clear()
+            self.workspace_combo.addItem(self.tr("No workspace"), NO_WORKSPACE)
+            for name in names:
+                self.workspace_combo.addItem(name, name)
+
+            active = self.workspaces.active_name if self.workspaces.active_name in names else NO_WORKSPACE
+            index = self.workspace_combo.findData(active)
+            self.workspace_combo.setCurrentIndex(max(0, index))
+        finally:
+            self.workspace_combo.blockSignals(False)
+
+    def current_workspace_name(self) -> str:
+        return self.workspace_combo.currentData() or NO_WORKSPACE
+
+    def _on_workspace_chosen(self, _index: int) -> None:
+        self.workspace_activated.emit(self.current_workspace_name())
+
+    def _show_workspace_menu(self) -> None:
+        menu = MMenu(parent=self)
+        current = self.current_workspace_name()
+
+        menu.addAction(self.tr("New workspace…")).triggered.connect(self._create_workspace)
+
+        rename_action = menu.addAction(self.tr("Rename…"))
+        rename_action.setEnabled(bool(current))
+        rename_action.triggered.connect(lambda: self._rename_workspace(current))
+
+        delete_action = menu.addAction(self.tr("Delete"))
+        delete_action.setEnabled(bool(current))
+        delete_action.triggered.connect(lambda: self._delete_workspace(current))
+
+        workspace = self.workspaces.load(current) if current else None
+        if workspace and workspace.folders:
+            menu.addSeparator()
+            for folder in workspace.folders:
+                label = os.path.basename(folder.rstrip(os.sep)) or folder
+                exists = os.path.isdir(folder)
+                action = menu.addAction(
+                    self.tr("Open {0}").format(label) if exists
+                    else self.tr("{0} (missing)").format(label)
+                )
+                action.setEnabled(exists)
+                action.triggered.connect(
+                    lambda _checked=False, path=folder: self.workspace_folder_opened.emit(path)
+                )
+
+        menu.exec_(self.workspace_menu_button.mapToGlobal(
+            QtCore.QPoint(0, self.workspace_menu_button.height())
+        ))
+
+    def _create_workspace(self) -> None:
+        name, accepted = QtWidgets.QInputDialog.getText(
+            self, self.tr("New Workspace"), self.tr("Series name:")
+        )
+        if not accepted or not name.strip():
+            return
+        if self.workspaces.create(name.strip()) is None:
+            QtWidgets.QMessageBox.information(
+                self, self.tr("New Workspace"),
+                self.tr('A workspace called "{0}" already exists.').format(name.strip()),
+            )
+            return
+        self.refresh_workspaces()
+        self.workspace_activated.emit(self.current_workspace_name())
+
+    def _rename_workspace(self, current: str) -> None:
+        name, accepted = QtWidgets.QInputDialog.getText(
+            self, self.tr("Rename Workspace"), self.tr("Series name:"), text=current
+        )
+        if not accepted or not name.strip():
+            return
+        if not self.workspaces.rename(current, name.strip()):
+            QtWidgets.QMessageBox.information(
+                self, self.tr("Rename Workspace"),
+                self.tr('A workspace called "{0}" already exists.').format(name.strip()),
+            )
+            return
+        self.refresh_workspaces()
+
+    def _delete_workspace(self, current: str) -> None:
+        answer = QtWidgets.QMessageBox.question(
+            self, self.tr("Delete Workspace"),
+            self.tr('Delete the workspace "{0}"? The images and translations stay '
+                    'on disk — only the saved setup is removed.').format(current),
+        )
+        if answer != QtWidgets.QMessageBox.StandardButton.Yes:
+            return
+        self.workspaces.delete(current)
+        self.refresh_workspaces()
+        self.workspace_activated.emit(self.current_workspace_name())
 
     # Building
 

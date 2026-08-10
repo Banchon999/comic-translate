@@ -249,6 +249,7 @@ class SettingsPageUI(QtWidgets.QWidget):
         # LLMs
         self.image_checkbox = self.llms_page.image_checkbox
         self.extra_context = self.llms_page.extra_context
+        self.prompt_preset_combo = self.llms_page.prompt_preset_combo
 
         # Text rendering
         self.min_font_spinbox = self.text_rendering_page.min_font_spinbox
