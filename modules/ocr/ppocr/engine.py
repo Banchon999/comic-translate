@@ -11,6 +11,7 @@ from modules.utils.language_utils import is_no_space_lang, normalize_script
 from modules.utils.device import get_providers
 from modules.utils.download import ModelDownloader, ModelID
 from modules.utils.onnx import make_session
+from modules.ocr.crop_utils import crop_with_bounds, expanded_ocr_line_bounds
 from .preprocessing import det_preprocess, crop_quad, rec_resize_norm
 from .postprocessing import DBPostProcessor, CTCLabelDecoder
 
@@ -168,7 +169,16 @@ class PPOCRv5Engine(OCREngine):
 			all_crops: list[np.ndarray] = []
 			for blk in blk_list:
 				lines = getattr(blk, 'lines', None) or [blk.xyxy]
-				crops = [_crop_line(img, line) for line in lines]
+				crops = [
+					_crop_line(
+						img,
+						line,
+						blk,
+						getattr(self, 'expansion_percentage', 5),
+						getattr(self, 'min_expansion_px', 0),
+					)
+					for line in lines
+				]
 				valid_lines: list[Any] = []
 				valid_crops: list[np.ndarray] = []
 				for line, crop in zip(lines, crops):
@@ -206,20 +216,44 @@ class PPOCRv5Engine(OCREngine):
 		return lists_to_blk_list(blk_list, bboxes, texts)
 
 
-def _crop_line(img: np.ndarray, line) -> np.ndarray | None:
+def _crop_line(
+	img: np.ndarray,
+	line,
+	blk: TextBlock | None = None,
+	expansion_percentage: int = 5,
+	min_padding: int = 0,
+) -> np.ndarray | None:
 	arr = np.asarray(line)
-	if arr.ndim == 2 and arr.shape[0] >= 4 and arr.shape[1] == 2:
+	if blk is None and arr.ndim == 2 and arr.shape[0] >= 4 and arr.shape[1] == 2:
 		return crop_quad(img, arr.astype(np.float32))
-	if arr.size != 4:
+
+	if blk is not None:
+		crop = crop_with_bounds(
+			img,
+			expanded_ocr_line_bounds(
+				img,
+				blk,
+				line,
+				expansion_percentage=expansion_percentage,
+				min_padding=min_padding,
+			),
+		)
+		if crop is None:
+			return None
+	else:
+		if arr.size != 4:
+			return None
+		x1, y1, x2, y2 = [int(round(float(v))) for v in arr.reshape(-1)[:4]]
+		x1 = max(0, min(img.shape[1], x1))
+		x2 = max(0, min(img.shape[1], x2))
+		y1 = max(0, min(img.shape[0], y1))
+		y2 = max(0, min(img.shape[0], y2))
+		if x2 <= x1 or y2 <= y1:
+			return None
+		crop = img[y1:y2, x1:x2]
+
+	if crop.size == 0:
 		return None
-	x1, y1, x2, y2 = [int(round(float(v))) for v in arr.reshape(-1)[:4]]
-	x1 = max(0, min(img.shape[1], x1))
-	x2 = max(0, min(img.shape[1], x2))
-	y1 = max(0, min(img.shape[0], y1))
-	y2 = max(0, min(img.shape[0], y2))
-	if x2 <= x1 or y2 <= y1:
-		return None
-	crop = img[y1:y2, x1:x2]
 	h, w = crop.shape[:2]
 	if h > 0 and w > 0 and h / float(w) >= 1.5:
 		crop = np.rot90(crop)
@@ -322,4 +356,3 @@ def _should_filter_japanese_small_lines(blk: TextBlock, texts: List[str]) -> boo
 	if normalize_script(getattr(blk, "script", "")) == "Japanese":
 		return True
 	return False
-
