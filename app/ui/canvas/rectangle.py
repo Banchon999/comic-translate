@@ -5,6 +5,7 @@ from PySide6.QtGui import QColor, QBrush, QCursor
 from PySide6 import QtCore
 from dataclasses import dataclass
 from ..dayu_widgets.menu import MMenu
+from . import handles
 
 @dataclass
 class RectState:
@@ -53,6 +54,17 @@ class MoveableRectItem(QGraphicsRectItem):
         self.center_scene_pos = None
 
         self.old_state = None
+
+    def paint(self, painter, option, widget=None):
+        super().paint(painter, option, widget)
+        # Handles only while this box is the selected one; drawing them on every
+        # box at once would bury the page under white squares.
+        if self.selected:
+            # boundingRect, not rect: that is what the hit test measures against,
+            # so this is the only way what you see is what you can grab.
+            handles.paint_handles(
+                painter, self.boundingRect(), handles.item_view_scale(self, option, painter)
+            )
 
     def focusOutEvent(self, event):
         self.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
