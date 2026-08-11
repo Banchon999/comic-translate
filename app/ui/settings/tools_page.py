@@ -1,4 +1,4 @@
-from PySide6 import QtWidgets
+from PySide6 import QtCore, QtWidgets
 from ..dayu_widgets.label import MLabel
 from ..dayu_widgets.check_box import MCheckBox
 from ..dayu_widgets.spin_box import MSpinBox
@@ -7,12 +7,13 @@ from modules.utils.device import is_gpu_available
 
 class ToolsPage(QtWidgets.QWidget):
     def __init__(
-        self, 
-        translators: list[str], 
-        ocr_engines: list[str], 
+        self,
+        translators: list[str],
+        ocr_engines: list[str],
         detectors: list[str],
-        inpainters: list[str], 
-        inpaint_strategy: list[str], 
+        inpainters: list[str],
+        inpaint_strategy: list[str],
+        unavailable_ocr_engines: dict[str, list[str]] | None = None,
         parent=None
     ):
         super().__init__(parent)
@@ -21,6 +22,7 @@ class ToolsPage(QtWidgets.QWidget):
         self.detectors = detectors
         self.inpainters = inpainters
         self.inpaint_strategy = inpaint_strategy
+        self.unavailable_ocr_engines = unavailable_ocr_engines or {}
 
         layout = QtWidgets.QVBoxLayout(self)
 
@@ -29,6 +31,7 @@ class ToolsPage(QtWidgets.QWidget):
 
         ocr_widget, self.ocr_combo = create_title_and_combo(self.tr("Text Recognition"), self.ocr_engines, h4=True)
         set_combo_box_width(self.ocr_combo, self.ocr_engines)
+        self._mark_unavailable_ocr_engines()
 
         detector_widget, self.detector_combo = create_title_and_combo(self.tr("Text Detector"), self.detectors, h4=True)
         set_combo_box_width(self.detector_combo, self.detectors)
@@ -215,6 +218,39 @@ class ToolsPage(QtWidgets.QWidget):
         layout.addStretch(1)
 
         self._update_hd_strategy_widgets(self.inpaint_strategy_combo.currentIndex())
+
+    # How to install what each optional engine needs, keyed by the package that
+    # is missing. Naming the command is the whole point — "unavailable" alone
+    # leaves the user guessing.
+    INSTALL_HINTS = {
+        'torch': 'pip install torch torchvision "transformers>=5"',
+        'torchvision': 'pip install torch torchvision "transformers>=5"',
+        'transformers': 'pip install torch torchvision "transformers>=5"',
+        'easyocr': 'pip install easyocr',
+    }
+
+    def _mark_unavailable_ocr_engines(self):
+        """Grey out engines whose Python packages are not installed.
+
+        The entry stays in the list so it can be found and its requirement
+        read; Qt will not let it be picked while it is disabled.
+        """
+        model = self.ocr_combo.model()
+        for name, missing in self.unavailable_ocr_engines.items():
+            index = self.ocr_combo.findText(name)
+            if index < 0:
+                continue
+
+            item = model.item(index)
+            if item is not None:
+                item.setEnabled(False)
+
+            command = self.INSTALL_HINTS.get(missing[0], "")
+            tooltip = self.tr("{0} needs: {1}").format(name, ", ".join(missing))
+            if command:
+                tooltip += "\n" + self.tr("Install with: {0}").format(command)
+            tooltip += "\n" + self.tr("Restart the app afterwards.")
+            self.ocr_combo.setItemData(index, tooltip, QtCore.Qt.ItemDataRole.ToolTipRole)
 
     def _update_hd_strategy_widgets(self, index: int):
         strategy = self.inpaint_strategy_combo.itemText(index)

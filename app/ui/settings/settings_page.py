@@ -455,6 +455,13 @@ class SettingsPage(QtWidgets.QWidget):
 
         ocr = settings.value('ocr', 'Default')
         translated_ocr = self.ui.reverse_mappings.get(ocr, ocr)
+        # An engine chosen on a machine that had its packages, opened on one
+        # that does not, would otherwise be restored and then fail at OCR time.
+        # The listed-but-disabled entry is still findable, so check availability
+        # rather than presence.
+        if translated_ocr in getattr(self.ui, 'unavailable_ocr_engines', {}):
+            logger.info("Saved OCR engine %s is unavailable here; falling back to Default", ocr)
+            translated_ocr = self.ui.reverse_mappings.get('Default', 'Default')
         if self.ui.ocr_combo.findText(translated_ocr) != -1:
             self.ui.ocr_combo.setCurrentText(translated_ocr)
         else:

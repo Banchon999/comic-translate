@@ -62,18 +62,26 @@ class SettingsPageUI(QtWidgets.QWidget):
             'PaddleOCR',
             'PaddleOCR (Server)',
             'Pororo (Korean)',
+            'PaddleOCR-VL',
+            'EasyOCR',
             self.tr('Microsoft OCR'),
             self.tr('Gemini-2.5-Flash-Lite'),
         ]
-        # EasyOCR is an optional torch-based dependency; only offer it when installed
-        if importlib.util.find_spec("easyocr") is not None:
-            self.ocr_engines.insert(4, 'EasyOCR')
-        # PaddleOCR-VL needs transformers 5, torch and torchvision, none of which
-        # this project depends on, so it is only offered when all are importable.
-        # Checked by spec rather than by importing the engine, which would drag
-        # the whole model stack into building the settings dialog.
-        if all(importlib.util.find_spec(n) for n in ("torch", "torchvision", "transformers")):
-            self.ocr_engines.insert(4, 'PaddleOCR-VL')
+        # Two engines rest on Python packages this project does not depend on.
+        # They used to be dropped from the list when those were absent, which
+        # left someone who went looking for one with nothing to go on. They are
+        # listed either way now, greyed out with what to install when missing.
+        # Availability is decided by find_spec rather than by importing the
+        # engine, which would drag the whole model stack into building the
+        # settings dialog.
+        self.unavailable_ocr_engines = {}
+        for name, packages in (
+            ('PaddleOCR-VL', ("torch", "torchvision", "transformers")),
+            ('EasyOCR', ("easyocr",)),
+        ):
+            missing = [p for p in packages if importlib.util.find_spec(p) is None]
+            if missing:
+                self.unavailable_ocr_engines[name] = missing
         self.inpaint_strategy = [self.tr('Resize'), self.tr('Original'), self.tr('Crop')]
         self.themes = [self.tr('Dark'), self.tr('Light')]
         self.alignment = [self.tr("Left"), self.tr("Center"), self.tr("Right")]
@@ -207,6 +215,7 @@ class SettingsPageUI(QtWidgets.QWidget):
             detectors=self.detectors,
             inpainters=self.inpainters,
             inpaint_strategy=self.inpaint_strategy,
+            unavailable_ocr_engines=self.unavailable_ocr_engines,
             parent=self,
         )
         self.credentials_page = CredentialsPage(

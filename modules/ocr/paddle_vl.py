@@ -60,6 +60,18 @@ class PaddleOCRVLEngine(OCREngine):
         self.min_expansion_px = 0
 
     def initialize(self, device: str = "cpu", expansion_percentage: int = 5) -> None:
+        if not dependencies_available():
+            import importlib.util
+
+            missing = [
+                name for name in REQUIRED_PACKAGES
+                if importlib.util.find_spec(name) is None
+            ]
+            raise RuntimeError(
+                f"PaddleOCR-VL needs {', '.join(missing)}, which are not installed. "
+                'Run: pip install torch torchvision "transformers>=5"'
+            )
+
         import torch
         from transformers import AutoModelForImageTextToText, AutoProcessor
 
