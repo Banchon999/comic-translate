@@ -187,15 +187,13 @@ class ComicTranslate(ComicTranslateUI):
         # Webtoon mode toggle
         self.webtoon_toggle.clicked.connect(self.webtoon_ctrl.toggle_webtoon_mode)
 
-        # Layer visibility toggles
-        self.layer_boxes_checkbox.toggled.connect(
-            lambda visible: self.image_viewer.set_layer_visibility('boxes', visible))
-        self.layer_strokes_checkbox.toggled.connect(
-            lambda visible: self.image_viewer.set_layer_visibility('strokes', visible))
-        self.layer_patches_checkbox.toggled.connect(
-            lambda visible: self.image_viewer.set_layer_visibility('patches', visible))
-        self.layer_text_checkbox.toggled.connect(
-            lambda visible: self.image_viewer.set_layer_visibility('text', visible))
+        # The page's layer stack
+        self.layers_button.toggled.connect(self.toggle_layers_popup)
+        self.layers_popup.installEventFilter(self)
+        self.document_layers_panel.visibility_changed.connect(
+            self.image_viewer.set_layer_visibility)
+        self.document_layers_panel.opacity_changed.connect(
+            self.image_viewer.set_layer_opacity)
 
         # Per-item layer list
         self.layer_panel.attach(self.image_viewer, self.undo_group.activeStack)
@@ -472,6 +470,29 @@ class ComicTranslate(ComicTranslateUI):
     def _finish_close_after_save(self):
         self._skip_close_prompt = True
         self.close()
+
+    def toggle_layers_popup(self, visible: bool):
+        if not visible:
+            self.layers_popup.hide()
+            return
+
+        # The viewer is the source of truth for what is shown and how strongly;
+        # read it back each time so the popup never contradicts the canvas.
+        self.document_layers_panel.sync_from(
+            self.image_viewer.layer_visibility, self.image_viewer.layer_opacity)
+        self.layers_popup.adjustSize()
+
+        button = self.layers_button
+        below = button.mapToGlobal(QtCore.QPoint(0, button.height() + 4))
+        self.layers_popup.move(below)
+        self.layers_popup.show()
+
+    def eventFilter(self, obj, event):
+        # A Qt popup closes itself on the first click outside it, which leaves
+        # the button stuck in its checked state unless we follow it back.
+        if obj is self.layers_popup and event.type() == QtCore.QEvent.Type.Hide:
+            self.layers_button.setChecked(False)
+        return super().eventFilter(obj, event)
 
     def toggle_layer_panel(self, visible: bool):
         self.layer_panel.setVisible(visible)

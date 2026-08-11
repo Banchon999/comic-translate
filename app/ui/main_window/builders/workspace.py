@@ -17,6 +17,7 @@ from app.ui.dayu_widgets.radio_button import MRadioButton
 from app.ui.dayu_widgets.slider import MSlider
 from app.ui.dayu_widgets.text_edit import MTextEdit
 from app.ui.dayu_widgets.tool_button import MToolButton
+from app.ui.canvas.document_layers import DocumentLayersPanel
 from app.ui.canvas.layer_panel import LayerPanel
 from app.ui.file_tree_panel import FileTreePanel
 from app.ui.search_replace_panel import SearchReplacePanel
@@ -85,23 +86,20 @@ class WorkspaceMixin:
         self.batch_report_button.setEnabled(False)
         self.batch_report_button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
 
-        # Layer visibility toggles: each pipeline stage's output is a layer
-        # that can be shown/hidden while editing.
-        self.layers_label = MLabel(self.tr("Layers:")).secondary()
-        self.layer_boxes_checkbox = MCheckBox(self.tr("Boxes"))
-        self.layer_boxes_checkbox.setToolTip(self.tr("Show/hide detection boxes"))
-        self.layer_strokes_checkbox = MCheckBox(self.tr("Segment"))
-        self.layer_strokes_checkbox.setToolTip(self.tr("Show/hide segmentation brush strokes"))
-        self.layer_patches_checkbox = MCheckBox(self.tr("Clean"))
-        self.layer_patches_checkbox.setToolTip(self.tr("Show/hide inpainting patches (cleaned areas)"))
-        self.layer_text_checkbox = MCheckBox(self.tr("Text"))
-        self.layer_text_checkbox.setToolTip(self.tr("Show/hide rendered translation text"))
-        for checkbox in (
-            self.layer_boxes_checkbox, self.layer_strokes_checkbox,
-            self.layer_patches_checkbox, self.layer_text_checkbox,
-        ):
-            checkbox.setChecked(True)
-            checkbox.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+        # The page's layer stack lives in a popup rather than as loose
+        # checkboxes: five toggles and three sliders do not belong in a toolbar,
+        # and out there they had no order and no grouping.
+        self.layers_button = MToolButton().svg("layers.svg").icon_only()
+        self.layers_button.setCheckable(True)
+        self.layers_button.setToolTip(self.tr("Layers of this page"))
+        self.layers_button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+
+        self.document_layers_panel = DocumentLayersPanel()
+        self.layers_popup = QtWidgets.QFrame(self, QtCore.Qt.WindowType.Popup)
+        self.layers_popup.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
+        popup_layout = QtWidgets.QVBoxLayout(self.layers_popup)
+        popup_layout.setContentsMargins(0, 0, 0, 0)
+        popup_layout.addWidget(self.document_layers_panel)
 
         self.layer_panel_button = MToolButton().svg("list_view.svg").icon_only()
         self.layer_panel_button.setCheckable(True)
@@ -116,11 +114,7 @@ class WorkspaceMixin:
         header_layout.addWidget(self.hbutton_group)
         header_layout.addWidget(self.loading)
         header_layout.addSpacing(15)
-        header_layout.addWidget(self.layers_label)
-        header_layout.addWidget(self.layer_boxes_checkbox)
-        header_layout.addWidget(self.layer_strokes_checkbox)
-        header_layout.addWidget(self.layer_patches_checkbox)
-        header_layout.addWidget(self.layer_text_checkbox)
+        header_layout.addWidget(self.layers_button)
         header_layout.addWidget(self.layer_panel_button)
         header_layout.addWidget(self.file_tree_button)
         header_layout.addStretch()
