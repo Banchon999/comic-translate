@@ -1,0 +1,19 @@
+# The image carries the whole source tree — this project is GPLv3, and shipping
+# a binary image means shipping the source that built it. What is excluded here
+# is only history, caches and local environments, none of which are source.
+.git
+.github
+__pycache__
+**/__pycache__
+*.py[cod]
+.venv
+venv
+env
+.env
+*.egg-info
+dist
+build
+.pytest_cache
+.ruff_cache
+.mypy_cache
+uv.lock
