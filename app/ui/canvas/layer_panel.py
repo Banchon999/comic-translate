@@ -13,6 +13,7 @@ from PySide6 import QtCore, QtWidgets
 from PySide6.QtGui import QUndoCommand
 from PySide6.QtWidgets import QGraphicsPixmapItem
 
+from .layer_state import item_opacity, item_visible, set_item_opacity, set_item_visible
 from .rectangle import MoveableRectItem
 from .text_item import TextBlockItem
 
@@ -61,17 +62,20 @@ def describe(item, index: int) -> str:
 class ItemPropertyCommand(QUndoCommand):
     """Undoable change to one scene item's visibility, lock state or opacity."""
 
-    def __init__(self, item, prop: str, old_value, new_value, text: str):
+    def __init__(self, item, prop: str, old_value, new_value, text: str, viewer=None):
         super().__init__(text)
         self.item = item
         self.prop = prop
         self.old_value = old_value
         self.new_value = new_value
+        self.viewer = viewer
 
     def _apply(self, value):
         try:
             if self.prop == 'visible':
-                self.item.setVisible(value)
+                # Recorded on the item, not pushed straight to Qt: the layer it
+                # belongs to has a say too, and the viewer combines the two.
+                set_item_visible(self.item, value)
             elif self.prop == 'locked':
                 self.item.setFlag(
                     QtWidgets.QGraphicsItem.GraphicsItemFlag.ItemIsMovable, not value
@@ -79,11 +83,20 @@ class ItemPropertyCommand(QUndoCommand):
                 self.item.setFlag(
                     QtWidgets.QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, not value
                 )
+                return
             elif self.prop == 'opacity':
-                self.item.setOpacity(value)
+                set_item_opacity(self.item, value)
+            else:
+                return
         except RuntimeError:
             # The item was removed from the scene; nothing to restore.
-            pass
+            return
+
+        if self.viewer is not None:
+            self.viewer.apply_layer_visibility()
+        else:
+            self.item.setVisible(item_visible(self.item))
+            self.item.setOpacity(item_opacity(self.item))
 
     def redo(self):
         self._apply(self.new_value)
@@ -190,7 +203,7 @@ class LayerPanel(QtWidgets.QWidget):
                     row.setCheckState(
                         1,
                         QtCore.Qt.CheckState.Checked
-                        if item.isVisible()
+                        if item_visible(item)
                         else QtCore.Qt.CheckState.Unchecked,
                     )
                     movable = bool(
@@ -251,7 +264,8 @@ class LayerPanel(QtWidgets.QWidget):
         if column == 1:
             self._push(
                 ItemPropertyCommand(
-                    item, 'visible', not checked, checked, self.tr("Show/Hide Layer")
+                    item, 'visible', not checked, checked,
+                    self.tr("Show/Hide Layer"), self.viewer,
                 )
             )
         else:
@@ -260,7 +274,8 @@ class LayerPanel(QtWidgets.QWidget):
             )
             self._push(
                 ItemPropertyCommand(
-                    item, 'locked', not movable, checked, self.tr("Lock Layer")
+                    item, 'locked', not movable, checked,
+                    self.tr("Lock Layer"), self.viewer,
                 )
             )
 
@@ -281,7 +296,7 @@ class LayerPanel(QtWidgets.QWidget):
         item = self._selected_item()
         self.opacity_slider.blockSignals(True)
         self.opacity_slider.setEnabled(item is not None)
-        self.opacity_slider.setValue(int(round((item.opacity() if item else 1.0) * 100)))
+        self.opacity_slider.setValue(int(round((item_opacity(item) if item else 1.0) * 100)))
         self.opacity_slider.blockSignals(False)
 
     def _on_opacity_preview(self, value: int):
@@ -290,8 +305,12 @@ class LayerPanel(QtWidgets.QWidget):
         if item is None:
             return
         if self._opacity_before_drag is None:
-            self._opacity_before_drag = item.opacity()
-        item.setOpacity(value / 100.0)
+            self._opacity_before_drag = item_opacity(item)
+        set_item_opacity(item, value / 100.0)
+        if self.viewer is not None:
+            self.viewer.apply_layer_visibility()
+        else:
+            item.setOpacity(value / 100.0)
 
     def _on_opacity_committed(self):
         item = self._selected_item()
@@ -302,7 +321,9 @@ class LayerPanel(QtWidgets.QWidget):
         new_value = self.opacity_slider.value() / 100.0
         if old_value == new_value:
             return
-        item.setOpacity(old_value)  # let the command apply the change
+        set_item_opacity(item, old_value)  # let the command apply the change
         self._push(
-            ItemPropertyCommand(item, 'opacity', old_value, new_value, self.tr("Layer Opacity"))
+            ItemPropertyCommand(
+                item, 'opacity', old_value, new_value, self.tr("Layer Opacity"), self.viewer
+            )
         )

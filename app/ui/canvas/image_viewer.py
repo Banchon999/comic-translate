@@ -5,6 +5,7 @@ from PySide6 import QtWidgets, QtCore, QtGui
 from PySide6.QtWidgets import QGraphicsView, QGraphicsPixmapItem, QGraphicsScene
 from PySide6.QtCore import Signal, Qt, QRectF, QPointF
 
+from . import layer_state
 from .text_item import TextBlockItem
 from .text.text_item_properties import TextItemProperties
 from .rectangle import MoveableRectItem
@@ -75,7 +76,16 @@ class ImageViewer(QGraphicsView):
         self.selected_rect: MoveableRectItem = None
 
         # Layer visibility: each pipeline stage's output can be hidden while editing
-        self.layer_visibility = {'boxes': True, 'strokes': True, 'patches': True, 'text': True}
+        # The three that make up the finished page, then the two that only exist
+        # while you work. The base image was missing from this entirely, so it
+        # could never be hidden to see what the cleaner and text layers add.
+        self.OUTPUT_LAYERS = ('text', 'patches', 'image')
+        self.WORKING_LAYERS = ('boxes', 'strokes')
+        self.layer_visibility = {
+            'image': True, 'patches': True, 'text': True,
+            'boxes': True, 'strokes': True,
+        }
+        self.layer_opacity = {'image': 1.0, 'patches': 1.0, 'text': 1.0}
         
         # Box drawing state
         self.start_point: QPointF = None
@@ -89,28 +99,54 @@ class ImageViewer(QGraphicsView):
 
     # Layer visibility
 
+    def _layer_of(self, item) -> str | None:
+        """Which document layer a scene item belongs to."""
+        if item is self.photo:
+            return 'image'
+        if isinstance(item, MoveableRectItem):
+            return 'boxes'
+        if isinstance(item, TextBlockItem):
+            return 'text'
+        if isinstance(item, QtWidgets.QGraphicsPathItem):
+            return 'strokes'
+        if isinstance(item, QGraphicsPixmapItem) and item.data(0) is not None:
+            # Inpaint patch items carry a hash key; together they are the layer
+            # that covers over the original lettering.
+            return 'patches'
+        return None
+
     def set_layer_visibility(self, layer: str, visible: bool) -> None:
         if layer not in self.layer_visibility:
             return
         self.layer_visibility[layer] = bool(visible)
         self.apply_layer_visibility()
 
+    def set_layer_opacity(self, layer: str, opacity: float) -> None:
+        """Set a layer's opacity, 0.0 to 1.0.
+
+        Fading the cleaner layer is how you check what it covered without
+        undoing it, which is the reason this exists at all.
+        """
+        if layer not in self.layer_opacity:
+            return
+        self.layer_opacity[layer] = max(0.0, min(1.0, float(opacity)))
+        self.apply_layer_visibility()
+
     def apply_layer_visibility(self) -> None:
-        """Apply the current layer toggles to every item in the scene."""
+        """Apply the current layer toggles and opacities to every scene item.
+
+        Combined with each item's own state from the per-item layer panel, so
+        neither control silently overwrites the other.
+        """
         visibility = self.layer_visibility
+        opacity = self.layer_opacity
         for item in self._scene.items():
-            if isinstance(item, MoveableRectItem):
-                item.setVisible(visibility['boxes'])
-            elif isinstance(item, TextBlockItem):
-                item.setVisible(visibility['text'])
-            elif isinstance(item, QtWidgets.QGraphicsPathItem) and item is not self.photo:
-                item.setVisible(visibility['strokes'])
-            elif (
-                isinstance(item, QGraphicsPixmapItem)
-                and item is not self.photo
-                and item.data(0) is not None  # inpaint patch items carry a hash key
-            ):
-                item.setVisible(visibility['patches'])
+            layer = self._layer_of(item)
+            if layer is None:
+                continue
+            layer_state.apply_to(
+                item, visibility.get(layer, True), opacity.get(layer, 1.0)
+            )
 
     # Public API
     def hasPhoto(self) -> bool:

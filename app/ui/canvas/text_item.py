@@ -6,6 +6,7 @@ from PySide6.QtCore import Qt, QRectF, Signal, QPointF
 import math, copy
 from dataclasses import dataclass
 from enum import Enum
+from . import handles
 from .text.vertical_layout import VerticalTextDocumentLayout
 
 
@@ -518,6 +519,11 @@ class TextBlockItem(QGraphicsTextItem):
 
         # Draw the normal text on top
         super().paint(painter, option, widget)
+
+        if self.selected:
+            handles.paint_handles(
+                painter, self.boundingRect(), handles.item_view_scale(self, option, painter)
+            )
 
     # Enough displacements that the gap left between neighbours, width*(1-cos(pi/n)),
     # stays under 2% of the outline width — well below a pixel at any usable size.
