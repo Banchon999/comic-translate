@@ -243,7 +243,11 @@ class BatchProcessor:
             logger.info("Glossary pre-pass: no text collected, skipping extraction")
             return
 
-        text_blob = "\n".join(collected_texts)[:60000]
+        # No truncation: extract_glossary_terms splits this into chunks and
+        # works through all of them. Cutting at a fixed length here used to
+        # throw away everything past the first few chapters of a long batch,
+        # silently, which is exactly where the recurring names show up.
+        text_blob = "\n".join(collected_texts)
         existing_sources = {entry.source for entry in manager.entries}
         try:
             entries = extract_glossary_terms(self.main_page, text_blob, existing_sources)

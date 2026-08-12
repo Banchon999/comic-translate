@@ -17,6 +17,20 @@ from modules.utils.glossary import (
 
 logger = logging.getLogger(__name__)
 
+#: Characters of page text to gather before asking the model for terms.
+#:
+#: One page of a manhwa is a dozen short lines. Asked to pull proper nouns out
+#: of that alone, a model has no way to tell a recurring character from someone
+#: shouting once, and it cannot see that two spellings on facing pages are the
+#: same person. Roughly ten pages is enough context to make those calls, and it
+#: cuts the number of API requests by the same factor.
+PAGE_BATCH_CHARS = 4000
+
+#: How long to wait after the last page before extracting whatever has piled
+#: up. Without this the tail end of a batch — anything under PAGE_BATCH_CHARS —
+#: would sit in the buffer forever.
+PAGE_FLUSH_IDLE_MS = 15000
+
 
 class GlossaryEntryDialog(QtWidgets.QDialog):
     """Dialog to add or edit a single glossary entry."""
@@ -111,6 +125,12 @@ class GlossaryPage(QtWidgets.QWidget):
 
         self._pending_pages: list[str] = []
         self._page_extraction_running = False
+        # Pages are gathered up rather than extracted one at a time — see
+        # _queue_page. The timer is what closes a batch that stopped arriving.
+        self._page_flush_timer = QtCore.QTimer(self)
+        self._page_flush_timer.setSingleShot(True)
+        self._page_flush_timer.setInterval(PAGE_FLUSH_IDLE_MS)
+        self._page_flush_timer.timeout.connect(self._flush_pending_pages)
         self.page_text_recognized.connect(self._on_page_text_recognized)
 
         layout = QtWidgets.QVBoxLayout(self)
@@ -239,6 +259,12 @@ class GlossaryPage(QtWidgets.QWidget):
         edit_button.clicked.connect(self.edit_selected)
         delete_button = MPushButton(self.tr("Delete")).small()
         delete_button.clicked.connect(self.delete_selected)
+        dedupe_button = MPushButton(self.tr("Merge Duplicates")).small()
+        dedupe_button.setToolTip(self.tr(
+            "Collapse entries that are the same term written differently —\n"
+            "most often a Korean name stored twice in different Unicode forms."
+        ))
+        dedupe_button.clicked.connect(self.merge_duplicates)
         import_button = MPushButton(self.tr("Import...")).small()
         import_button.clicked.connect(self.import_file)
         export_json_button = MPushButton(self.tr("Export JSON")).small()
@@ -246,8 +272,8 @@ class GlossaryPage(QtWidgets.QWidget):
         export_csv_button = MPushButton(self.tr("Export CSV")).small()
         export_csv_button.clicked.connect(lambda: self.export_file("csv"))
 
-        for b in (add_button, edit_button, delete_button, import_button,
-                  export_json_button, export_csv_button):
+        for b in (add_button, edit_button, delete_button, dedupe_button,
+                  import_button, export_json_button, export_csv_button):
             buttons_layout.addWidget(b)
         buttons_layout.addStretch(1)
         layout.addLayout(buttons_layout)
@@ -402,7 +428,8 @@ class GlossaryPage(QtWidgets.QWidget):
                 self.tr("This page has no recognised text yet. Run Recognize first."),
             )
             return
-        self._queue_page("\n".join(lines))
+        # Asked for explicitly, so do it now rather than waiting for company.
+        self._queue_page("\n".join(lines), flush_now=True)
 
     def _on_page_text_recognized(self, lines: list):
         """A page finished OCR. Queue it when auto-extraction is on."""
@@ -412,13 +439,23 @@ class GlossaryPage(QtWidgets.QWidget):
         if text.strip():
             self._queue_page(text)
 
-    def _queue_page(self, text: str):
+    def _queue_page(self, text: str, flush_now: bool = False):
+        """Add a page to the buffer, and extract once there is enough of it."""
         self._pending_pages.append(text)
-        self._start_next_page_extraction()
+        buffered = sum(len(page) for page in self._pending_pages)
+        if flush_now or buffered >= PAGE_BATCH_CHARS:
+            self._page_flush_timer.stop()
+            self._flush_pending_pages()
+        else:
+            # Restart the clock: a batch still running will overtake it.
+            self._page_flush_timer.start()
+            self._update_queue_status()
 
-    def _start_next_page_extraction(self):
-        # One page at a time: each extraction is an LLM call, and firing one per
-        # page of a batch in parallel would rate-limit the account instantly.
+    def _flush_pending_pages(self):
+        """Send everything buffered so far as one extraction."""
+        # One call at a time: each is an LLM request, and firing one per page of
+        # a batch in parallel would rate-limit the account instantly. Whatever
+        # arrives while this runs is picked up by the next flush.
         if self._page_extraction_running or not self._pending_pages:
             return
 
@@ -427,7 +464,8 @@ class GlossaryPage(QtWidgets.QWidget):
             self._pending_pages.clear()
             return
 
-        text = self._pending_pages.pop(0)
+        text = "\n".join(self._pending_pages)
+        self._pending_pages.clear()
         existing = {entry.source for entry in self.manager.entries}
         self._page_extraction_running = True
         self._update_queue_status()
@@ -447,21 +485,35 @@ class GlossaryPage(QtWidgets.QWidget):
             self._refresh_type_filter()
             self.refresh_table()
         self._update_queue_status()
-        self._start_next_page_extraction()
+        self._resume_pending_pages()
 
     def _on_page_extraction_error(self, error_info):
-        # A failed page must not stop the rest, and must not interrupt the user
-        # with a dialog mid-batch: the log status line carries the news.
+        # A failed batch must not stop the rest, and must not interrupt the user
+        # with a dialog mid-run: the log status line carries the news.
         self._page_extraction_running = False
         _, value, _ = error_info
         logger.warning("Per-page glossary extraction failed: %s", value)
         self._update_queue_status()
-        self._start_next_page_extraction()
+        self._resume_pending_pages()
+
+    def _resume_pending_pages(self):
+        """Deal with pages that arrived while the last extraction was running."""
+        if not self._pending_pages:
+            return
+        if sum(len(page) for page in self._pending_pages) >= PAGE_BATCH_CHARS:
+            self._page_flush_timer.stop()
+            self._flush_pending_pages()
+        else:
+            self._page_flush_timer.start()
 
     def _update_queue_status(self):
-        if self._page_extraction_running or self._pending_pages:
+        if self._page_extraction_running:
+            self.log_status_label.setText(self.tr("Extracting terms…"))
+        elif self._pending_pages:
+            # Waiting for more pages is not the same as working, and saying
+            # "extracting" while nothing happens for 15 seconds reads as a hang.
             self.log_status_label.setText(
-                self.tr("Extracting terms… {0} page(s) queued").format(len(self._pending_pages))
+                self.tr("Gathering context… {0} page(s) collected").format(len(self._pending_pages))
             )
         else:
             self._refresh_log_status()
@@ -585,6 +637,17 @@ class GlossaryPage(QtWidgets.QWidget):
             self.manager.remove(sources)
             self._refresh_type_filter()
             self.refresh_table()
+
+    def merge_duplicates(self):
+        """Clean up a glossary built before terms were normalised."""
+        removed = self.manager.deduplicate()
+        self._refresh_type_filter()
+        self.refresh_table()
+        QtWidgets.QMessageBox.information(
+            self, self.tr("Glossary"),
+            self.tr("Merged {0} duplicate term(s).").format(removed) if removed
+            else self.tr("No duplicate terms found."),
+        )
 
     def import_file(self):
         path, _ = QtWidgets.QFileDialog.getOpenFileName(

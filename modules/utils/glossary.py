@@ -3,6 +3,7 @@ import re
 import csv
 import json
 import logging
+import unicodedata
 from dataclasses import dataclass, asdict
 
 from .paths import get_user_data_dir
@@ -18,6 +19,37 @@ GLOSSARY_GENDERS = ["", "male", "female", "neutral"]
 _SOURCE_KEYS = ("source", "korean", "src", "original")
 _TARGET_KEYS = ("target", "thai", "tgt", "translation", "translated")
 
+# Zero-width and bidirectional marks. OCR picks these up from stylised
+# lettering and they are invisible on screen, so a term carrying one looks
+# exactly like the same term without it.
+_INVISIBLE = re.compile(r"[​-‏‪-‮⁠﻿]")
+
+
+def normalize_term(text: str) -> str:
+    """Clean up a term for storage: the visible form, with nothing hidden in it.
+
+    NFC matters most for Korean. Hangul has two encodings — one code point per
+    composed syllable, or a sequence of jamo — and they render identically
+    while comparing unequal. OCR engines and other tools disagree about which
+    to emit, so without this the same name is stored twice and neither the
+    glossary nor the prompt matcher can tell.
+    """
+    if not text:
+        return ""
+    cleaned = _INVISIBLE.sub("", unicodedata.normalize("NFC", str(text)))
+    # Collapse NBSP, ideographic space and runs of whitespace to one space.
+    return " ".join(cleaned.split())
+
+
+def term_key(text: str) -> str:
+    """The identity of a term — what makes two entries the same entry.
+
+    Case-folded on top of normalize_term, so "Gate" and "gate" are one term.
+    Case folding is a no-op for Korean, Japanese, Chinese and Thai, so this
+    only ever merges Latin-script variants, which is what you want.
+    """
+    return normalize_term(text).casefold()
+
 
 @dataclass
 class GlossaryEntry:
@@ -27,10 +59,15 @@ class GlossaryEntry:
     gender: str = ""  # male / female / neutral, only meaningful for characters
     note: str = ""
 
+    @property
+    def key(self) -> str:
+        """What this entry is, for comparison against other entries."""
+        return term_key(self.source)
+
     @classmethod
     def from_dict(cls, data: dict) -> "GlossaryEntry | None":
-        source = next((str(data[k]).strip() for k in _SOURCE_KEYS if data.get(k)), "")
-        target = next((str(data[k]).strip() for k in _TARGET_KEYS if data.get(k)), "")
+        source = normalize_term(next((data[k] for k in _SOURCE_KEYS if data.get(k)), ""))
+        target = normalize_term(next((data[k] for k in _TARGET_KEYS if data.get(k)), ""))
         if not source or not target:
             return None
         gender = str(data.get("gender", "") or "").strip().lower()
@@ -223,12 +260,18 @@ class GlossaryManager:
     # Editing
 
     def find(self, source: str) -> GlossaryEntry | None:
-        return next((e for e in self.entries if e.source == source), None)
+        key = term_key(source)
+        return next((e for e in self.entries if e.key == key), None)
+
+    def keys(self) -> set[str]:
+        """Identities of every stored term, for callers filtering candidates."""
+        return {e.key for e in self.entries}
 
     def upsert(self, entry: GlossaryEntry, original_source: str | None = None, save: bool = True) -> None:
         """Add an entry, or replace the one it edits/duplicates."""
-        if original_source and original_source != entry.source:
-            self.entries = [e for e in self.entries if e.source != original_source]
+        if original_source and term_key(original_source) != entry.key:
+            old_key = term_key(original_source)
+            self.entries = [e for e in self.entries if e.key != old_key]
         existing = self.find(entry.source)
         if existing:
             self.entries[self.entries.index(existing)] = entry
@@ -239,9 +282,31 @@ class GlossaryManager:
 
     def remove(self, sources: list[str]) -> int:
         before = len(self.entries)
-        sources_set = set(sources)
-        self.entries = [e for e in self.entries if e.source not in sources_set]
+        keys = {term_key(s) for s in sources}
+        self.entries = [e for e in self.entries if e.key not in keys]
         removed = before - len(self.entries)
+        if removed:
+            self.save()
+        return removed
+
+    def deduplicate(self) -> int:
+        """Collapse entries that are the same term, keeping the first of each.
+
+        Glossaries built before terms were normalised can hold the same name
+        twice — most often a Korean name stored once composed and once
+        decomposed. Returns how many entries were dropped.
+        """
+        seen: set[str] = set()
+        kept: list[GlossaryEntry] = []
+        for entry in self.entries:
+            if entry.key in seen:
+                continue
+            seen.add(entry.key)
+            entry.source = normalize_term(entry.source)
+            entry.target = normalize_term(entry.target)
+            kept.append(entry)
+        removed = len(self.entries) - len(kept)
+        self.entries = kept
         if removed:
             self.save()
         return removed
@@ -377,7 +442,11 @@ class GlossaryManager:
 
         entries = self.entries
         if self.match_only and source_text:
-            entries = [e for e in entries if e.source and e.source in source_text]
+            # Match on the normalised forms of both sides. A glossary holding a
+            # composed Korean name would otherwise never match decomposed OCR
+            # text, and the term would be quietly left out of the prompt.
+            haystack = term_key(source_text)
+            entries = [e for e in entries if e.key and e.key in haystack]
         if not entries:
             return ""
 
