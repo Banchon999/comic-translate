@@ -27,6 +27,20 @@ except ImportError as exc:  # pragma: no cover - depends on the install
 else:
 	_psapi_import_error = None
 
+	# PhotoshopAPI is a pybind11 extension, and pybind11 <= 2.11.1 reaches for
+	# numpy.core.multiarray to pick up _ARRAY_API — lazily, the first time it
+	# converts a numpy array, not when the extension loads. NumPy 2 still ships
+	# that module as a compatibility shim (and says in its own source that it
+	# exists for exactly this reason), but nothing in this tree imports it, so
+	# PyInstaller never collects it. A frozen build then gets all the way into
+	# an export before the first ImageLayer_8bit call dies with
+	# ModuleNotFoundError. Importing it here is what makes the dependency
+	# visible to a bundler's static analysis.
+	try:
+		import numpy.core.multiarray  # noqa: F401
+	except ImportError:  # pragma: no cover - a future NumPy may drop the shim
+		pass
+
 
 def psd_support_available() -> bool:
 	"""Whether PSD files can be read and written in this install."""
