@@ -7,6 +7,7 @@ import imkit as imk
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QImage, QPainter, QPen, QBrush
 
+from modules.inpainting.denoise import denoise_around_mask
 from modules.utils.device import resolve_device
 from modules.utils.image_utils import build_block_mask_data, build_bubble_clip_mask, clip_mask_to_bubble, clip_mask_components_to_bubble
 from modules.utils.pipeline_config import inpaint_map, get_config, get_inpainter_backend
@@ -166,7 +167,29 @@ class InpaintingHandler:
         finally:
             restore_original_block_coordinates(visible_blocks)
 
+    def _denoise_cleaned(self, mask: np.ndarray, inpainted_image: np.ndarray) -> np.ndarray:
+        """Tidy the JPEG artefacts inpainting blended in around the lettering.
+
+        Confined to a faded ring over the mask, and a no-op where the
+        surrounding art is a flat fill, so a clean source comes through
+        untouched. Called before the patches are cut, so only the pixels that
+        actually leave this method as a patch are affected.
+        """
+        if inpainted_image is None or mask is None:
+            return inpainted_image
+        settings_page = getattr(self.main_page, 'settings_page', None)
+        getter = getattr(settings_page, 'get_denoise_cleaned_areas', None)
+        if getter is not None and not getter():
+            return inpainted_image
+        try:
+            return denoise_around_mask(inpainted_image, mask)
+        except Exception:
+            logger.exception("Denoising the cleaned area failed; using it as-is")
+            return inpainted_image
+
     def _get_regular_patches(self, mask: np.ndarray, inpainted_image: np.ndarray):
+        inpainted_image = self._denoise_cleaned(mask, inpainted_image)
+
         contours, _ = imk.find_contours(mask)
         if not contours:
             return []
@@ -777,6 +800,8 @@ class InpaintingHandler:
         # get_best_render_area(self.main_page.blk_list, original_image, inpainted)    
 
     def get_inpainted_patches(self, mask: np.ndarray, inpainted_image: np.ndarray):
+        inpainted_image = self._denoise_cleaned(mask, inpainted_image)
+
         # slice mask into bounding boxes
         contours, _ = imk.find_contours(mask)
         patches = []
