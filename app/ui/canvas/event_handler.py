@@ -245,7 +245,14 @@ class EventHandler:
                 return True
         if event.type() == QEvent.Type.Gesture:
             return self._handle_gesture_event(event)
-        return QtWidgets.QGraphicsView.viewportEvent(self.viewer, event)
+        viewer = getattr(self, 'viewer', None)
+        if viewer is None:
+            # Qt can still deliver a viewport event while Python is tearing the
+            # handler down — on application quit, and at interpreter exit after
+            # a test run. Reaching for self.viewer then raises AttributeError
+            # and prints a traceback over whatever the user was looking at.
+            return False
+        return QtWidgets.QGraphicsView.viewportEvent(viewer, event)
 
     def _handle_gesture_event(self, event):
         if pan := event.gesture(Qt.GestureType.PanGesture): 
