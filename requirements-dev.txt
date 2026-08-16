@@ -1,0 +1,13 @@
+# Everything the app needs, plus what the test suite and linter need.
+-r requirements.txt
+
+pytest>=8.0
+
+# Reads back the PSDs the exporter writes, so a test can assert the real file
+# has the layer structure it should rather than trusting the writer that made
+# it. Pure Python and MIT-licensed. It is NOT a replacement for PhotoshopAPI on
+# the export side: psd-tools can create pixel layers and groups but has no way
+# to author an editable text layer, which is the whole point of the PSD export.
+psd-tools>=1.18
+
+ruff>=0.6

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Comic Translate is a PySide6 (Qt) desktop GUI application that automatically translates comics/manga/manhwa/webtoons. The pipeline: detect speech bubbles & text → OCR → translate (LLM or traditional) → inpaint (clean) the original text → render translated text back onto the image. It also supports a browser extension and PSD/CBZ/PDF/EPUB import-export, but the desktop app (`comic.py`) is the primary surface developed here.
 
-There is no test suite, linter config, or CI test job in this repo — verification is done by running the app manually and/or writing throwaway scripts against the relevant modules (see "Manual verification" below).
+There is a test suite (`tests/`, pytest) and a linter (`ruff.toml`), both run by `.github/workflows/test.yml` on every push and pull request. They cover pure logic and Qt-free-ish widget behaviour; anything involving a model, a network call or how a page actually *looks* still has to be checked by running the app (see "Verification" below).
 
 ## Commands
 
@@ -23,7 +23,14 @@ Run the app:
 uv run comic.py
 ```
 
-Syntax/import check the whole tree (closest thing to a build check — there is no test suite):
+Run the tests and the linter:
+```bash
+uv pip install -r requirements-dev.txt
+pytest                  # conftest.py forces the offscreen Qt platform itself
+ruff check .
+```
+
+Syntax/import check the whole tree, when you want something faster than the suite:
 ```bash
 python -m compileall -q modules app pipeline
 ```
@@ -40,11 +47,17 @@ pyinstaller --noconfirm --clean --name ComicTranslate --add-data "resources:reso
 pyinstaller --noconfirm --clean --windowed --name ComicTranslate --icon resources/icons/icon.ico --add-data "resources;resources" comic.py   # Windows (PowerShell `;` separator)
 ```
 
-All workflows are `workflow_dispatch` only — nothing builds automatically on push or PR. `build-windows-full.yml` is the same Windows build plus the PyTorch stack (`--collect-all torch torchvision transformers`), which is what makes PaddleOCR-VL reachable in a frozen bundle; it is separate because torch takes the download from a few hundred megabytes to several gigabytes, and its final step asserts the three packages actually landed in `dist/` rather than trusting `--collect-all`.
+Every **build** workflow is `workflow_dispatch` only — nothing builds automatically on push or PR; `test.yml` is the one exception and is deliberately the opposite, since a gate only matters if it runs unasked. `build-windows-full.yml` is the same Windows build plus the PyTorch stack (`--collect-all torch torchvision transformers`), which is what makes PaddleOCR-VL reachable in a frozen bundle; it is separate because torch takes the download from a few hundred megabytes to several gigabytes, and its final step asserts the three packages actually landed in `dist/` rather than trusting `--collect-all`.
 
-### Manual verification (no test suite exists)
+### Verification
 
-For changes to a `modules/*` engine or utility, the practical way to verify is a standalone script run against a venv with the relevant deps installed (numpy/pillow/onnxruntime for detection/OCR/inpainting math; add pyside6-essentials only if the code path imports Qt). Importing `modules.utils` triggers `modules/utils/__init__.py` → `textblock.py` → `imkit`, which needs `mahotas`; importing anything under `app.ui` pulls in the full Qt stack. Prefer testing pure logic (e.g. `modules/utils/glossary.py`, `modules/rendering/render.py` wrap helpers, mask/box math) in isolation before wiring it into the Qt-dependent layers. For UI-affecting changes, actually launch `uv run comic.py` (or under `xvfb-run` in a headless environment) and exercise the feature — Qt widget wiring bugs do not show up in `compileall`.
+`tests/` is where anything worth keeping goes. `conftest.py` does two things before Qt loads: forces the offscreen platform, and repoints `XDG_DATA_HOME`/`XDG_CONFIG_HOME`/`HOME` at a temp directory — without that a run reads and writes the real user's glossaries, settings and models, since `modules/utils/paths.py` resolves them through those variables. A session-scoped `qapp` fixture supplies the one QApplication a process is allowed.
+
+`tests/test_psd_export.py` deliberately reads exported files back with **psd-tools** rather than PhotoshopAPI, which wrote them: asserting with the writer only proves it agrees with itself, and both PSD bugs found so far (a black merged-image section, and a frozen build dying before writing anything) were invisible that way. psd-tools is a dev dependency and cannot replace PhotoshopAPI for export — it creates pixel layers and groups but has no way to author an editable text layer.
+
+The linter is scoped to rules that catch bugs (`E9`, `F`, `B`) rather than style. Its first run found a live one: `drawing_manager.py` called two functions it never imported, inside a broad `except Exception`, so the Segment tool silently produced a plain rectangle instead of a fitted mask in webtoon mode. `ruff.toml`'s `ignore` list is a reviewed backlog, not a verdict — each entry says what it is and how many sites.
+
+Some things the suite cannot reach. For changes to a `modules/*` engine that runs a model, the practical way to verify is still a standalone script run against a venv with the relevant deps installed (numpy/pillow/onnxruntime for detection/OCR/inpainting math; add pyside6-essentials only if the code path imports Qt). Importing `modules.utils` triggers `modules/utils/__init__.py` → `textblock.py` → `imkit`, which needs `mahotas`; importing anything under `app.ui` pulls in the full Qt stack. Prefer testing pure logic (e.g. `modules/utils/glossary.py`, `modules/rendering/render.py` wrap helpers, mask/box math) in isolation before wiring it into the Qt-dependent layers. For UI-affecting changes, actually launch `uv run comic.py` (or under `xvfb-run` in a headless environment) and exercise the feature — Qt widget wiring bugs do not show up in `compileall`.
 
 ## Architecture
 

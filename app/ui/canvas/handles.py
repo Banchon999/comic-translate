@@ -52,6 +52,26 @@ def _square(centre: QPointF, side: float) -> QRectF:
     return QRectF(centre.x() - side / 2, centre.y() - side / 2, side, side)
 
 
+#: Most of the smallest side a handle may take up.
+#:
+#: Below this, the handles meet in the middle and the box has no interior left
+#: to grab — every drag resizes it and it can never be moved. That is not a
+#: hypothetical: at 10% zoom a nominal handle is 160 image pixels, which is
+#: wider than most detection boxes. Anything under 1 leaves the centre free
+#: (a corner only reaches the centre once its side exceeds the longer edge),
+#: and 0.8 is high enough that a normal one-line text box, where the handle is
+#: already about as tall as the box, is not made harder to hit.
+_MAX_SIDE_FRACTION = 0.8
+
+
+def _hit_side(rect: QRectF, scale: float) -> float:
+    """The grab square's side in item space, kept off the centre of the box."""
+    nominal = HANDLE_HIT_PX / scale
+    if rect.isEmpty():
+        return nominal
+    return min(nominal, _MAX_SIDE_FRACTION * min(rect.width(), rect.height()))
+
+
 def handle_at(pos: QPointF, rect: QRectF, scale: float) -> str | None:
     """Which handle is under `pos`, or None.
 
@@ -61,7 +81,7 @@ def handle_at(pos: QPointF, rect: QRectF, scale: float) -> str | None:
     if scale <= 0:
         return None
 
-    side = HANDLE_HIT_PX / scale
+    side = _hit_side(rect, scale)
     centres = handle_centres(rect)
 
     for name in CORNERS:
@@ -94,7 +114,10 @@ def paint_handles(painter: QPainter, rect: QRectF, scale: float) -> None:
     if scale <= 0 or rect.isEmpty():
         return
 
-    side = HANDLE_PX / scale
+    # Derived from the grab size rather than computed separately, so what is
+    # drawn keeps its usual proportion to what responds even on a small box,
+    # where _hit_side shrinks the target.
+    side = _hit_side(rect, scale) * (HANDLE_PX / HANDLE_HIT_PX)
     # Pull the centres inward by half a handle so the squares sit flush against
     # the inside of the border.
     inset = rect.adjusted(side / 2, side / 2, -side / 2, -side / 2)
