@@ -10,6 +10,13 @@ on:
   pull_request:
   workflow_dispatch:
 
+# A branch with an open pull request matches both triggers, which runs the whole
+# matrix twice on one commit. Grouping by ref and cancelling the older run keeps
+# one, and also stops a superseded run finishing after the push that replaced it.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
