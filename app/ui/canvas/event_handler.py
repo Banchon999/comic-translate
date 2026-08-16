@@ -99,6 +99,15 @@ class EventHandler:
             if self._is_on_image(scene_pos):
                 self.viewer.drawing_manager.start_stroke(scene_pos)
 
+        if self.viewer.current_tool == 'wand' and self.viewer.hasPhoto():
+            if self._is_on_image(scene_pos):
+                # Ctrl takes every region of that colour on the page at once,
+                # rather than only the one under the cursor — one click for all
+                # the panel gutters instead of one per gutter.
+                contiguous = not (event.modifiers() & Qt.KeyboardModifier.ControlModifier)
+                self.viewer.drawing_manager.flood_fill_at(scene_pos, contiguous=contiguous)
+                return
+
         # Only pass to QGraphicsView for panning or tool-specific interactions, not our items
         scroll = self.viewer.dragMode() == QtWidgets.QGraphicsView.DragMode.ScrollHandDrag
         if self.viewer.current_tool == 'pan' or scroll:

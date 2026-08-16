@@ -3088,22 +3088,29 @@ back on the Image (for further editing)</source>
         <translation>ลบเส้นแปรง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="437"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="438"/>
+        <source>Select a whole region with one click — the inside of a bubble, a panel gutter, a flat area behind a sound effect.
+Hold Ctrl to take every region of that colour on the page at once.</source>
+        <translation>เลือกทั้งพื้นที่ด้วยคลิกเดียว — ในลูกโป่งคำพูด ช่องว่างระหว่างช่อง พื้นเรียบๆ หลังเสียงเอฟเฟกต์
+กด Ctrl ค้างเพื่อเลือกทุกพื้นที่ที่สีเดียวกันทั้งหน้าพร้อมกัน</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="446"/>
         <source>Remove all the brush strokes on the Image</source>
         <translation>ลบเส้นแปรงทั้งหมดบนภาพ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="448"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="458"/>
         <source>Brush/Eraser Size Slider</source>
         <translation>แถบปรับขนาดแปรง/ยางลบ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="452"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="462"/>
         <source>Box Drawing</source>
         <translation>การวาดกล่อง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="456"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="466"/>
         <source>Inpainting</source>
         <translation>การเติมภาพ</translation>
     </message>

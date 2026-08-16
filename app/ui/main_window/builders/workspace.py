@@ -433,11 +433,21 @@ class WorkspaceMixin:
         self.eraser_button.clicked.connect(self.toggle_eraser_tool)
         self.tool_buttons["eraser"] = self.eraser_button
 
+        self.wand_button = self.create_tool_button(svg="wand.svg", checkable=True)
+        self.wand_button.setToolTip(self.tr(
+            "Select a whole region with one click — the inside of a bubble, a "
+            "panel gutter, a flat area behind a sound effect.\n"
+            "Hold Ctrl to take every region of that colour on the page at once."
+        ))
+        self.wand_button.clicked.connect(self.toggle_wand_tool)
+        self.tool_buttons["wand"] = self.wand_button
+
         self.clear_brush_strokes_button = self.create_tool_button(svg="clear-outlined.svg")
         self.clear_brush_strokes_button.setToolTip(self.tr("Remove all the brush strokes on the Image"))
 
         inp_tools_lay.addWidget(self.brush_button)
         inp_tools_lay.addWidget(self.eraser_button)
+        inp_tools_lay.addWidget(self.wand_button)
         inp_tools_lay.addWidget(self.clear_brush_strokes_button)
         inp_tools_lay.addStretch()
 

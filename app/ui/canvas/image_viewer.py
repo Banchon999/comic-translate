@@ -216,6 +216,11 @@ class ImageViewer(QGraphicsView):
         self.current_tool = tool
         if tool == 'pan':
             self.setDragMode(QGraphicsView.ScrollHandDrag)
+        elif tool == 'wand':
+            # A crosshair, because what matters is the single pixel under the
+            # cursor: that pixel's colour is what the whole selection grows from.
+            self.setDragMode(QGraphicsView.NoDrag)
+            self.setCursor(QtGui.QCursor(Qt.CursorShape.CrossCursor))
         elif tool in ['brush', 'eraser']:
             self.setDragMode(QGraphicsView.NoDrag)
             if tool == 'brush':

@@ -35,6 +35,12 @@ class ToolStateMixin:
         else:
             self.set_tool(None)
 
+    def toggle_wand_tool(self):
+        if self.wand_button.isChecked():
+            self.set_tool("wand")
+        else:
+            self.set_tool(None)
+
     def set_slider_size(self, size: int):
         self.brush_eraser_slider.blockSignals(True)
         self.brush_eraser_slider.setValue(size)

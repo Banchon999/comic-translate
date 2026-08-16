@@ -140,6 +140,17 @@ Reopening a saved project materializes each page into its own `<temp>/unique_ima
 
 The five layers split into `OUTPUT_LAYERS = ('text', 'patches', 'image')` — the three that make up the finished page, in stacking order, matching the three groups `app/controllers/psd_exporter.py` writes ("Editable Text" / "Inpaint Patches" / "Raw Image") — and `WORKING_LAYERS = ('boxes', 'strokes')`, which only exist while editing and never leave the canvas. `layer_visibility` covers all five; `layer_opacity` only the output three. `set_layer_visibility()` / `set_layer_opacity()` / `apply_layer_visibility()` drive them, and `app/ui/canvas/document_layers.py`'s `DocumentLayersPanel` is the UI, in a `Qt.Popup` frame hung off the Layers button in the editor header (built in `builders/workspace.py`, wired in `controller.py`'s `toggle_layers_popup`). Every code path that creates one of these item types must apply the current visibility state (see call sites in `image_viewer.py`, `app/ui/commands/base.py`, `app/ui/commands/brush.py`, `app/ui/canvas/drawing_manager.py`).
 
+### Canvas tools
+
+`viewer.current_tool` is a string (`box`, `brush`, `eraser`, `pan`, `wand`), set by `set_tool` and dispatched in `event_handler.py`. Buttons register themselves in `self.tool_buttons[name]` in `builders/workspace.py`, which is what makes them mutually exclusive — nothing else needs touching to add one.
+
+The magic wand (`modules/utils/flood_select.py`, kept Qt-free so it can be tested as array maths) grows a region from the clicked pixel and hands back a mask. `drawing_manager.flood_fill_at` turns that into **an ordinary filled `QGraphicsPathItem` with a `BrushStrokeCommand`** — deliberately the same thing the brush produces, so mask generation, undo, both layer panels and project saving needed no changes at all.
+
+Two decisions there are load-bearing and non-obvious:
+
+- **Holes are closed in the mask, not by the path's fill rule.** `imk.find_contours` winds an enclosed gap opposite to its outer contour, so `WindingFill` leaves it empty. Clicking a bubble would then mask a ring *around* the lettering — the opposite of what cleaning it needs.
+- **Only holes smaller than the region enclosing them are filled.** Every closed shape encloses something, so unbounded filling makes clicking a 4px bubble border select the whole bubble, and clicking a panel border select the whole panel.
+
 `app/ui/canvas/layer_panel.py`'s `LayerPanel` goes one level down, listing individual scene items with per-item show/lock/opacity (rebuilt from the scene on a debounced `QGraphicsScene.changed`, never mirrored into a second model). Both panels end up driving `setVisible`/`setOpacity` on the same items, so neither writes to Qt directly: an item's *own* state lives on the item under the data roles in `app/ui/canvas/layer_state.py`, and `apply_layer_visibility()` combines the two (visible only if both agree, opacity multiplied). Writing `item.setOpacity(...)` from a panel instead would be silently undone the next time any layer toggle moved.
 
 All of this is purely a display concern — `get_image_array(include_patches=True)` always composes patches for OCR/translation/inpainting regardless of what's toggled on screen.
