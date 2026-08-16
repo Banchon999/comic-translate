@@ -41,6 +41,12 @@ class ToolStateMixin:
         else:
             self.set_tool(None)
 
+    def toggle_lasso_tool(self):
+        if self.lasso_button.isChecked():
+            self.set_tool("lasso")
+        else:
+            self.set_tool(None)
+
     def set_slider_size(self, size: int):
         self.brush_eraser_slider.blockSignals(True)
         self.brush_eraser_slider.setValue(size)

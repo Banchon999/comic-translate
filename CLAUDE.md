@@ -142,7 +142,9 @@ The five layers split into `OUTPUT_LAYERS = ('text', 'patches', 'image')` — th
 
 ### Canvas tools
 
-`viewer.current_tool` is a string (`box`, `brush`, `eraser`, `pan`, `wand`), set by `set_tool` and dispatched in `event_handler.py`. Buttons register themselves in `self.tool_buttons[name]` in `builders/workspace.py`, which is what makes them mutually exclusive — nothing else needs touching to add one.
+`viewer.current_tool` is a string (`box`, `brush`, `eraser`, `pan`, `wand`, `lasso`), set by `set_tool` and dispatched in `event_handler.py`. Buttons register themselves in `self.tool_buttons[name]` in `builders/workspace.py`, which is what makes them mutually exclusive — nothing else needs touching to add one.
+
+Both selection tools end at `drawing_manager.add_region_stroke(path)`, which is why neither needed changes anywhere downstream.
 
 The magic wand (`modules/utils/flood_select.py`, kept Qt-free so it can be tested as array maths) grows a region from the clicked pixel and hands back a mask. `drawing_manager.flood_fill_at` turns that into **an ordinary filled `QGraphicsPathItem` with a `BrushStrokeCommand`** — deliberately the same thing the brush produces, so mask generation, undo, both layer panels and project saving needed no changes at all.
 
@@ -150,6 +152,8 @@ Two decisions there are load-bearing and non-obvious:
 
 - **Holes are closed in the mask, not by the path's fill rule.** `imk.find_contours` winds an enclosed gap opposite to its outer contour, so `WindingFill` leaves it empty. Clicking a bubble would then mask a ring *around* the lettering — the opposite of what cleaning it needs.
 - **Only holes smaller than the region enclosing them are filled.** Every closed shape encloses something, so unbounded filling makes clicking a 4px bubble border select the whole bubble, and clicking a panel border select the whole panel.
+
+The lasso is one tool told apart by what the mouse does: drag past `LASSO_DRAG_THRESHOLD` traces a loop freehand and commits on release, while clicks below it accumulate polygon vertices closed by double-click, Enter, or abandoned with Escape. The in-progress outline is a real scene item, so `has_drawn_elements` and `generate_mask_from_strokes` both skip `lasso_preview` explicitly — without that, an outline the user never finished still gets inpainted. `set_tool` cancels an unfinished outline when the user reaches for something else, and the viewer takes focus while the lasso is active so Enter and Escape reach `keyPressEvent` at all.
 
 `app/ui/canvas/layer_panel.py`'s `LayerPanel` goes one level down, listing individual scene items with per-item show/lock/opacity (rebuilt from the scene on a debounced `QGraphicsScene.changed`, never mirrored into a second model). Both panels end up driving `setVisible`/`setOpacity` on the same items, so neither writes to Qt directly: an item's *own* state lives on the item under the data roles in `app/ui/canvas/layer_state.py`, and `apply_layer_visibility()` combines the two (visible only if both agree, opacity multiplied). Writing `item.setOpacity(...)` from a panel instead would be silently undone the next time any layer toggle moved.
 

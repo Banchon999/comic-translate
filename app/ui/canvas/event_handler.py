@@ -99,6 +99,11 @@ class EventHandler:
             if self._is_on_image(scene_pos):
                 self.viewer.drawing_manager.start_stroke(scene_pos)
 
+        if self.viewer.current_tool == 'lasso' and self.viewer.hasPhoto():
+            if self._is_on_image(scene_pos):
+                self.viewer.drawing_manager.lasso_press(scene_pos)
+                return
+
         if self.viewer.current_tool == 'wand' and self.viewer.hasPhoto():
             if self._is_on_image(scene_pos):
                 # Ctrl takes every region of that colour on the page at once,
@@ -135,6 +140,10 @@ class EventHandler:
         if self.viewer.current_tool in ['brush', 'eraser'] and self.viewer.drawing_manager.current_path:
             if self._is_on_image(scene_pos):
                 self.viewer.drawing_manager.continue_stroke(scene_pos)
+
+        if self.viewer.current_tool == 'lasso':
+            held = bool(event.buttons() & Qt.MouseButton.LeftButton)
+            self.viewer.drawing_manager.lasso_move(scene_pos, held)
         
         if self.viewer.current_tool == 'box':
             self._move_handle_box_resize(scene_pos)
@@ -173,9 +182,35 @@ class EventHandler:
         
         if self.viewer.current_tool in ['brush', 'eraser']:
             self.viewer.drawing_manager.end_stroke()
-            
+
+        if self.viewer.current_tool == 'lasso':
+            self.viewer.drawing_manager.lasso_release(
+                self.viewer.mapToScene(event.position().toPoint())
+            )
+
         if self.viewer.current_tool == 'box':
             self._release_handle_box_creation()
+
+    def handle_mouse_double_click(self, event: QtGui.QMouseEvent) -> bool:
+        """Closing a clicked polygon. Returns True when the event was ours."""
+        if self.viewer.current_tool == 'lasso':
+            self.viewer.drawing_manager.lasso_close()
+            return True
+        return False
+
+    def handle_key_press(self, event: QtGui.QKeyEvent) -> bool:
+        """Enter closes an in-progress outline, Escape abandons it."""
+        if self.viewer.current_tool != 'lasso':
+            return False
+        if not self.viewer.drawing_manager.lasso_points:
+            return False
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self.viewer.drawing_manager.lasso_close()
+            return True
+        if event.key() == Qt.Key.Key_Escape:
+            self.viewer.drawing_manager.lasso_cancel()
+            return True
+        return False
 
     def handle_wheel(self, event: QtGui.QWheelEvent):
         if not self.viewer.hasPhoto(): 

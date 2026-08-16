@@ -23,7 +23,8 @@ def viewer(qapp):
     page[20:70, 20:100] = 0      # bubble outline
     page[24:66, 24:96] = 255     # bubble interior
     view.display_image_array(page)
-    return view
+    yield view
+    view.close()
 
 
 def stroke_items(view):

@@ -442,12 +442,22 @@ class WorkspaceMixin:
         self.wand_button.clicked.connect(self.toggle_wand_tool)
         self.tool_buttons["wand"] = self.wand_button
 
+        self.lasso_button = self.create_tool_button(svg="lasso.svg", checkable=True)
+        self.lasso_button.setToolTip(self.tr(
+            "Draw around an irregular shape a round brush cannot follow.\n"
+            "Drag to trace it freehand, or click corner to corner for straight edges.\n"
+            "Double-click or press Enter to close it; Escape to start over."
+        ))
+        self.lasso_button.clicked.connect(self.toggle_lasso_tool)
+        self.tool_buttons["lasso"] = self.lasso_button
+
         self.clear_brush_strokes_button = self.create_tool_button(svg="clear-outlined.svg")
         self.clear_brush_strokes_button.setToolTip(self.tr("Remove all the brush strokes on the Image"))
 
         inp_tools_lay.addWidget(self.brush_button)
         inp_tools_lay.addWidget(self.eraser_button)
         inp_tools_lay.addWidget(self.wand_button)
+        inp_tools_lay.addWidget(self.lasso_button)
         inp_tools_lay.addWidget(self.clear_brush_strokes_button)
         inp_tools_lay.addStretch()
 

@@ -3095,22 +3095,31 @@ Hold Ctrl to take every region of that colour on the page at once.</source>
 กด Ctrl ค้างเพื่อเลือกทุกพื้นที่ที่สีเดียวกันทั้งหน้าพร้อมกัน</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="446"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="447"/>
+        <source>Draw around an irregular shape a round brush cannot follow.
+Drag to trace it freehand, or click corner to corner for straight edges.
+Double-click or press Enter to close it; Escape to start over.</source>
+        <translation>วาดล้อมรอบรูปทรงที่แปรงกลมตามไม่ได้
+ลากเพื่อวาดอิสระ หรือคลิกทีละมุมเพื่อได้เส้นตรง
+ดับเบิลคลิกหรือกด Enter เพื่อปิดรูป กด Escape เพื่อเริ่มใหม่</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="455"/>
         <source>Remove all the brush strokes on the Image</source>
         <translation>ลบเส้นแปรงทั้งหมดบนภาพ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="458"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="468"/>
         <source>Brush/Eraser Size Slider</source>
         <translation>แถบปรับขนาดแปรง/ยางลบ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="462"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="472"/>
         <source>Box Drawing</source>
         <translation>การวาดกล่อง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="466"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="476"/>
         <source>Inpainting</source>
         <translation>การเติมภาพ</translation>
     </message>
