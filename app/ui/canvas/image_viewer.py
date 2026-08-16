@@ -525,6 +525,12 @@ class ImageViewer(QGraphicsView):
             properties.shadow_offset,
             properties.shadow_blur,
         )
+        item.set_gradient(
+            properties.gradient_enabled,
+            properties.gradient_color,
+            properties.gradient_angle,
+        )
+        item.set_curvature(properties.curvature)
 
         # Update the item
         item.update()

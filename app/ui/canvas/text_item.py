@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import QGraphicsTextItem, QGraphicsItem, \
      QApplication, QWidget, QStyleOptionGraphicsItem, QGraphicsDropShadowEffect
-from PySide6.QtGui import QFont, QCursor, QColor, \
+from PySide6.QtGui import QFont, QCursor, QColor, QBrush, QPen, QFontMetricsF, \
+     QLinearGradient, QGradient, QPainterPath, QTransform, \
      QTextCharFormat, QTextBlockFormat, QTextCursor, QPainter
 from PySide6.QtCore import Qt, QRectF, Signal, QPointF
 import math, copy
@@ -8,6 +9,7 @@ from dataclasses import dataclass
 from enum import Enum
 from . import handles
 from .text.vertical_layout import VerticalTextDocumentLayout
+from modules.rendering.text_effects import arc_bulge, arc_placements, gradient_line
 
 
 @dataclass
@@ -19,7 +21,10 @@ class TextBlockState:
     @classmethod
     def from_item(cls, item: QGraphicsTextItem):
         """Create TextBlockState from a TextBlockItem"""
-        rect = QRectF(item.pos(), item.boundingRect().size()).getCoords()
+        # The text's own rect, not the painted one: a curved item paints
+        # outside its box, and this state is what a resize is undone back to.
+        rect_of = getattr(item, 'text_rect', item.boundingRect)
+        rect = QRectF(item.pos(), rect_of().size()).getCoords()
         return cls(
             rect=rect,
             rotation=item.rotation(),
@@ -82,6 +87,12 @@ class TextBlockItem(QGraphicsTextItem):
         self.shadow_color = QColor(0, 0, 0, 160)
         self.shadow_offset = (4.0, 4.0)
         self.shadow_blur = 0.0
+        self.gradient_enabled = False
+        self.gradient_color = QColor(255, 255, 255)
+        self.gradient_angle = 90.0
+        self.curvature = 0.0
+        self._applying_gradient = False
+        self._curved_bulge = None
 
         self.selected = False
         self.resizing = False
@@ -137,7 +148,7 @@ class TextBlockItem(QGraphicsTextItem):
         
         # Inform the graphics system that the geometry will change
         self.prepareGeometryChange()
-        current_rect = self.boundingRect()
+        current_rect = self.text_rect()
 
         # Disable text interaction while changing layout
         self.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
@@ -313,6 +324,220 @@ class TextBlockItem(QGraphicsTextItem):
         effect.setOffset(*self.shadow_offset)
         effect.setBlurRadius(self.shadow_blur)
         self.setGraphicsEffect(effect)
+
+    # ------------------------------------------------------------------
+    # Gradient fill
+    # ------------------------------------------------------------------
+
+    def set_gradient(self, enabled: bool, color: QColor = None, angle: float = None):
+        """Fade the fill from the item's text colour to a second one.
+
+        The item's own colour is the starting one, so turning the gradient off
+        leaves the text looking the way the colour button says it should.
+
+        This is an item-wide fill: it replaces per-character colours while it is
+        on, and turning it off restores the item's colour everywhere rather than
+        whatever each run used to be. A gradient that stopped at a range
+        boundary would restart on the next run anyway, which is not what anyone
+        means by a gradient across a word.
+        """
+        self.gradient_enabled = bool(enabled)
+        if color is not None:
+            self.gradient_color = QColor(color)
+        if angle is not None:
+            self.gradient_angle = float(angle)
+        self.apply_gradient()
+
+    def fill_brush(self) -> QBrush:
+        """The brush the text is painted with, gradient or plain colour."""
+        if not self.gradient_enabled:
+            return QBrush(self.text_color)
+
+        size = self.document().size()
+        line = gradient_line(size.width(), size.height(), self.gradient_angle)
+        gradient = QLinearGradient(*line)
+        # Anchored to the laid-out document rather than to each glyph run:
+        # Qt's ObjectBoundingMode restarts the sweep on every line, so a
+        # two-line block would come out the same colour twice over.
+        gradient.setCoordinateMode(QGradient.CoordinateMode.LogicalMode)
+        gradient.setColorAt(0.0, QColor(self.text_color))
+        gradient.setColorAt(1.0, QColor(self.gradient_color))
+        return QBrush(gradient)
+
+    def apply_gradient(self):
+        """Push the current fill onto the document, or take it back off.
+
+        Curved text paints its own glyphs and reads `fill_brush()` directly, so
+        there is nothing to push there.
+        """
+        if self.curvature:
+            self.update()
+            return
+
+        # Merging a char format is a document edit, which comes back round as
+        # contentsChanged; without this the re-apply would recurse.
+        if self._applying_gradient:
+            return
+        self._applying_gradient = True
+        try:
+            cursor = QTextCursor(self.document())
+            cursor.select(QTextCursor.SelectionType.Document)
+            char_format = QTextCharFormat()
+            char_format.setForeground(self.fill_brush())
+            cursor.mergeCharFormat(char_format)
+        finally:
+            self._applying_gradient = False
+        self.update()
+
+    # ------------------------------------------------------------------
+    # Curved text
+    # ------------------------------------------------------------------
+
+    def set_curvature(self, curvature: float):
+        """Bend the baseline into an arc: 1.0 arches up, -1.0 sags, 0 is flat."""
+        curvature = max(-1.0, min(1.0, float(curvature)))
+        if curvature == self.curvature:
+            return
+        self.prepareGeometryChange()
+        was_curved = bool(self.curvature)
+        self.curvature = curvature
+        self._curved_bulge = None
+        # Coming back to flat has to put the document's own fill back, since
+        # while curved the glyphs were painted by hand and the document was
+        # never told what colour it is.
+        if was_curved and not curvature:
+            self.apply_gradient()
+        self.update()
+
+    def text_rect(self) -> QRectF:
+        """The laid-out text's rectangle — the box the user sizes and drags.
+
+        `boundingRect()` grows past this when the text is curved, because Qt
+        repaints exactly that rectangle and an arch reaches above its line. Item
+        geometry — handles, resizing, saved state — uses this one, so bending
+        the text does not move the box it lives in.
+        """
+        return super().boundingRect()
+
+    def boundingRect(self) -> QRectF:
+        rect = super().boundingRect()
+        if not getattr(self, 'curvature', 0.0):
+            return rect
+        bulge = self.curved_bulge()
+        # Symmetric, so the centre stays where it was and the transform origin
+        # and rotation pivot are unaffected.
+        return rect.adjusted(0, -bulge, 0, bulge)
+
+    def curved_bulge(self) -> float:
+        if self._curved_bulge is None:
+            self._curved_bulge = max(
+                (arc_bulge(line.placements, line.metrics_height) for line in self.curved_lines()),
+                default=0.0,
+            )
+        return self._curved_bulge
+
+    def curved_font(self) -> QFont:
+        """The font the curved glyphs are drawn in.
+
+        The document's own default, so bending the text cannot change its size
+        — the item's `font_size` attribute is only a copy of it and the two can
+        be a step apart mid-resize. Bold, italic and underline are merged onto
+        ranges rather than the default, so those come off the item.
+        """
+        font = QFont(self.document().defaultFont())
+        font.setBold(self.bold)
+        font.setItalic(self.italic)
+        font.setUnderline(self.underline)
+        return font
+
+    @dataclass
+    class CurvedLine:
+        text: str
+        advances: list
+        placements: list
+        origin: QPointF
+        metrics_height: float
+
+    def curved_lines(self) -> list:
+        """One arc per line of text, stacked and centred in the text rect."""
+        font = self.curved_font()
+        metrics = QFontMetricsF(font)
+        rect = self.text_rect()
+        line_height = metrics.height() * float(self.line_spacing or 1.0)
+        lines = self.toPlainText().split('\n')
+
+        top = rect.center().y() - line_height * len(lines) / 2.0
+        result = []
+        for index, text in enumerate(lines):
+            advances = [
+                metrics.horizontalAdvance(character) + self.letter_spacing
+                for character in text
+            ]
+            result.append(self.CurvedLine(
+                text=text,
+                advances=advances,
+                placements=arc_placements(advances, self.curvature),
+                origin=QPointF(
+                    rect.center().x(),
+                    top + line_height * index + metrics.ascent(),
+                ),
+                metrics_height=metrics.height(),
+            ))
+        return result
+
+    def curved_path(self) -> QPainterPath:
+        """Every curved glyph as one path, in the item's own coordinates.
+
+        Turning the glyphs into outlines and baking each one's rotation into
+        the path — rather than rotating the painter and drawing text — is what
+        lets the whole thing be filled in a single pass. A gradient brush
+        resolves against whatever transform the painter is under, so a glyph
+        drawn under its own rotation samples the gradient at its own origin and
+        every letter comes out the same colour.
+        """
+        path = QPainterPath()
+        font = self.curved_font()
+        for line in self.curved_lines():
+            for character, advance, placement in zip(line.text, line.advances, line.placements):
+                if not character.strip():
+                    continue
+                glyph = QPainterPath()
+                glyph.addText(-advance / 2.0, 0.0, font, character)
+                transform = QTransform()
+                transform.translate(
+                    line.origin.x() + placement.x,
+                    line.origin.y() + placement.y,
+                )
+                transform.rotate(placement.angle)
+                path.addPath(transform.map(glyph))
+        return path
+
+    def paint_curved(self, painter: QPainter):
+        """Draw the text along its arc.
+
+        Qt lays a document out on straight lines, so there is no document to
+        draw through here. That costs the per-range character formats — a curved
+        item is one font, one fill, one outline — which is what curved lettering
+        is in practice.
+        """
+        path = self.curved_path()
+        if path.isEmpty():
+            return
+
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+
+        if self.outline and self.outline_color and self.outline_width:
+            # Stroked down the middle of the outline, so half of it lands
+            # outside the glyph — the same reach as the width the flat path
+            # displaces its copies by.
+            pen = QPen(QColor(self.outline_color), float(self.outline_width) * 2.0)
+            pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            painter.strokePath(path, pen)
+
+        painter.fillPath(path, self.fill_brush())
+        painter.restore()
 
     def set_font_size(self, font_size):
         font_size = max(1, font_size)
@@ -503,6 +728,14 @@ class TextBlockItem(QGraphicsTextItem):
         widget: QWidget = None
     ):
 
+        if self.curvature:
+            self.paint_curved(painter)
+            if self.selected:
+                handles.paint_handles(
+                    painter, self.text_rect(), handles.item_view_scale(self, option, painter)
+                )
+            return
+
         # Outline pass: draw the glyphs underneath, displaced around a circle, so
         # their union is the glyph dilated by the outline width. The fill is then
         # painted on top and stays intact.
@@ -522,7 +755,7 @@ class TextBlockItem(QGraphicsTextItem):
 
         if self.selected:
             handles.paint_handles(
-                painter, self.boundingRect(), handles.item_view_scale(self, option, painter)
+                painter, self.text_rect(), handles.item_view_scale(self, option, painter)
             )
 
     # Enough displacements that the gap left between neighbours, width*(1-cos(pi/n)),
@@ -756,8 +989,15 @@ class TextBlockItem(QGraphicsTextItem):
 
     def _on_text_changed(self):
         new_text = self.toPlainText()
+        self._curved_bulge = None
+        if self.curvature:
+            self.prepareGeometryChange()
         self.text_changed.emit(new_text)
         self.update_outlines()
+        if self.gradient_enabled:
+            # The gradient spans the laid-out document, so it has to be
+            # rebuilt whenever the text that document holds changes size.
+            self.apply_gradient()
 
     def mouseMoveEvent(self, event):
         # Resize/rotate/move logic is now handled by EventHandler and QGraphicsView
@@ -877,7 +1117,7 @@ class TextBlockItem(QGraphicsTextItem):
         rotated_delta = QPointF(rotated_delta_x, rotated_delta_y)
 
         # Get the current rect and create a new one to modify
-        rect = self.boundingRect()
+        rect = self.text_rect()
         new_rect = QRectF(rect)
         original_height = rect.height()
 
@@ -1047,7 +1287,7 @@ class TextBlockItem(QGraphicsTextItem):
             underline=self.underline
         )
         
-        new_instance.set_text(self.toHtml(), self.boundingRect().width())
+        new_instance.set_text(self.toHtml(), self.text_rect().width())
         new_instance.setTransformOriginPoint(self.transformOriginPoint())
         new_instance.setPos(self.pos())
         new_instance.setRotation(self.rotation())
