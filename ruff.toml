@@ -1,0 +1,66 @@
+# Lint config lives here rather than in pyproject.toml because .gitignore
+# excludes pyproject.toml (uv writes one) and it would never be committed.
+
+target-version = "py312"
+line-length = 120
+
+exclude = [
+    # Vendored upstream code — reformatting it would destroy the diff against
+    # the projects it came from, which is how we track their fixes.
+    "modules/ocr/pororo/pororo",
+    "modules/ocr/manga_ocr",
+    "imkit",
+]
+
+[lint]
+# Deliberately narrow to start. This codebase predates any linter, so turning
+# on the full default set would bury a real finding under thousands of style
+# complaints. These are the rules that catch bugs rather than opinions:
+#   E9  syntax errors
+#   F   pyflakes — undefined names, unused imports, f-strings with no fields
+#   B   bugbear — mutable default args, except-without-raise, loop-variable capture
+select = ["E9", "F", "B"]
+
+ignore = [
+    # Bare `except:` is used deliberately in a few Qt teardown paths where any
+    # exception must not take the window down with it.
+    "E722",
+    # Assigning a lambda is idiomatic in the Qt signal wiring here.
+    "E731",
+
+    # --- Backlog -----------------------------------------------------------
+    # This codebase predates any linter. The first run reported 176 findings;
+    # one was a live bug (F821 — see tests/test_imports.py) and is fixed. The
+    # rest are below so the gate is green and any *new* violation of the rules
+    # above fails CI. These are a list to burn down, not a decision that the
+    # code is fine — each was read before being parked here.
+    #
+    # Reviewed and benign at every current site, but the rules stay worth
+    # having, so re-enable once the sites are cleaned up:
+    "B023",  # 3 sites: closures over a loop variable, all called in the same
+             # iteration, so none of them actually escapes
+    "B006",  # 1 site: an `exif_infos={}` default that is only ever read
+    "F523",  # 1 site: a .format with a spare positional, in vendored dayu code
+    #
+    # Tidy-ups with no behaviour attached:
+    "F401",  # 37 unused imports
+    "F841",  # 24 assigned-and-never-used locals
+    "F811",  # 2 redefinitions
+    "F541",  # 3 f-strings with nothing to interpolate
+    "B905",  # 36 zip() without strict= — every one is same-length by
+             # construction, but stating it would document that
+    "B007",  # 15 unused loop variables
+    "B008",  # 2 function calls in a default argument
+    "B009",  # 5 getattr with a constant
+    "B010",  # 12 setattr with a constant
+    "B904",  # 4 raises inside except without `from`
+    #
+    # dayu_widgets uses star imports throughout; fixing these means rewriting a
+    # vendored widget library.
+    "F403",
+    "F405",
+]
+
+[lint.per-file-ignores]
+# Tests reach into private helpers on purpose; that is the point of a unit test.
+"tests/*" = ["F401"]

@@ -45,6 +45,10 @@ class TextController:
             self.main.shadow_offset_x_dropdown,
             self.main.shadow_offset_y_dropdown,
             self.main.shadow_blur_dropdown,
+            self.main.gradient_checkbox,
+            self.main.gradient_color_button,
+            self.main.gradient_angle_dropdown,
+            self.main.curvature_dropdown,
         ]
         self._text_change_timer = QtCore.QTimer(self.main)
         self._text_change_timer.setSingleShot(True)
@@ -649,6 +653,47 @@ class TextController:
         command.finalize_new_state()
         self.main.push_command(command)
 
+    def apply_gradient_settings(self, *_):
+        if not self.main.curr_tblock_item:
+            return
+        item = self.main.curr_tblock_item
+        command = TextFormatCommand(self.main.image_viewer, item)
+        item.set_gradient(
+            self.main.gradient_checkbox.isChecked(),
+            QColor(self.main.gradient_color_button.property('selected_color')),
+            self._dropdown_value(self.main.gradient_angle_dropdown, 90.0),
+        )
+        command.finalize_new_state()
+        self.main.push_command(command)
+
+    def on_gradient_color_change(self):
+        gradient_color = self.main.get_color()
+        if not (gradient_color and gradient_color.isValid()):
+            return
+        self.main.gradient_color_button.setStyleSheet(
+            f"background-color: {gradient_color.name()}; border: none; border-radius: 5px;"
+        )
+        self.main.gradient_color_button.setProperty('selected_color', gradient_color.name())
+        if self.main.gradient_checkbox.isChecked():
+            self.apply_gradient_settings()
+
+    def apply_curvature(self, *_):
+        if not self.main.curr_tblock_item:
+            return
+        item = self.main.curr_tblock_item
+        command = TextFormatCommand(self.main.image_viewer, item)
+        # The dropdown is a percentage; the item works in -1..1.
+        item.set_curvature(self._dropdown_value(self.main.curvature_dropdown, 0.0) / 100.0)
+        command.finalize_new_state()
+        self.main.push_command(command)
+
+    @staticmethod
+    def _dropdown_value(dropdown, fallback=0.0):
+        try:
+            return float(dropdown.currentText())
+        except (TypeError, ValueError):
+            return fallback
+
     def on_shadow_color_change(self):
         shadow_color = self.main.get_color()
         if not (shadow_color and shadow_color.isValid()):
@@ -745,6 +790,19 @@ class TextController:
             self.main.shadow_offset_y_dropdown.setCurrentText(str(offset_y))
             self.main.shadow_blur_dropdown.setCurrentText(str(getattr(text_item, 'shadow_blur', 0.0)))
             self.main.shadow_checkbox.setChecked(bool(getattr(text_item, 'shadow_enabled', False)))
+
+            gradient_color = getattr(text_item, 'gradient_color', None) or QColor(255, 255, 255)
+            self.main.gradient_color_button.setStyleSheet(
+                f"background-color: {gradient_color.name()}; border: none; border-radius: 5px;"
+            )
+            self.main.gradient_color_button.setProperty('selected_color', gradient_color.name())
+            self.main.gradient_angle_dropdown.setCurrentText(
+                str(getattr(text_item, 'gradient_angle', 90.0))
+            )
+            self.main.gradient_checkbox.setChecked(bool(getattr(text_item, 'gradient_enabled', False)))
+            self.main.curvature_dropdown.setCurrentText(
+                str(round(getattr(text_item, 'curvature', 0.0) * 100))
+            )
 
             self.main.bold_button.setChecked(text_item.bold)
             self.main.italic_button.setChecked(text_item.italic)

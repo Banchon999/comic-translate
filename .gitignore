@@ -18,8 +18,10 @@ venv/
 pyproject.toml
 uv.lock
 
-# Test files
+# Throwaway test scripts written next to the code they poke at stay local.
+# The committed suite lives in tests/ and is exempt.
 test_*.py
+!tests/test_*.py
 demo_*.py
 benchmarks/
 

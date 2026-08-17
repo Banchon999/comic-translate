@@ -347,6 +347,46 @@ class WorkspaceMixin:
         shadow_settings_layout.addWidget(self.shadow_blur_dropdown)
         shadow_settings_layout.addStretch()
 
+        effects_settings_layout = QtWidgets.QHBoxLayout()
+
+        self.gradient_checkbox = MCheckBox(self.tr("Gradient"))
+        self.gradient_checkbox.setToolTip(self.tr(
+            "Fade the fill from the text colour to a second one, across the whole text."
+        ))
+
+        self.gradient_color_button = QtWidgets.QPushButton()
+        self.gradient_color_button.setToolTip(self.tr("Gradient End Color"))
+        self.gradient_color_button.setFixedSize(30, 30)
+        self.gradient_color_button.setStyleSheet("background-color: #ffffff; border: none; border-radius: 5px;")
+        self.gradient_color_button.setProperty("selected_color", "#ffffff")
+
+        self.gradient_angle_dropdown = MComboBox().small()
+        self.gradient_angle_dropdown.setToolTip(self.tr("Gradient Angle"))
+        self.gradient_angle_dropdown.addItems(["0", "45", "90", "135", "180", "225", "270", "315"])
+        self.gradient_angle_dropdown.setCurrentText("90")
+        self.gradient_angle_dropdown.setFixedWidth(60)
+        self.gradient_angle_dropdown.set_editable(True)
+
+        curve_label = MLabel(self.tr("Curve"))
+        curve_label.setToolTip(self.tr(
+            "Bend the baseline into an arc: positive arches up, negative sags."
+        ))
+        self.curvature_dropdown = MComboBox().small()
+        self.curvature_dropdown.setToolTip(self.tr("Text Curve"))
+        self.curvature_dropdown.addItems(
+            ["-100", "-75", "-50", "-25", "0", "25", "50", "75", "100"]
+        )
+        self.curvature_dropdown.setCurrentText("0")
+        self.curvature_dropdown.setFixedWidth(60)
+        self.curvature_dropdown.set_editable(True)
+
+        effects_settings_layout.addWidget(self.gradient_checkbox)
+        effects_settings_layout.addWidget(self.gradient_color_button)
+        effects_settings_layout.addWidget(self.gradient_angle_dropdown)
+        effects_settings_layout.addWidget(curve_label)
+        effects_settings_layout.addWidget(self.curvature_dropdown)
+        effects_settings_layout.addStretch()
+
         rendering_divider_top = MDivider()
         rendering_divider_bottom = MDivider()
         text_render_layout.addWidget(rendering_divider_top)
@@ -354,6 +394,7 @@ class WorkspaceMixin:
         text_render_layout.addLayout(main_text_settings_layout)
         text_render_layout.addLayout(outline_settings_layout)
         text_render_layout.addLayout(shadow_settings_layout)
+        text_render_layout.addLayout(effects_settings_layout)
         text_render_layout.addWidget(rendering_divider_bottom)
 
         tools_widget = QtWidgets.QWidget()
@@ -433,11 +474,31 @@ class WorkspaceMixin:
         self.eraser_button.clicked.connect(self.toggle_eraser_tool)
         self.tool_buttons["eraser"] = self.eraser_button
 
+        self.wand_button = self.create_tool_button(svg="wand.svg", checkable=True)
+        self.wand_button.setToolTip(self.tr(
+            "Select a whole region with one click — the inside of a bubble, a "
+            "panel gutter, a flat area behind a sound effect.\n"
+            "Hold Ctrl to take every region of that colour on the page at once."
+        ))
+        self.wand_button.clicked.connect(self.toggle_wand_tool)
+        self.tool_buttons["wand"] = self.wand_button
+
+        self.lasso_button = self.create_tool_button(svg="lasso.svg", checkable=True)
+        self.lasso_button.setToolTip(self.tr(
+            "Draw around an irregular shape a round brush cannot follow.\n"
+            "Drag to trace it freehand, or click corner to corner for straight edges.\n"
+            "Double-click or press Enter to close it; Escape to start over."
+        ))
+        self.lasso_button.clicked.connect(self.toggle_lasso_tool)
+        self.tool_buttons["lasso"] = self.lasso_button
+
         self.clear_brush_strokes_button = self.create_tool_button(svg="clear-outlined.svg")
         self.clear_brush_strokes_button.setToolTip(self.tr("Remove all the brush strokes on the Image"))
 
         inp_tools_lay.addWidget(self.brush_button)
         inp_tools_lay.addWidget(self.eraser_button)
+        inp_tools_lay.addWidget(self.wand_button)
+        inp_tools_lay.addWidget(self.lasso_button)
         inp_tools_lay.addWidget(self.clear_brush_strokes_button)
         inp_tools_lay.addStretch()
 

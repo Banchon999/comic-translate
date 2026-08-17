@@ -1,0 +1,71 @@
+name: Tests
+
+# The build workflows are workflow_dispatch only — they take a long time and
+# produce artefacts nobody wants on every commit. This one is the opposite: it
+# runs in a couple of minutes and only matters if it runs unasked, so it is the
+# one workflow wired to push and pull_request.
+on:
+  # Branches are covered by pull_request, not by push. Listening to both meant
+  # a branch with an open pull request matched twice and ran the whole matrix
+  # twice on one commit — four jobs, all green, two of them redundant. A branch
+  # with no pull request open now goes untested, which is the intended trade:
+  # the gate is there to guard the merge.
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Supersede a run when another commit lands on the same pull request, so a
+# stale green cannot arrive after the push that replaced it.
+#
+# Keyed on the branch name rather than github.ref: a pull_request event reports
+# refs/pull/N/merge and a push reports refs/heads/<branch>, so grouping on the
+# ref puts the same branch in two different groups. head_ref is set only for
+# pull_request events, which is what makes the fallback pick the right one.
+concurrency:
+  group: tests-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.12 is what the setup instructions in CLAUDE.md use; 3.14 is what
+        # every build workflow ships. Running both is what catches the two
+        # drifting apart.
+        python-version: ['3.12', '3.14']
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install system libraries
+        # Qt needs these even with no display attached; the offscreen platform
+        # still loads the xcb plugin's dependency chain.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libegl1 libgl1 libxkbcommon-x11-0 \
+            libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
+            libxcb-randr0 libxcb-render-util0 libxcb-shape0
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Test
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: pytest

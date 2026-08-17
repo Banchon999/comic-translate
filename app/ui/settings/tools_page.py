@@ -72,6 +72,17 @@ class ToolsPage(QtWidgets.QWidget):
             "Downloads a 90 MB model once, and adds a few seconds per page on CPU."
         ))
 
+        self.denoise_checkbox = MCheckBox(
+            self.tr("Tidy JPEG artefacts around cleaned text")
+        )
+        self.denoise_checkbox.setChecked(True)
+        self.denoise_checkbox.setToolTip(self.tr(
+            "Smooths the ring of pixels just around each cleaned area, where a low-quality\n"
+            "JPEG leaves a halo that inpainting blends into the patch. The rest of the page\n"
+            "is left untouched, and an area whose surroundings are a flat fill is skipped\n"
+            "entirely — so a clean source loses nothing by leaving this on."
+        ))
+
         mask_padding_layout = QtWidgets.QHBoxLayout()
         mask_padding_label = MLabel(self.tr("Text Mask Expansion (px):"))
         self.mask_padding_spinbox = MSpinBox().small()
@@ -208,6 +219,7 @@ class ToolsPage(QtWidgets.QWidget):
         layout.addSpacing(10)
         layout.addWidget(inpainting_label)
         layout.addWidget(self.text_segmentation_checkbox)
+        layout.addWidget(self.denoise_checkbox)
         layout.addLayout(mask_padding_layout)
         layout.addLayout(bubble_inset_layout)
         layout.addWidget(inpainter_widget)

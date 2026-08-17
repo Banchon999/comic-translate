@@ -213,9 +213,24 @@ class ImageViewer(QGraphicsView):
                 self.centerOn(rect.center())
 
     def set_tool(self, tool: str):
+        if self.current_tool == 'lasso' and tool != 'lasso':
+            # An outline half-drawn when the user reaches for another tool is
+            # abandoned, not left floating on the canvas with no way to finish it.
+            self.drawing_manager.lasso_cancel()
         self.current_tool = tool
         if tool == 'pan':
             self.setDragMode(QGraphicsView.ScrollHandDrag)
+        elif tool == 'lasso':
+            self.setDragMode(QGraphicsView.NoDrag)
+            self.setCursor(QtGui.QCursor(Qt.CursorShape.CrossCursor))
+            # Keys only reach a view that can take focus, and Enter/Escape are
+            # how a clicked polygon gets closed or abandoned.
+            self.setFocus()
+        elif tool == 'wand':
+            # A crosshair, because what matters is the single pixel under the
+            # cursor: that pixel's colour is what the whole selection grows from.
+            self.setDragMode(QGraphicsView.NoDrag)
+            self.setCursor(QtGui.QCursor(Qt.CursorShape.CrossCursor))
         elif tool in ['brush', 'eraser']:
             self.setDragMode(QGraphicsView.NoDrag)
             if tool == 'brush':
@@ -257,6 +272,16 @@ class ImageViewer(QGraphicsView):
 
     def mouseReleaseEvent(self, event):
         self.event_handler.handle_mouse_release(event)
+
+    def mouseDoubleClickEvent(self, event):
+        if self.event_handler.handle_mouse_double_click(event):
+            return
+        super().mouseDoubleClickEvent(event)
+
+    def keyPressEvent(self, event):
+        if self.event_handler.handle_key_press(event):
+            return
+        super().keyPressEvent(event)
 
     def wheelEvent(self, event):
         self.event_handler.handle_wheel(event)
@@ -500,6 +525,12 @@ class ImageViewer(QGraphicsView):
             properties.shadow_offset,
             properties.shadow_blur,
         )
+        item.set_gradient(
+            properties.gradient_enabled,
+            properties.gradient_color,
+            properties.gradient_angle,
+        )
+        item.set_curvature(properties.curvature)
 
         # Update the item
         item.update()

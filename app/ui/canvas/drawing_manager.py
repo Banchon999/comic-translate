@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 from typing import List, Dict
 
@@ -12,6 +13,13 @@ from app.ui.commands.base import PathCommandBase as pcb
 import imkit as imk
 from modules.utils.image_utils import build_block_mask_data, clip_mask_to_bubble, clip_mask_components_to_bubble
 from modules.utils.text_segmentation import peek_page_mask
+from modules.utils.textblock import adjust_text_line_coordinates
+from modules.detection.utils.content import detect_content_mask_in_bbox
+from modules.utils.flood_select import (
+    DEFAULT_FEATHER, DEFAULT_TOLERANCE, flood_select, mask_to_polygons,
+)
+
+logger = logging.getLogger(__name__)
 
 
 class DrawingManager:
@@ -24,6 +32,16 @@ class DrawingManager:
         self.brush_color = QColor(255, 0, 0, 100)
         self.brush_size = 25
         self.eraser_size = 25
+
+        # Magic wand. Exposed as attributes rather than constants so the
+        # toolbar can offer them without this module knowing about widgets.
+        self.wand_tolerance = DEFAULT_TOLERANCE
+        self.wand_feather = DEFAULT_FEATHER
+
+        self.lasso_points: list[QPointF] = []
+        self.lasso_preview = None
+        self._lasso_dragged = False
+        self._lasso_press_pos = None
         
         self.brush_cursor = self.create_inpaint_cursor('brush', self.brush_size)
         self.eraser_cursor = self.create_inpaint_cursor('eraser', self.eraser_size)
@@ -38,6 +56,184 @@ class DrawingManager:
         """The app's settings, or None when the viewer is used standalone."""
         window = self.viewer.window()
         return getattr(window, "settings_page", None)
+
+    def flood_fill_at(self, scene_pos: QPointF, contiguous: bool = True):
+        """Select the region under the cursor and add it as a stroke.
+
+        The result is an ordinary filled path item — the same thing the brush
+        produces — so mask generation, undo, the layer panels and saving all
+        treat it exactly like a hand-drawn stroke and needed no changes.
+        """
+        image = self.viewer.get_image_array(include_patches=True)
+        if image is None:
+            return None
+
+        # In webtoon mode get_image_array returns only the visible slice, so the
+        # seed has to be moved into that slice's coordinates and the resulting
+        # outline moved back out again.
+        offset_x, offset_y = self._visible_area_offset()
+        seed_x = int(round(scene_pos.x())) - offset_x
+        seed_y = int(round(scene_pos.y())) - offset_y
+
+        mask = flood_select(
+            image, seed_x, seed_y,
+            tolerance=self.wand_tolerance,
+            feather=self.wand_feather,
+            contiguous=contiguous,
+        )
+        polygons = mask_to_polygons(mask)
+        if not polygons:
+            return None
+
+        path = QPainterPath()
+        # Holes are closed in the mask by flood_select, not here: find_contours
+        # returns an enclosed gap wound opposite to its outer contour, so
+        # WindingFill leaves it empty rather than filling it in. Matching the
+        # fill rule the segmentation builder below uses regardless.
+        path.setFillRule(Qt.FillRule.WindingFill)
+        for points in polygons:
+            first_x, first_y = points[0]
+            path.moveTo(float(first_x + offset_x), float(first_y + offset_y))
+            for x, y in points[1:]:
+                path.lineTo(float(x + offset_x), float(y + offset_y))
+            path.closeSubpath()
+
+        return self.add_region_stroke(path)
+
+    def add_region_stroke(self, path: QPainterPath):
+        """Put a filled region on the canvas as an undoable stroke.
+
+        Shared by every tool that selects an area rather than painting one, so
+        a wand click and a lasso loop produce items indistinguishable from a
+        brushed stroke — which is what lets mask generation, undo, the layer
+        panels and project saving stay unaware that these tools exist.
+        """
+        if path is None or path.isEmpty():
+            return None
+
+        # The same colours a generated segmentation path uses, so the existing
+        # "is this a filled region" check in save_path_properties still matches.
+        item = self._scene.addPath(
+            path,
+            QPen(QColor(255, 0, 0), 2, Qt.SolidLine),
+            QBrush(QColor(255, 0, 0, 128)),
+        )
+        item.setZValue(0.9)
+        item.setVisible(self.viewer.layer_visibility.get('strokes', True))
+        self.viewer.command_emitted.emit(BrushStrokeCommand(self.viewer, item))
+        return item
+
+    # Lasso and polygon selection
+    #
+    # One tool, told apart by what the mouse does: drag a loop freehand, or
+    # click corner to corner and close it. Straight edges are hard to draw by
+    # hand and curves are tedious to click, and a panel needs one while a
+    # character's outline needs the other.
+
+    #: Below this much movement a press counts as a click, not a drag.
+    LASSO_DRAG_THRESHOLD = 4.0
+
+    def lasso_press(self, scene_pos: QPointF):
+        self._lasso_press_pos = scene_pos
+        self._lasso_dragged = False
+        if not self.lasso_points:
+            self.lasso_points = [scene_pos]
+        self._update_lasso_preview()
+
+    def lasso_move(self, scene_pos: QPointF, buttons_held: bool):
+        if not self.lasso_points:
+            return
+        if buttons_held and self._lasso_press_pos is not None:
+            delta = scene_pos - self._lasso_press_pos
+            if not self._lasso_dragged:
+                moved = (delta.x() ** 2 + delta.y() ** 2) ** 0.5
+                if moved < self.LASSO_DRAG_THRESHOLD:
+                    return
+                self._lasso_dragged = True
+            self.lasso_points.append(scene_pos)
+        elif self._lasso_dragged:
+            return
+        else:
+            # Between clicks, show where the next edge would land without
+            # committing to it.
+            self._update_lasso_preview(rubber_band=scene_pos)
+            return
+        self._update_lasso_preview()
+
+    def lasso_release(self, scene_pos: QPointF):
+        """A freehand loop is finished on release; a clicked polygon is not."""
+        if self._lasso_dragged:
+            return self.lasso_close()
+        if self.lasso_points and scene_pos != self.lasso_points[-1]:
+            self.lasso_points.append(scene_pos)
+            self._update_lasso_preview()
+        return None
+
+    def lasso_close(self):
+        """Close the outline and commit it. Fewer than three points is a line."""
+        points = self.lasso_points
+        self._clear_lasso_preview()
+        self.lasso_points = []
+        self._lasso_dragged = False
+        self._lasso_press_pos = None
+
+        if len(points) < 3:
+            return None
+        path = QPainterPath()
+        path.setFillRule(Qt.FillRule.WindingFill)
+        path.moveTo(points[0])
+        for point in points[1:]:
+            path.lineTo(point)
+        path.closeSubpath()
+        return self.add_region_stroke(path)
+
+    def lasso_cancel(self):
+        self._clear_lasso_preview()
+        self.lasso_points = []
+        self._lasso_dragged = False
+        self._lasso_press_pos = None
+
+    def _clear_lasso_preview(self):
+        if self.lasso_preview is not None:
+            try:
+                self._scene.removeItem(self.lasso_preview)
+            except RuntimeError:
+                pass
+            self.lasso_preview = None
+
+    def _update_lasso_preview(self, rubber_band: QPointF = None):
+        if not self.lasso_points:
+            self._clear_lasso_preview()
+            return
+
+        path = QPainterPath()
+        path.moveTo(self.lasso_points[0])
+        for point in self.lasso_points[1:]:
+            path.lineTo(point)
+        if rubber_band is not None:
+            path.lineTo(rubber_band)
+
+        if self.lasso_preview is None:
+            # Dashed and unfilled, so an outline still being drawn cannot be
+            # mistaken for one that has been committed.
+            pen = QPen(QColor(255, 0, 0), 2, Qt.DashLine)
+            pen.setCosmetic(True)
+            self.lasso_preview = self._scene.addPath(path, pen)
+            self.lasso_preview.setZValue(1.0)
+        else:
+            self.lasso_preview.setPath(path)
+
+    def _visible_area_offset(self) -> tuple[int, int]:
+        """Where get_image_array's top-left sits in scene coordinates."""
+        if not self.viewer.webtoon_mode:
+            return 0, 0
+        try:
+            _, mappings = self.viewer.webtoon_manager.get_visible_area_image()
+            if mappings:
+                return 0, int(min(m['scene_y_start'] for m in mappings))
+        except Exception:
+            logger.exception("Could not work out the visible area offset; assuming none")
+        return 0, 0
 
     def start_stroke(self, scene_pos: QPointF):
         """Starts a new drawing or erasing stroke."""
@@ -253,6 +449,8 @@ class DrawingManager:
             
     def has_drawn_elements(self):
         for item in self._scene.items():
+            if item is self.lasso_preview:
+                continue  # still being drawn; not a selection yet
             if isinstance(item, QGraphicsPathItem) and item != self.viewer.photo:
                 return True
         return False
@@ -320,6 +518,11 @@ class DrawingManager:
         gen_painter.setBrush(brush)
 
         for item in self._scene.items():
+            if item is self.lasso_preview:
+                # An outline the user is still drawing is not a selection yet.
+                # It is a path item in the scene like any other, so without this
+                # an abandoned polygon would be cleaned along with the real ones.
+                continue
             if isinstance(item, QGraphicsPathItem) and item != self.viewer.photo:
                 painter = gen_painter if QColor(item.brush().color().name(QColor.HexArgb)) == "#80ff0000" else human_painter
                 # Get the path bounding rect to see where the stroke is

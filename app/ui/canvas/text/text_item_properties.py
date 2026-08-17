@@ -38,6 +38,10 @@ class TextItemProperties:
     shadow_color: Optional[QColor] = None
     shadow_offset: tuple = (4.0, 4.0)
     shadow_blur: float = 0.0
+    gradient_enabled: bool = False
+    gradient_color: Optional[QColor] = None
+    gradient_angle: float = 90.0
+    curvature: float = 0.0
 
     # Advanced properties
     selection_outlines: list = field(default_factory=list)
@@ -117,6 +121,14 @@ class TextItemProperties:
         if shadow_offset:
             props.shadow_offset = (float(shadow_offset[0]), float(shadow_offset[1]))
         props.shadow_blur = float(data.get('shadow_blur', 0.0))
+        props.gradient_enabled = bool(data.get('gradient_enabled', False))
+        if 'gradient_color' in data:
+            if isinstance(data['gradient_color'], QColor):
+                props.gradient_color = data['gradient_color']
+            elif data['gradient_color']:
+                props.gradient_color = QColor(data['gradient_color'])
+        props.gradient_angle = float(data.get('gradient_angle', 90.0))
+        props.curvature = float(data.get('curvature', 0.0))
 
         # Advanced
         props.selection_outlines = data.get('selection_outlines', [])
@@ -151,9 +163,12 @@ class TextItemProperties:
             origin = item.transformOriginPoint()
             props.transform_origin = (origin.x(), origin.y())
         
-        # Layout properties
-        props.width = item.boundingRect().width()
-        props.height = item.boundingRect().height()
+        # Layout properties. The text's own rect, not the painted one — a
+        # curved item paints above and below its box, and reloading a project
+        # must give back the box, not the arc.
+        text_rect = item.text_rect() if hasattr(item, 'text_rect') else item.boundingRect()
+        props.width = text_rect.width()
+        props.height = text_rect.height()
         props.vertical = getattr(item, 'vertical', False)
         
         # Text effects
@@ -162,6 +177,10 @@ class TextItemProperties:
         props.shadow_color = getattr(item, 'shadow_color', None)
         props.shadow_offset = getattr(item, 'shadow_offset', (4.0, 4.0))
         props.shadow_blur = getattr(item, 'shadow_blur', 0.0)
+        props.gradient_enabled = bool(getattr(item, 'gradient_enabled', False))
+        props.gradient_color = getattr(item, 'gradient_color', None)
+        props.gradient_angle = getattr(item, 'gradient_angle', 90.0)
+        props.curvature = getattr(item, 'curvature', 0.0)
 
         # Advanced properties
         props.selection_outlines = getattr(item, 'selection_outlines', []).copy()
@@ -196,6 +215,10 @@ class TextItemProperties:
             'shadow_color': self.shadow_color,
             'shadow_offset': self.shadow_offset,
             'shadow_blur': self.shadow_blur,
+            'gradient_enabled': self.gradient_enabled,
+            'gradient_color': self.gradient_color,
+            'gradient_angle': self.gradient_angle,
+            'curvature': self.curvature,
             'selection_outlines': self.selection_outlines,
         }
 

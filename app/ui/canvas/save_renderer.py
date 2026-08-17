@@ -70,6 +70,12 @@ class ImageSaveRenderer:
                 text_props.shadow_offset,
                 text_props.shadow_blur,
             )
+            text_item.set_gradient(
+                text_props.gradient_enabled,
+                text_props.gradient_color,
+                text_props.gradient_angle,
+            )
+            text_item.set_curvature(text_props.curvature)
             text_item.update()
 
             self.scene.addItem(text_item)

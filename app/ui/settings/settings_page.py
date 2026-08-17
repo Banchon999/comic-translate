@@ -120,7 +120,7 @@ class SettingsPage(QtWidgets.QWidget):
             ui.uppercase_checkbox, ui.raw_text_checkbox,
             ui.translated_text_checkbox, ui.inpainted_image_checkbox,
             ui.per_class_fonts_checkbox, ui.stitch_detection_checkbox,
-            ui.text_segmentation_checkbox,
+            ui.text_segmentation_checkbox, ui.denoise_checkbox,
             ui.use_style_defaults_checkbox,
         ]
         for checkbox in checkboxes:
@@ -205,6 +205,9 @@ class SettingsPage(QtWidgets.QWidget):
 
     def get_use_text_segmentation_model(self) -> bool:
         return self.ui.text_segmentation_checkbox.isChecked()
+
+    def get_denoise_cleaned_areas(self) -> bool:
+        return self.ui.denoise_checkbox.isChecked()
 
     def get_ocr_padding(self) -> tuple[int, int]:
         """(percentage, minimum pixels) to expand a box by before OCR crops it."""
@@ -319,6 +322,7 @@ class SettingsPage(QtWidgets.QWidget):
                 'ocr_min_padding': self.get_ocr_padding()[1],
                 'stitch_detection': self.ui.stitch_detection_checkbox.isChecked(),
                 'text_segmentation_model': self.get_use_text_segmentation_model(),
+                'denoise_cleaned_areas': self.get_denoise_cleaned_areas(),
                 'hd_strategy': self.get_hd_strategy_settings()
             },
             'llm': self.get_llm_settings(),
@@ -494,6 +498,9 @@ class SettingsPage(QtWidgets.QWidget):
         self.ui.stitch_detection_checkbox.setChecked(settings.value('stitch_detection', False, type=bool))
         self.ui.text_segmentation_checkbox.setChecked(
             settings.value('text_segmentation_model', True, type=bool)
+        )
+        self.ui.denoise_checkbox.setChecked(
+            settings.value('denoise_cleaned_areas', True, type=bool)
         )
 
         # Load HD strategy settings
