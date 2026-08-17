@@ -341,17 +341,25 @@ class TextBlockItem(QGraphicsTextItem):
         boundary would restart on the next run anyway, which is not what anyone
         means by a gradient across a word.
         """
+        was_enabled = self.gradient_enabled
         self.gradient_enabled = bool(enabled)
         if color is not None:
             self.gradient_color = QColor(color)
         if angle is not None:
             self.gradient_angle = float(angle)
-        self.apply_gradient()
+        # Turning it off when it was never on must leave the document alone.
+        # Applying a plain brush would flatten every per-character colour the
+        # item has, and this runs for every text item the save renderer builds.
+        if self.gradient_enabled or was_enabled:
+            self.apply_gradient()
 
     def fill_brush(self) -> QBrush:
         """The brush the text is painted with, gradient or plain colour."""
+        # An item restored from a project that predates the colour being saved
+        # has no text_color, and Qt will not take None as a brush.
+        base_color = QColor(self.text_color) if self.text_color else QColor(0, 0, 0)
         if not self.gradient_enabled:
-            return QBrush(self.text_color)
+            return QBrush(base_color)
 
         size = self.document().size()
         line = gradient_line(size.width(), size.height(), self.gradient_angle)
@@ -360,8 +368,8 @@ class TextBlockItem(QGraphicsTextItem):
         # Qt's ObjectBoundingMode restarts the sweep on every line, so a
         # two-line block would come out the same colour twice over.
         gradient.setCoordinateMode(QGradient.CoordinateMode.LogicalMode)
-        gradient.setColorAt(0.0, QColor(self.text_color))
-        gradient.setColorAt(1.0, QColor(self.gradient_color))
+        gradient.setColorAt(0.0, base_color)
+        gradient.setColorAt(1.0, QColor(self.gradient_color) if self.gradient_color else QColor(255, 255, 255))
         return QBrush(gradient)
 
     def apply_gradient(self):

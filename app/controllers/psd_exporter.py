@@ -176,7 +176,16 @@ def _write_page_psd(page: PsdPageData, out_path: str) -> None:
 	if callable(invalidate):
 		invalidate()
 
+	# PhotoshopAPI is a native extension: if it dies in here it takes the whole
+	# process with it and Python never gets to raise, so the only trace of what
+	# went wrong is what was logged before the call. An empty .psd on disk means
+	# the crash was inside this write.
+	logger.info(
+		"PSD write starting: %s (%dx%d, %d text layers, %d patches)",
+		out_path, width, height, len(text_items), len(page.patches),
+	)
 	doc.write(out_path, force_overwrite=True)
+	logger.info("PSD write finished: %s (%d bytes)", out_path, os.path.getsize(out_path))
 
 	preview = page.composite_image
 	if preview is None:

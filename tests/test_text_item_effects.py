@@ -261,3 +261,58 @@ class TestSavedState:
         flat = TextItemProperties.from_text_item(item).height
         item.set_curvature(0.9)
         assert TextItemProperties.from_text_item(item).height == flat
+
+
+class TestSaveRendererSafety:
+    """The save renderer builds these items for every export, gradient or not.
+
+    A failure here does not fail one item — it abandons the whole page render,
+    which is how a page ends up saved without its translated text.
+    """
+
+    def test_turning_a_gradient_off_leaves_per_character_colours_alone(self, item):
+        """`set_gradient(False, ...)` runs for every item the renderer builds."""
+        from PySide6.QtGui import QTextCharFormat
+
+        cursor = QTextCursor(item.document())
+        cursor.setPosition(0)
+        cursor.setPosition(3, QTextCursor.MoveMode.KeepAnchor)
+        fmt = QTextCharFormat()
+        fmt.setForeground(QColor(0, 128, 0))
+        cursor.mergeCharFormat(fmt)
+
+        item.set_gradient(False, QColor(0, 0, 255), 90)
+
+        cursor.setPosition(1)
+        assert cursor.charFormat().foreground().color() == QColor(0, 128, 0)
+
+    def test_a_gradient_still_replaces_them_while_it_is_on(self, item):
+        from PySide6.QtGui import QTextCharFormat
+
+        cursor = QTextCursor(item.document())
+        cursor.setPosition(0)
+        cursor.setPosition(3, QTextCursor.MoveMode.KeepAnchor)
+        fmt = QTextCharFormat()
+        fmt.setForeground(QColor(0, 128, 0))
+        cursor.mergeCharFormat(fmt)
+
+        item.set_gradient(True, QColor(0, 0, 255), 90)
+        cursor.setPosition(1)
+        assert cursor.charFormat().foreground().gradient() is not None
+
+    def test_turning_it_off_after_it_was_on_does_restore_the_colour(self, item):
+        item.set_gradient(True, QColor(0, 0, 255), 90)
+        item.set_gradient(False)
+        cursor = QTextCursor(item.document())
+        cursor.setPosition(1)
+        assert cursor.charFormat().foreground().gradient() is None
+
+    def test_an_item_with_no_colour_does_not_raise(self, qapp):
+        """Qt refuses a null brush, and older projects have no text_color."""
+        from app.ui.canvas.text_item import TextBlockItem
+
+        block = TextBlockItem(text="HI", font_size=20, render_color=None, outline_color=None)
+        block.set_gradient(True, QColor(0, 0, 255), 90)
+        assert block.fill_brush().gradient() is not None
+        block.set_gradient(False)
+        assert block.fill_brush().color().isValid()
