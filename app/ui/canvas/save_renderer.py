@@ -60,7 +60,11 @@ class ImageSaveRenderer:
             text_item.setRotation(text_props.rotation)
             text_item.setScale(text_props.scale)
             text_item.set_vertical(bool(text_props.vertical))
-            text_item.set_color(text_props.text_color)
+            if text_props.text_color is not None:
+                # A project saved before the colour was stored has none, and Qt
+                # raises on a null brush rather than ignoring it — which would
+                # abandon the whole render, not just this item's colour.
+                text_item.set_color(text_props.text_color)
             text_item.selection_outlines = text_props.selection_outlines.copy()
             if text_props.letter_spacing:
                 text_item.set_letter_spacing(text_props.letter_spacing)
@@ -191,7 +195,11 @@ class ImageSaveRenderer:
             if text_props.direction:
                 text_item.set_direction(text_props.direction)
             text_item.set_vertical(bool(text_props.vertical))
-            text_item.set_color(text_props.text_color)
+            if text_props.text_color is not None:
+                # A project saved before the colour was stored has none, and Qt
+                # raises on a null brush rather than ignoring it — which would
+                # abandon the whole render, not just this item's colour.
+                text_item.set_color(text_props.text_color)
             # Spacing changes how the text wraps, so it has to be applied before
             # the height is measured. The shadow does not affect layout.
             if text_props.letter_spacing:

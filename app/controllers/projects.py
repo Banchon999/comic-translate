@@ -21,7 +21,7 @@ from app.ui.canvas.text_item import TextBlockItem
 from app.ui.canvas.text.text_item_properties import TextItemProperties
 from app.ui.canvas.save_renderer import ImageSaveRenderer
 from app.ui.export_chapters_dialog import ExportChaptersDialog, ExportChapterRow
-from app.controllers.psd_exporter import PsdPageData, export_psd_pages
+from app.controllers.psd_exporter import PsdPageData, export_psd_pages, warm_font_cache
 from app.projects.project_state import (
     close_state_store,
     load_state_from_proj_file,
@@ -785,6 +785,12 @@ class ProjectController:
         self.main.image_ctrl.save_current_image_state()
         all_pages_current_state = self._build_all_pages_current_state()
         bundle_name = self._get_export_bundle_name()
+        # Resolve the fonts here, on the GUI thread, so the worker never reads
+        # the font database off it.
+        try:
+            warm_font_cache(all_pages_current_state)
+        except Exception:
+            logger.debug("Could not pre-resolve export fonts.", exc_info=True)
         self.main.loading.setVisible(True)
         self.main.run_threaded(
             self._write_psd_worker, None, self.main.default_error_handler, lambda: self.main.loading.setVisible(False),
@@ -795,6 +801,12 @@ class ProjectController:
         self.main.image_ctrl.save_current_image_state()
         all_pages_current_state = self._build_all_pages_current_state()
         bundle_name = self._get_export_bundle_name()
+        # Resolve the fonts here, on the GUI thread, so the worker never reads
+        # the font database off it.
+        try:
+            warm_font_cache(all_pages_current_state)
+        except Exception:
+            logger.debug("Could not pre-resolve export fonts.", exc_info=True)
         self.main.loading.setVisible(True)
         self.main.run_threaded(
             self._write_psd_plan_worker,

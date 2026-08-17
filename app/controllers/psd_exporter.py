@@ -176,7 +176,16 @@ def _write_page_psd(page: PsdPageData, out_path: str) -> None:
 	if callable(invalidate):
 		invalidate()
 
+	# PhotoshopAPI is a native extension: if it dies in here it takes the whole
+	# process with it and Python never gets to raise, so the only trace of what
+	# went wrong is what was logged before the call. An empty .psd on disk means
+	# the crash was inside this write.
+	logger.info(
+		"PSD write starting: %s (%dx%d, %d text layers, %d patches)",
+		out_path, width, height, len(text_items), len(page.patches),
+	)
 	doc.write(out_path, force_overwrite=True)
+	logger.info("PSD write finished: %s (%d bytes)", out_path, os.path.getsize(out_path))
 
 	preview = page.composite_image
 	if preview is None:
@@ -1090,8 +1099,50 @@ def _to_postscript_name(family: str, bold: bool = False, italic: bool = False) -
 	return ps_name
 
 
+def _on_gui_thread() -> bool:
+	app = QtCore.QCoreApplication.instance()
+	return app is not None and QtCore.QThread.currentThread() is app.thread()
+
+
+def warm_font_cache(all_pages_state: dict[str, Any]) -> int:
+	"""Resolve every PostScript name the export will need, on this thread.
+
+	Call this from the GUI thread before handing the export to a worker. The
+	lookup reads the font's OpenType table through QRawFont, which Qt documents
+	as local to the thread that built it and which goes through the font
+	database — GUI-thread-only, enforced on Windows and not on Linux. Priming
+	the cache here means the worker only ever reads it back.
+	"""
+	families: set[tuple[str, bool, bool]] = set()
+	for page_state in (all_pages_state or {}).values():
+		viewer_state = (page_state or {}).get("viewer_state") or {}
+		for text_state in viewer_state.get("text_items_state", []) or []:
+			family = text_state.get("font_family") or "Arial"
+			bold = bool(text_state.get("bold", False))
+			italic = bool(text_state.get("italic", False))
+			# Both axes, since a run may switch either one on its own.
+			for b in {bold, True, False}:
+				for i in {italic, True, False}:
+					families.add((family, b, i))
+
+	for family, bold, italic in families:
+		try:
+			_to_postscript_name(family, bold, italic)
+		except Exception:
+			logger.debug("Could not pre-resolve the PostScript name for %r", family, exc_info=True)
+	return len(families)
+
+
 def _read_postscript_name_from_font(family: str, bold: bool, italic: bool) -> str:
 	"""Read PostScript name (nameID 6) from the font's OpenType name table via QRawFont."""
+
+	if not _on_gui_thread():
+		# Reading the font table off the GUI thread can take the process down
+		# without raising, which loses the export and the app with it. A
+		# derived name is a worse font match and an incomparably better
+		# failure; warm_font_cache() is what keeps this path rare.
+		logger.debug("Font table read for %r skipped off the GUI thread", family)
+		return _postscript_name_fallback(family, bold, italic)
 
 	font = QtGui.QFont(family)
 	if bold:
