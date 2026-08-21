@@ -274,7 +274,7 @@ class SettingsPage(QtWidgets.QWidget):
                 for field in ("api_key", "api_url", "model"):
                     creds[field] = _text_or_none(f"Custom_{field}")
             elif normalized == "OpenRouter":
-                for field in ("api_key", "model"):
+                for field in ("api_key", "model", "ocr_model"):
                     creds[field] = _text_or_none(f"OpenRouter_{field}")
 
             return creds
@@ -429,6 +429,7 @@ class SettingsPage(QtWidgets.QWidget):
                 elif translated_service == "OpenRouter":
                     settings.setValue(f"{translated_service}_api_key", cred['api_key'])
                     settings.setValue(f"{translated_service}_model", cred['model'])
+                    settings.setValue(f"{translated_service}_ocr_model", cred.get('ocr_model', ''))
         else:
             settings.remove('credentials')  # Clear all credentials if save_keys is unchecked
         settings.endGroup()
@@ -572,6 +573,7 @@ class SettingsPage(QtWidgets.QWidget):
                 elif translated_service == "OpenRouter":
                     self.ui.credential_widgets[f"{translated_service}_api_key"].setText(settings.value(f"{translated_service}_api_key", ''))
                     self.ui.credential_widgets[f"{translated_service}_model"].setText(settings.value(f"{translated_service}_model", ''))
+                    self.ui.credential_widgets[f"{translated_service}_ocr_model"].setText(settings.value(f"{translated_service}_ocr_model", ''))
         settings.endGroup()
 
         # ADDED: Load user info and update account view 

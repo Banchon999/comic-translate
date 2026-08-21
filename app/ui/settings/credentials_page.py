@@ -12,6 +12,7 @@ class CredentialsPage(QtWidgets.QWidget):
         self.value_mappings = value_mappings
         self.credential_widgets: dict[str, MLineEdit] = {}
         self.openrouter_model_selector: OpenRouterModelSelector | None = None
+        self.openrouter_ocr_model_selector: OpenRouterModelSelector | None = None
 
         # main layout (no internal scroll here — outer settings scroll handles it)
         main_layout = QtWidgets.QVBoxLayout(self)
@@ -131,6 +132,22 @@ class CredentialsPage(QtWidgets.QWidget):
                 service_layout.addWidget(self.openrouter_model_selector)
                 self.credential_widgets[f"{normalized}_model"] = self.openrouter_model_selector
 
+                # OCR and translation want different models: OCR runs a cheap
+                # vision model once per text block, translation a stronger one
+                # once per page. Left empty, OCR reuses the model above.
+                self.openrouter_ocr_model_selector = OpenRouterModelSelector(
+                    label=self.tr("OCR Model"),
+                    placeholder=self.tr("Same as above"),
+                    vision_only=True,
+                )
+                self.openrouter_ocr_model_selector.set_api_key_source(api_key_input)
+                self.openrouter_ocr_model_selector.setToolTip(self.tr(
+                    "Vision model used when OCR is set to OpenRouter.\n"
+                    "Leave empty to use the same model as translation."
+                ))
+                service_layout.addWidget(self.openrouter_ocr_model_selector)
+                self.credential_widgets[f"{normalized}_ocr_model"] = self.openrouter_ocr_model_selector
+
             elif normalized == "Yandex":
                 api_key_input = MLineEdit()
                 api_key_input.setEchoMode(QtWidgets.QLineEdit.Password)
@@ -172,5 +189,6 @@ class CredentialsPage(QtWidgets.QWidget):
         super().showEvent(event)
         # Fetching the OpenRouter catalogue is deferred to the first time this
         # page is looked at, so opening the app never waits on the network.
-        if self.openrouter_model_selector is not None:
-            self.openrouter_model_selector.ensure_catalogue_loaded()
+        for selector in (self.openrouter_model_selector, self.openrouter_ocr_model_selector):
+            if selector is not None:
+                selector.ensure_catalogue_loaded()

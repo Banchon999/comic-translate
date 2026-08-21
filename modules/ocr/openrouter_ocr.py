@@ -34,7 +34,14 @@ class OpenRouterOCR(GPTOCR):
         self.timeout = 60
 
     def initialize(self, settings: Any, model: str = '', expansion_percentage: int = 0) -> None:
-        """Read the OpenRouter key and model id out of the credentials page.
+        """Read the OpenRouter key and OCR model id out of the credentials page.
+
+        OCR and translation take separate model fields, because they want
+        different things from a model: OCR runs a cheap vision model once per
+        text block, translation a stronger one once per page, and paying for
+        the stronger one per block is the expensive way to read a page. The OCR
+        field falls back to the translation model when left empty, so a single
+        model still works with nothing to configure.
 
         `model` is accepted so the factory can call every OCR engine the same
         way, but it is ignored: which model runs is the user's choice in the
@@ -42,7 +49,11 @@ class OpenRouterOCR(GPTOCR):
         """
         credentials = settings.get_credentials(settings.ui.tr("OpenRouter"))
         self.api_key = credentials.get('api_key', '') or ''
-        self.model = credentials.get('model', '') or ''
+        # Stripped before the choice, not after: a field holding only spaces
+        # is truthy, so picking first and stripping second would take the
+        # blank one and never reach the fallback.
+        ocr_model = (credentials.get('ocr_model') or '').strip()
+        self.model = ocr_model or (credentials.get('model') or '').strip()
         self.expansion_percentage = expansion_percentage
 
     def request_headers(self) -> dict:

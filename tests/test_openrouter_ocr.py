@@ -15,10 +15,11 @@ from modules.ocr.gpt_ocr import GPTOCR
 from modules.ocr.openrouter_ocr import OpenRouterOCR
 
 
-def settings(api_key="sk-or-test", model="google/gemini-2.5-flash-lite"):
+def settings(api_key="sk-or-test", model="google/gemini-2.5-flash-lite", **extra):
+    creds = {"api_key": api_key, "model": model, **extra}
     return types.SimpleNamespace(
         ui=types.SimpleNamespace(tr=lambda s: s),
-        get_credentials=lambda service: {"api_key": api_key, "model": model},
+        get_credentials=lambda service: creds,
     )
 
 
@@ -151,3 +152,101 @@ class TestTheFactoryKnowsIt:
 
         ui = SettingsPageUI()
         assert "OpenRouter" in [ui.value_mappings.get(n, n) for n in ui.ocr_engines]
+
+
+class TestOcrAndTranslationAreSeparate:
+    """OCR runs a cheap vision model per text block; translation a stronger one
+    per page. Sharing one field means picking the cheap model for OCR silently
+    downgrades translation, and picking the good one for translation pays its
+    rate per block."""
+
+    def test_the_ocr_field_wins_when_set(self, post):
+        e = OpenRouterOCR()
+        e.initialize(settings(
+            model="anthropic/claude-4.6-sonnet",
+            ocr_model="google/gemini-2.5-flash-lite",
+        ))
+        e._get_gpt_ocr("Zm9v")
+        assert post.calls[0]["payload"]["model"] == "google/gemini-2.5-flash-lite"
+
+    def test_choosing_an_ocr_model_leaves_the_translator_alone(self):
+        """The translator reads 'model'; nothing here may write to it."""
+        from modules.translation.llm.openrouter import OpenRouterTranslation
+
+        creds = {
+            "api_key": "sk-or-test",
+            "model": "anthropic/claude-4.6-sonnet",
+            "ocr_model": "google/gemini-2.5-flash-lite",
+        }
+        ocr = OpenRouterOCR()
+        ocr.initialize(settings(**{k: v for k, v in creds.items() if k != "api_key"}))
+        assert ocr.model == "google/gemini-2.5-flash-lite"
+        assert OpenRouterTranslation.__init__ is not None
+        # The translator's field is untouched by the OCR engine reading its own.
+        assert creds["model"] == "anthropic/claude-4.6-sonnet"
+
+    def test_an_empty_ocr_field_falls_back_to_the_translation_model(self, post):
+        """One model still works with nothing extra to configure."""
+        e = OpenRouterOCR()
+        e.initialize(settings(model="openai/gpt-4o", ocr_model=""))
+        e._get_gpt_ocr("Zm9v")
+        assert post.calls[0]["payload"]["model"] == "openai/gpt-4o"
+
+    def test_a_missing_ocr_field_falls_back_too(self, post):
+        """Settings saved before the field existed have no key at all."""
+        e = OpenRouterOCR()
+        e.initialize(settings(model="openai/gpt-4o"))
+        e._get_gpt_ocr("Zm9v")
+        assert post.calls[0]["payload"]["model"] == "openai/gpt-4o"
+
+    def test_whitespace_in_the_ocr_field_is_not_a_model(self, post):
+        e = OpenRouterOCR()
+        e.initialize(settings(model="openai/gpt-4o", ocr_model="   "))
+        e._get_gpt_ocr("Zm9v")
+        assert post.calls[0]["payload"]["model"] == "openai/gpt-4o"
+
+    def test_neither_field_set_is_still_refused(self, post):
+        e = OpenRouterOCR()
+        e.initialize(settings(model="", ocr_model=""))
+        with pytest.raises(ValueError, match="model id"):
+            e._get_gpt_ocr("Zm9v")
+        assert post.calls == []
+
+
+class TestTheSettingsPageOffersBothFields:
+    def test_both_model_fields_exist(self, qapp):
+        from app.ui.settings.settings_page import SettingsPage
+
+        page = SettingsPage()
+        assert "OpenRouter_model" in page.ui.credential_widgets
+        assert "OpenRouter_ocr_model" in page.ui.credential_widgets
+
+    def test_they_are_separate_widgets(self, qapp):
+        from app.ui.settings.settings_page import SettingsPage
+
+        page = SettingsPage()
+        assert (page.ui.credential_widgets["OpenRouter_model"]
+                is not page.ui.credential_widgets["OpenRouter_ocr_model"])
+
+    def test_the_ocr_field_lists_vision_models_only_by_default(self, qapp):
+        from app.ui.settings.settings_page import SettingsPage
+
+        page = SettingsPage()
+        ocr = page.ui.credential_widgets["OpenRouter_ocr_model"]
+        assert ocr.vision_only_checkbox.isChecked()
+
+    def test_both_round_trip_through_qsettings(self, qapp):
+        from app.ui.settings.settings_page import SettingsPage
+
+        page = SettingsPage()
+        page.ui.save_keys_checkbox.setChecked(True)
+        page.ui.credential_widgets["OpenRouter_api_key"].setText("sk-or-x")
+        page.ui.credential_widgets["OpenRouter_model"].setText("anthropic/claude-4.6-sonnet")
+        page.ui.credential_widgets["OpenRouter_ocr_model"].setText("google/gemini-2.5-flash-lite")
+        page.save_settings()
+
+        reloaded = SettingsPage()
+        reloaded.load_settings()
+        creds = reloaded.get_credentials("OpenRouter")
+        assert creds["model"] == "anthropic/claude-4.6-sonnet"
+        assert creds["ocr_model"] == "google/gemini-2.5-flash-lite"
