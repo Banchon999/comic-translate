@@ -9,7 +9,11 @@ from ..utils.translator_utils import MODEL_MAP
 
 class GPTOCR(OCREngine):
     """OCR engine using GPT vision capabilities via direct REST API calls."""
-    
+
+    #: OpenAI renamed this parameter; OpenAI-compatible services that are not
+    #: OpenAI mostly did not, so subclasses override it.
+    MAX_TOKENS_PARAM = "max_completion_tokens"
+
     def __init__(self):
         self.api_key = None
         self.expansion_percentage = 0
@@ -65,6 +69,12 @@ class GPTOCR(OCREngine):
                 
         return blk_list
     
+    def request_headers(self) -> dict:
+        return {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}",
+        }
+
     def _get_gpt_ocr(self, base64_image: str) -> str:
         """
         Get OCR result from GPT model using direct REST API call.
@@ -78,12 +88,6 @@ class GPTOCR(OCREngine):
         if not self.api_key:
             raise ValueError("API key not initialized. Call initialize() first.")
             
-        # Prepare request headers
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}"
-        }
-        
         # Prepare request payload
         payload = {
             "model": self.model,
@@ -96,13 +100,13 @@ class GPTOCR(OCREngine):
                     ]
                 }
             ],
-            "max_completion_tokens": self.max_tokens
+            self.MAX_TOKENS_PARAM: self.max_tokens,
         }
         
         # Make POST request to OpenAI API
         response = requests.post(
             self.api_base_url,
-            headers=headers,
+            headers=self.request_headers(),
             data=json.dumps(payload),
             timeout=20
         )

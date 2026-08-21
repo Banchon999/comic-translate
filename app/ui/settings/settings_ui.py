@@ -66,6 +66,7 @@ class SettingsPageUI(QtWidgets.QWidget):
             'EasyOCR',
             self.tr('Microsoft OCR'),
             self.tr('Gemini-2.5-Flash-Lite'),
+            self.tr('OpenRouter'),
         ]
         # Two engines rest on Python packages this project does not depend on.
         # They used to be dropped from the list when those were absent, which
