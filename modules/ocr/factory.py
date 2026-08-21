@@ -11,6 +11,7 @@ from .ppocr import PPOCRv5Engine
 from .manga_ocr.mobile import MangaOCRMobileONNXEngine
 from .pororo.onnx_engine import PororoOCREngineONNX  
 from .gemini_ocr import GeminiOCR
+from .openrouter_ocr import OpenRouterOCR
 from .user_ocr import UserOCR
 
 
@@ -23,6 +24,7 @@ class OCRFactory:
     LLM_ENGINE_IDENTIFIERS = {
         "GPT": GPTOCR,
         "Gemini": GeminiOCR,
+        "OpenRouter": OpenRouterOCR,
     }
     
     @classmethod
@@ -157,6 +159,7 @@ class OCRFactory:
             'Google Cloud Vision': cls._create_google_ocr,
             'GPT-4.1-mini': lambda s: cls._create_gpt_ocr(s, ocr_model),
             'Gemini-2.5-Flash-Lite': lambda s: cls._create_gemini_ocr(s, ocr_model),
+            'OpenRouter': cls._create_openrouter_ocr,
         }
         
         make_japanese = lambda s: cls._create_manga_ocr(s, effective_backend)
@@ -310,6 +313,12 @@ class OCRFactory:
         device = resolve_device(settings.is_gpu_enabled(), 'torch')
         engine = PaddleOCRVLEngine()
         engine.initialize(device=device)
+        return engine
+
+    @staticmethod
+    def _create_openrouter_ocr(settings) -> OCREngine:
+        engine = OpenRouterOCR()
+        engine.initialize(settings)
         return engine
 
     @staticmethod

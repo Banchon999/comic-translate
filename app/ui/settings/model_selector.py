@@ -126,7 +126,7 @@ class OpenRouterModelSelector(QtWidgets.QWidget):
 
     INPUT_WIDTH = 400
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, label: str = "", placeholder: str = "", vision_only: bool = False):
         super().__init__(parent)
 
         self._models: list[OpenRouterModel] = []
@@ -141,7 +141,7 @@ class OpenRouterModelSelector(QtWidgets.QWidget):
         row = QtWidgets.QHBoxLayout()
         row.setSpacing(6)
 
-        prefix = MLabel(self.tr("Model")).border()
+        prefix = MLabel(label or self.tr("Model")).border()
         set_label_width(prefix)
         prefix.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         row.addWidget(prefix)
@@ -153,7 +153,9 @@ class OpenRouterModelSelector(QtWidgets.QWidget):
         # even though the row has not been laid out yet. Together the two add up
         # to the same 400px the plain credential inputs use.
         self.combo.setFixedWidth(max(160, self.INPUT_WIDTH - prefix.maximumWidth() - row.spacing()))
-        self.combo.lineEdit().setPlaceholderText("e.g. openai/gpt-4o, anthropic/claude-sonnet-4.5")
+        self.combo.lineEdit().setPlaceholderText(
+            placeholder or "e.g. openai/gpt-4o, anthropic/claude-sonnet-4.5"
+        )
         self.combo.setView(QtWidgets.QListView())
         self.combo.view().setItemDelegate(_ModelItemDelegate(self.combo))
         # Without this the popup is capped at 10 rows and scrolls a 400-item list.
@@ -173,6 +175,9 @@ class OpenRouterModelSelector(QtWidgets.QWidget):
         controls.setSpacing(8)
 
         self.vision_only_checkbox = MCheckBox(self.tr("Vision models only"))
+        # An OCR model has to read the crop, so there is no point listing the
+        # ones that cannot see it.
+        self.vision_only_checkbox.setChecked(vision_only)
         self.vision_only_checkbox.setToolTip(self.tr(
             "Only list models that accept images, which are the ones that can use\n"
             "the page image when \"Provide Image as Input to AI\" is on."
