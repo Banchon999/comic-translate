@@ -4,12 +4,14 @@ from typing import TYPE_CHECKING, Any, Sequence
 
 from PySide6 import QtCore
 
-from modules.detection.processor import TextBlockDetector
+from modules.detection.processor import TextBlockDetector
+
 from modules.ocr.processor import OCRProcessor
 from modules.rendering.render import pyside_word_wrap, is_vertical_block, get_best_render_area
 from modules.translation.processor import Translator
 from modules.utils.common_utils import is_close
 from modules.utils.device import resolve_device
+from modules.utils.glossary import collect_source_text
 from modules.utils.language_utils import get_language_code, is_no_space_lang
 from modules.utils.language_utils import to_canonical_language_name
 from modules.utils.pipeline_config import validate_ocr, validate_translator
@@ -348,7 +350,6 @@ class ManualWorkflowController:
                 self.main.lang_mapping,
             )
             settings_page = self.main.settings_page
-            extra_context = settings_page.get_llm_settings()["extra_context"]
             translator_key = settings_page.get_tool_selection("translator")
             upper_case = settings_page.ui.uppercase_checkbox.isChecked()
 
@@ -366,6 +367,12 @@ class ManualWorkflowController:
                     source_lang = state.get("source_lang", source_lang_fallback)
                     target_lang = state.get("target_lang", target_lang_fallback)
                     translator = Translator(self.main, source_lang, target_lang)
+                    # Per page, not hoisted above the loop: match-only glossary
+                    # terms depend on each page's own OCR text, so one page's
+                    # matches must not leak into another's prompt or cache key.
+                    extra_context = settings_page.get_extra_context(
+                        collect_source_text(blk_list)
+                    )
                     cache_key = cache_manager._get_translation_cache_key(
                         image,
                         source_lang,
