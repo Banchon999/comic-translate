@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 import math
+import threading
 from typing import Optional
 
 from PySide6 import QtCore
@@ -45,7 +46,40 @@ _reported: set[str] = set()
 _renderer: Optional[SkiaTextRenderer] = None
 
 #: The crash guard only wraps the first render of the session.
+#:
+#: Reference-counted under a lock rather than a bare flag, because renders do
+#: overlap: export runs `ImageSaveRenderer` on a `QThreadPool` worker while the
+#: canvas paints on the GUI thread. With a flag, whichever finished first would
+#: remove the marker while the other was still inside Skia — so a crash in the
+#: second would leave no marker and the next launch would walk into it again.
+#: The marker is taken when the count rises from zero and released only when it
+#: returns to zero.
 _first_render_done = False
+_guard_lock = threading.Lock()
+_guarded_renders = 0
+
+
+def _enter_guarded_render() -> bool:
+    """Take the crash marker if this render needs guarding."""
+    global _guarded_renders
+    with _guard_lock:
+        if _first_render_done:
+            return False
+        if _guarded_renders == 0:
+            render_guard.mark_render_started()
+        _guarded_renders += 1
+        return True
+
+
+def _leave_guarded_render() -> None:
+    """Release the marker once every guarded render has come back."""
+    global _guarded_renders, _first_render_done
+    with _guard_lock:
+        _guarded_renders -= 1
+        if _guarded_renders <= 0:
+            _guarded_renders = 0
+            render_guard.mark_render_finished()
+            _first_render_done = True
 
 
 def _enum_int(value, default: int) -> int:
@@ -190,18 +224,17 @@ def paint_item(painter: QPainter, item) -> bool:
     # that reproduces, and free on a page with forty blocks. If the process
     # dies inside the call below there is no exception and no exit path, so the
     # marker staying on disk is the only evidence the next launch will have.
-    global _first_render_done
     if _first_render_done:
         return _paint_item(painter, item)
 
-    render_guard.mark_render_started()
+    if not _enter_guarded_render():
+        return _paint_item(painter, item)
     try:
         return _paint_item(painter, item)
     finally:
         # Reached however the render ended — drawn, refused, or raised. Any of
         # those means the process survived it, which is all the marker claims.
-        render_guard.mark_render_finished()
-        _first_render_done = True
+        _leave_guarded_render()
 
 
 def _paint_item(painter: QPainter, item) -> bool:

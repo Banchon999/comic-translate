@@ -99,3 +99,55 @@ def test_marker_failures_are_never_fatal(monkeypatch):
     render_guard.mark_render_finished()
     monkeypatch.setattr(render_guard, "_distrusted", None)
     assert not render_guard.previous_run_crashed_rendering()
+
+
+# ---------------------------------------------------------------------------
+# Overlapping renders.
+#
+# Renders do overlap in this app: export runs `ImageSaveRenderer` on a
+# `QThreadPool` worker while the canvas paints on the GUI thread. A guard that
+# tracks "the first render" with a bare flag removes the marker as soon as
+# whichever finishes first comes back — so a crash in the one still running
+# leaves nothing behind, and the next launch walks into it again. That is the
+# case the guard exists for, so it is the case it must not drop.
+# ---------------------------------------------------------------------------
+
+
+def test_an_overlapping_render_keeps_the_marker_until_both_return(tmp_path, monkeypatch):
+    """The marker must outlive the *last* guarded render, not the first."""
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    from app.ui.canvas import skia_paint
+
+    monkeypatch.setattr(skia_paint, "_first_render_done", False)
+    monkeypatch.setattr(skia_paint, "_guarded_renders", 0)
+
+    marker = tmp_path / "ComicTranslate" / render_guard.MARKER_NAME
+
+    assert skia_paint._enter_guarded_render()          # GUI thread starts
+    assert skia_paint._enter_guarded_render()          # worker starts too
+    assert marker.exists()
+
+    skia_paint._leave_guarded_render()                 # GUI thread finishes
+    assert marker.exists(), (
+        "the marker was cleared while another render was still in Skia — a "
+        "crash in that one would leave no trace for the next launch"
+    )
+
+    skia_paint._leave_guarded_render()                 # worker finishes
+    assert not marker.exists()
+
+
+def test_later_renders_are_not_guarded_again(tmp_path, monkeypatch):
+    """Once a render has come back intact, the marker is not retaken."""
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    from app.ui.canvas import skia_paint
+
+    monkeypatch.setattr(skia_paint, "_first_render_done", False)
+    monkeypatch.setattr(skia_paint, "_guarded_renders", 0)
+
+    assert skia_paint._enter_guarded_render()
+    skia_paint._leave_guarded_render()
+
+    assert not skia_paint._enter_guarded_render(), (
+        "a later render was guarded again, costing two disk writes per paint"
+    )
