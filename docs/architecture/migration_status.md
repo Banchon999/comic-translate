@@ -372,3 +372,59 @@ pytest 420 passed, ruff clean.
 
 **Next:** defects 2 and 3 (per-range rich text and per-range outlines), then
 curved text on Skia, then the full visual matrix and a real-page run.
+
+### Wave 2 — per-range styling, underline, and a real-page run
+
+**Underline (defect 6, found by looking rather than by a test).** The contact
+sheet showed underlined text rendering with no underline at all under Skia:
+0 px of added ink against Qt's +382. Skia derives a decoration colour from
+`TextStyle.setColor` but *not* from `setForegroundPaint`, and the renderer uses
+a paint — so the underline was laid out and never drawn. Fixed by setting
+`setDecorationColor` explicitly in every paint pass, not only the fill pass,
+so an outlined block outlines its underline too.
+
+**Defects 2 and 3 (per-range rich text, per-range outlines) — fixed.**
+`skia_paint._char_runs()` walks the `QTextDocument`'s blocks and fragments and
+emits a `CharRun` per format span; `TextRenderSpec.runs_for()` then splits at
+**both** char-format and outline boundaries and `_paragraph()` builds the
+paragraph with `pushStyle`/`pop` per run. Splitting at outline boundaries too
+is the part that is easy to get wrong: a uniformly-formatted block is a single
+char run, and a single run is entirely "covered" by any outline that overlaps
+it, so a scoped outline still stroked the whole block. Verified by rendering:
+a green span now spans (28,89) under Qt and (28,90) under Skia.
+
+`_char_runs()` returns `()` — degrading to the single-style path — when the
+walked length disagrees with the plain text length, rather than guessing at a
+misalignment and mis-styling the block.
+
+**Real-page end-to-end.** `detect → mask → clean → render → export` run against
+a generated comic page with the real RT-DETR-v2 detector and the real LaMa
+ONNX inpainter:
+
+| Stage | Result |
+|---|---|
+| Detection | 3/3 bubbles, tight boxes, 0.8s |
+| Mask | 25,885 px across all three bubbles |
+| Inpaint (LaMa ONNX) | 21.1s, Japanese text fully removed, bubble outlines intact, no halo |
+| Render Qt vs Skia | ink 32,280 vs 31,416 px (2.7%), centroids within 2 px |
+
+The Qt/Skia difference is 8,797 px at threshold 16 but only 1,330 px above 200
+— concentrated at glyph edges, i.e. rasteriser antialiasing, not a layout
+divergence. Confirmed by eye on the stacked comparison, not only by the counts.
+
+*Honest limits of that run:* OCR and translation are not exercised — OCR needs
+a second model download and translation needs an API key this machine does not
+have — so the translated strings are supplied directly. Everything downstream
+of that is the real code path.
+
+One thing the run exposed about the *harness*, not the product:
+`collect_block_mask_data` defaults to `require_text_or_translation=True`, so
+detection-only blocks produce an empty mask and cleaning becomes a 20-second
+no-op that still reports success. That default is correct — an untranslated
+block must not be erased — but any harness that skips OCR has to set
+`.text`/`.translation` itself or it silently verifies nothing.
+
+**Still open:** curved text falls back to Qt (renders correctly, so it is an
+architectural inconsistency rather than a user-visible defect); the full
+per-feature visual matrix needs a re-run and a re-read after these fixes; the
+Skia-in-bundle assertion in the four build workflows has never executed.
