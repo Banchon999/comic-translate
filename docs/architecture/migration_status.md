@@ -575,3 +575,63 @@ slightly tighter; both still fit their box.
 
 **Status:** 449 tests passing, ruff clean, headless 87/87, parity 0 px, CI
 green on `ad5d75e` (test 3.12, test 3.14, headless).
+
+### Wave 6 — the shadow was never wrong, and Skia is now the default
+
+**The shadow "defect" was a measurement artefact.** Earlier waves recorded that
+Skia's drop shadow read 18–29% more diffuse than Qt's and wanted
+`SHADOW_BLUR_TO_SIGMA` re-fitted. Re-measuring says **0.15 was already right**.
+
+That claim came from an ink count at a single darkness threshold, which cannot
+tell a tight dark shadow from a wide faint one — it reads a change of *shape*
+as a change of *amount*. Measured properly (isolate the shadow by differencing
+renders with and without it so glyph ink cancels; compare coverage at four
+thresholds over blur radii 3–20 through the export renderer), Skia lands within
+4–6% of Qt on total shadow mass and 0.93–1.10 on extent everywhere but the
+deepest core at the widest blur. 0.23 and 0.30 are clearly worse: at blur 20
+they thin the core until nothing survives a >200 threshold (0.05 and 0.00).
+
+Three metrics were tried and two are dead ends, recorded on the constant so
+nobody repeats them:
+
+| Metric | Why it fails |
+|---|---|
+| Per-pixel error vs Qt on a text shadow | Dominated by the engines rasterising the *glyph* differently — the shadow is a blurred copy of it. Error surface came out flat: 7.99 worst vs 7.86 best. |
+| RMS spread about a centroid | Measures the size of the shape casting the shadow, not the width of the blur. Qt read 58 at blur 2 and 62 at blur 30. |
+| Fitting against a solid rectangle | Says 0.23, and is wrong: `QGraphicsDropShadowEffect` blurs the item's own pixmap and does not behave the same for a large filled rect as for glyphs. |
+
+Also verified while chasing it: Skia's mask-filter sigma **does** scale with the
+canvas transform, so rendering at the device scale did not change the blur.
+
+**Skia is now the default** where skia-python is installed; Qt remains the
+default and the fallback where it is not. Two things were needed beyond
+changing a constant:
+
+- **The measurer had to follow the painter.** `_default_measurer` returned Qt
+  whenever none was installed, so flipping only the paint default would leave
+  `modules.rendering.render` — which imports `text_measure` and never touches
+  `text_engine` — measuring with Qt while the canvas drew with Skia. Exactly
+  the split this seam exists to prevent. The default now lives in
+  `text_engine.default_engine()` (pure, constructs nothing) and
+  `_default_measurer` reads the active engine.
+- **A default change alone reaches almost nobody.** `skia_text_engine` is part
+  of `get_all_settings()`, autosaved ~1.5 s after any change, so every existing
+  user has an explicit `False` stored and the new fallback is never consulted.
+  `_migrate_skia_default` flips it once and records that it did; a user who
+  then turns Skia off stays off.
+
+`test_qt_is_the_default` had been passing for the wrong reason — other tests'
+teardown leaves Qt selected, so it asserted leakage rather than the default.
+
+**Status:** 457 tests passing, ruff clean, headless 87/87, preview/export
+parity 0 px, real-page E2E clean. Qt-vs-Skia divergence on a real page fell
+from 8,797 px to 5,704 after the sharpness fix.
+
+**Still outstanding — needs you:** the Skia-in-bundle assertion in the four
+build workflows has never executed. Dispatching them needs `actions:write`,
+which this session still does not have (403 through both the CLI and the
+GitHub API, re-tested after the grant was offered). It matters more now that
+Skia is the default: if skia-python does not land in the frozen Windows
+bundle, every Windows user silently falls back to Qt. The import is guarded, so
+it degrades rather than crashes. Likely fix if it fails: `--collect-all skia`
+or `--hidden-import skia` in the PyInstaller command.
