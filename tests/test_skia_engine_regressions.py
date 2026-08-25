@@ -930,3 +930,189 @@ def test_skia_shadow_covers_comparable_area_to_qt(qapp, blur):
             f"at blur {blur}, Skia covers {ratio:.2f}x Qt's area above "
             f"darkness {threshold} — the blur conversion is off"
         )
+
+
+# ---------------------------------------------------------------------------
+# Per-range formatting across lines and down columns.
+#
+# `char_runs` and `outlines` index the whole block, but the draw paths hand a
+# paragraph one *line* at a time (and vertical text one *cluster* at a time),
+# and `runs_for()` clamps every offset against the text it is given. Passing
+# document offsets with a short line therefore applied the first line's
+# formatting to every line and dropped any range starting past it:
+#
+#   * a char run scoped to line 2 rendered in line 1's colour;
+#   * an outline scoped to line 2 painted nowhere at all;
+#   * an outline scoped to line 1 leaked onto line 2;
+#   * vertical text lost per-range formatting entirely, because each cluster's
+#     spec was built without `char_runs`.
+#
+# Every per-range test before these used single-line text, which is exactly why
+# the whole multi-line axis went untested. Each case here keeps a single-line
+# control so a fix that repairs multi-line by breaking the simple path fails.
+# ---------------------------------------------------------------------------
+
+
+def _render_spec(**kwargs):
+    from core.skia_render import SkiaTextRenderer, TextRenderSpec
+
+    rgba, _, _ = SkiaTextRenderer().render(TextRenderSpec(**kwargs))
+    return rgba
+
+
+def _halves(rgba):
+    middle = rgba.shape[0] // 2
+    return rgba[:middle], rgba[middle:]
+
+
+def _mean_colour(rgba):
+    """Mean RGB of the opaque pixels, or None where nothing was drawn."""
+    opaque = rgba[:, :, 3] > 128
+    if not opaque.any():
+        return None
+    return rgba[:, :, :3][opaque].mean(axis=0)
+
+
+def _is_red(colour):
+    return colour is not None and colour[0] > 150 and colour[2] < 100
+
+
+def _is_blue(colour):
+    return colour is not None and colour[2] > 150 and colour[0] < 100
+
+
+def _green_pixels(rgba):
+    green = (
+        (rgba[:, :, 1] > 150)
+        & (rgba[:, :, 0] < 120)
+        & (rgba[:, :, 2] < 120)
+        & (rgba[:, :, 3] > 128)
+    )
+    return int(green.sum())
+
+
+def _two_colour_runs(second_start, second_end):
+    from core.skia_render import CharRun
+
+    return (
+        CharRun(0, 4, color="#ff0000"),
+        CharRun(second_start, second_end, color="#0000ff"),
+    )
+
+
+@requires_skia
+def test_per_range_colour_reaches_the_second_line(qapp):
+    """A word recoloured on line 2 must not render in line 1's colour."""
+    from core.text_measure import TextStyle
+
+    top, bottom = _halves(_render_spec(
+        text="AAAA\nBBBB",
+        style=TextStyle(font_family="", font_size=28.0, line_spacing=1.2),
+        char_runs=_two_colour_runs(5, 9),
+        soft_wrapped=False,
+    ))
+
+    assert _is_red(_mean_colour(top)), "line 1 lost its own colour"
+    assert _is_blue(_mean_colour(bottom)), (
+        "line 2 rendered in line 1's colour — document offsets are being "
+        "clamped against the short line"
+    )
+
+
+@requires_skia
+def test_per_range_colour_still_works_on_a_single_line(qapp):
+    """The control: the simple path must not break while the multi-line one is fixed."""
+    from core.text_measure import TextStyle
+
+    rgba = _render_spec(
+        text="AAAABBBB",
+        style=TextStyle(font_family="", font_size=28.0, line_spacing=1.2),
+        char_runs=_two_colour_runs(4, 8),
+        soft_wrapped=False,
+    )
+    opaque = rgba[:, :, 3] > 128
+    red = int(((rgba[:, :, 0] > 150) & (rgba[:, :, 2] < 100) & opaque).sum())
+    blue = int(((rgba[:, :, 2] > 150) & (rgba[:, :, 0] < 100) & opaque).sum())
+    assert red > 0 and blue > 0
+
+
+@requires_skia
+@pytest.mark.parametrize(
+    "start, end, expect_top, expect_bottom",
+    [
+        (0, 4, True, False),    # scoped to line 1: must not leak downward
+        (5, 9, False, True),    # scoped to line 2: painted nowhere before
+        (0, 9, True, True),     # whole block: the case that worked by accident
+    ],
+)
+def test_scoped_outlines_land_on_their_own_line(
+    qapp, start, end, expect_top, expect_bottom
+):
+    """An outline over a selection must stroke that selection's line, and only it."""
+    from core.skia_render import OutlineLayer
+    from core.text_measure import TextStyle
+
+    top, bottom = _halves(_render_spec(
+        text="AAAA\nBBBB",
+        style=TextStyle(font_family="", font_size=28.0, line_spacing=1.2),
+        outlines=(OutlineLayer(width=4.0, color="#00ff00", start=start, end=end),),
+        fill_color="#000000",
+        soft_wrapped=False,
+    ))
+
+    assert (_green_pixels(top) > 0) is expect_top, (
+        f"outline ({start},{end}): line 1 outlined = {_green_pixels(top) > 0}, "
+        f"expected {expect_top}"
+    )
+    assert (_green_pixels(bottom) > 0) is expect_bottom, (
+        f"outline ({start},{end}): line 2 outlined = {_green_pixels(bottom) > 0}, "
+        f"expected {expect_bottom}"
+    )
+
+
+@requires_skia
+def test_vertical_text_keeps_per_range_formatting(qapp):
+    """Vertical clusters must carry the block's character runs, sliced to each one.
+
+    Each cluster's spec used to be built from scratch without `char_runs`, so
+    every glyph fell back to the item-wide style and a user's restyled word
+    vanished the moment Skia drew it.
+    """
+    from core.skia_render import CharRun
+    from core.text_measure import TextStyle
+
+    top, bottom = _halves(_render_spec(
+        text="あいうえ",
+        style=TextStyle(font_family="", font_size=28.0, line_spacing=1.2,
+                        vertical=True),
+        # Adjacent, not overlapping: `runs_for` takes the first run covering an
+        # index, so a run spanning the whole text would win over a later one.
+        char_runs=(CharRun(0, 2, color="#ff0000"), CharRun(2, 4, color="#0000ff")),
+        soft_wrapped=False,
+    ))
+
+    assert _is_red(_mean_colour(top)), "the first vertical cluster lost its colour"
+    assert _is_blue(_mean_colour(bottom)), (
+        "later vertical clusters fell back to the item-wide style"
+    )
+
+
+@requires_skia
+def test_an_open_ended_outline_stays_open_ended_on_every_line(qapp):
+    """`end=None` means "to the end of the text" and must survive the slicing.
+
+    This is how a full-document outline is expressed, so getting it wrong would
+    unstyle every ordinary outlined block rather than an exotic one.
+    """
+    from core.skia_render import OutlineLayer
+    from core.text_measure import TextStyle
+
+    top, bottom = _halves(_render_spec(
+        text="AAAA\nBBBB",
+        style=TextStyle(font_family="", font_size=28.0, line_spacing=1.2),
+        outlines=(OutlineLayer(width=4.0, color="#00ff00", start=0, end=None),),
+        fill_color="#000000",
+        soft_wrapped=False,
+    ))
+
+    assert _green_pixels(top) > 0 and _green_pixels(bottom) > 0

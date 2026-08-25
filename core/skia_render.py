@@ -383,14 +383,18 @@ class SkiaTextRenderer:
         y = origin[1] + margin
         layout_width = self._layout_width(content_w, spec)
 
+        offset = 0
         for line in spec.text.split("\n"):
-            line_spec = _with_text(spec, line)
+            line_spec = _with_text(spec, line, offset)
+            # Past this point the ranges belong to `line_spec`, not `spec` — the
+            # document-wide ones do not address this line.
+            offset += len(line) + 1          # the newline the split consumed
             _, natural_height = self.measurer._natural_size(line, spec.style)
 
             if spec.shadow is not None:
                 self._paint_pass(canvas, line_spec, x, y, layout_width,
                                  self._shadow_paint(spec), ink=spec.shadow.color)
-            for outline in sorted(spec.outlines, key=lambda o: o.width, reverse=True):
+            for outline in sorted(line_spec.outlines, key=lambda o: o.width, reverse=True):
                 if outline.width <= 0:
                     continue
                 self._paint_pass(canvas, line_spec, x, y, layout_width,
@@ -561,6 +565,7 @@ class SkiaTextRenderer:
         columns = spec.text.split("\n")
 
         column_x = origin[0] + content_w - margin
+        offset = 0
         for column in columns:
             clusters = _vertical_clusters(column)
             widest = 0.0
@@ -573,21 +578,33 @@ class SkiaTextRenderer:
             for cluster in clusters:
                 cluster_w, cluster_h = self.measurer._natural_size(cluster, style)
                 cluster_layout_w = math.ceil(cluster_w) + LAYOUT_SLACK_PX
-                cluster_spec = TextRenderSpec(
-                    text=cluster,
-                    style=_horizontal(style),
-                    fill_color=spec.fill_color,
-                    outlines=spec.outlines,
-                    shadow=spec.shadow,
-                    gradient=spec.gradient,
+                # Built through `_with_text` so the character runs and outlines
+                # are carried in, sliced to this cluster and rebased onto it.
+                # Constructing the spec directly dropped `char_runs` entirely,
+                # which flattened every restyled glyph back to the item's own
+                # style, and handed document-wide outline offsets to a
+                # one-character spec. A cluster is not always one code point —
+                # a combining mark rides with its base — so the offset advances
+                # by the cluster's own length.
+                cluster_spec = _with_text(
+                    replace(
+                        spec,
+                        style=_horizontal(style),
+                        box=None,
+                        soft_wrapped=False,
+                    ),
+                    cluster,
+                    offset,
                 )
+                offset += len(cluster)
                 # Centre each glyph in its column, as vertical text does.
                 x = column_x + (widest - cluster_w) / 2.0
                 if spec.shadow is not None:
                     self._paint_pass(canvas, cluster_spec, x, y, cluster_layout_w,
                                      self._shadow_paint(cluster_spec),
                                      ink=spec.shadow.color)
-                for outline in sorted(spec.outlines, key=lambda o: o.width, reverse=True):
+                for outline in sorted(cluster_spec.outlines,
+                                      key=lambda o: o.width, reverse=True):
                     if outline.width <= 0:
                         continue
                     self._paint_pass(canvas, cluster_spec, x, y, cluster_layout_w,
@@ -598,12 +615,66 @@ class SkiaTextRenderer:
                                  run_colors=True)
                 y += cluster_h
 
+            offset += 1          # the newline `split` consumed between columns
 
-def _with_text(spec: TextRenderSpec, text: str) -> TextRenderSpec:
-    """The same spec carrying one line of its text."""
+
+def _with_text(spec: TextRenderSpec, text: str, start: int = 0) -> TextRenderSpec:
+    """The same spec carrying one slice of its text, with ranges rebased.
+
+    `start` is where `text` begins in `spec.text`. Rebasing is not optional:
+    `char_runs` and `outlines` index the whole document, while the draw paths
+    hand a paragraph one line — or one vertical cluster — at a time, and
+    `runs_for()` clamps every offset against the length of the text it is
+    given. Passing document offsets with a short line therefore applies the
+    *first* line's formatting to every line, and silently drops any range that
+    begins past the first line: an outline scoped to the second line of a block
+    painted nowhere at all, and one scoped to the first line leaked onto the
+    second.
+    """
     from dataclasses import replace
 
-    return replace(spec, text=text)
+    end = start + len(text)
+    return replace(
+        spec,
+        text=text,
+        char_runs=_rebase_runs(spec.char_runs, start, end),
+        outlines=_rebase_outlines(spec.outlines, start, end),
+    )
+
+
+def _rebase_runs(runs, start: int, end: int) -> tuple[CharRun, ...]:
+    """The character runs overlapping ``[start, end)``, in that slice's offsets."""
+    from dataclasses import replace
+
+    rebased = []
+    for run in runs:
+        lo, hi = max(run.start, start), min(run.end, end)
+        if lo < hi:
+            rebased.append(replace(run, start=lo - start, end=hi - start))
+    return tuple(rebased)
+
+
+def _rebase_outlines(outlines, start: int, end: int) -> tuple[OutlineLayer, ...]:
+    """The outlines overlapping ``[start, end)``, in that slice's offsets.
+
+    An outline with `end=None` runs to the end of the text, so it always
+    reaches this slice and stays open-ended in it — `runs_for` reads None as
+    "to the end" of whatever it is given.
+    """
+    from dataclasses import replace
+
+    rebased = []
+    for outline in outlines:
+        outline_end = outline.end if outline.end is not None else end
+        lo, hi = max(outline.start, start), min(outline_end, end)
+        if lo >= hi:
+            continue
+        rebased.append(replace(
+            outline,
+            start=lo - start,
+            end=None if outline.end is None else hi - start,
+        ))
+    return tuple(rebased)
 
 
 def _horizontal(style: TextStyle) -> TextStyle:
