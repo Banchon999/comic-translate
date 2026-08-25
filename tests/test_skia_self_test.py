@@ -175,3 +175,71 @@ def test_the_cache_is_not_consulted_when_running_from_source(tmp_path, monkeypat
 
     skia_text._self_test_result = False
     assert skia_text.self_test() is None
+
+
+# ---------------------------------------------------------------------------
+# The out-of-process probe, under the conditions it actually exists for.
+#
+# The point of spawning a child is that the failure being guarded against kills
+# whatever runs it. So the cases that matter are not clean error codes — they
+# are a child that dies from a signal, and a child that cannot be started at
+# all.
+# ---------------------------------------------------------------------------
+
+
+def _probe_with_child(monkeypatch, child_code):
+    """Run the probe against a stand-in child process."""
+    import subprocess as sp
+
+    real_run = sp.run
+
+    def fake_run(cmd, **kwargs):
+        return real_run(
+            [sys.executable, "-c", child_code],
+            capture_output=True, timeout=60, check=False,
+        )
+
+    monkeypatch.setattr(sp, "run", fake_run)
+    return skia_text._self_test_out_of_process()
+
+
+def test_a_probe_that_crashes_means_skia_is_unusable(monkeypatch):
+    """A native crash in the child is the whole reason it is a child.
+
+    It exits by signal with no output, so there is no error message to read —
+    the exit code is the entire signal, and it has to be believed.
+    """
+    reason = _probe_with_child(monkeypatch, "import ctypes; ctypes.string_at(0)")
+    assert reason is not None, "a segfaulting probe was treated as a healthy runtime"
+    assert "native crash" in reason
+
+
+def test_a_probe_that_reports_a_reason_passes_it_on(monkeypatch):
+    reason = _probe_with_child(
+        monkeypatch,
+        "import sys; print('the font manager is broken', file=sys.stderr); sys.exit(1)",
+    )
+    assert reason is not None and "font manager is broken" in reason
+
+
+def test_a_probe_that_cannot_start_declines_skia(monkeypatch):
+    """Unverifiable must mean Qt, not "try it and hope".
+
+    Running the check in-process instead would perform the very operation that
+    might kill the process, in the process that must not die. Qt renders
+    correctly, so the cost of declining is speed; the cost of gambling is an
+    app that closes itself.
+    """
+    import subprocess as sp
+
+    def refuse(cmd, **kwargs):
+        raise OSError("cannot spawn")
+
+    monkeypatch.setattr(sp, "run", refuse)
+    reason = skia_text._self_test_out_of_process()
+
+    assert reason is not None, (
+        "an unverifiable runtime was accepted — the in-process fallback would "
+        "run the crashing operation in the process that must survive it"
+    )
+    assert "could not be run" in reason

@@ -260,14 +260,17 @@ def _self_test_out_of_process() -> Optional[str]:
             check=False,
         )
     except Exception as exc:
-        # Could not even start the probe — that is not evidence against Skia,
-        # so run it here and accept the risk rather than disabling the engine
-        # on an unrelated failure.
+        # Could not even start the probe. Running the check here instead would
+        # mean performing the exact operation that might kill the process, in
+        # the process that must not die — so the unverified engine is declined
+        # rather than gambled on. Qt renders correctly; the cost of being wrong
+        # here is some speed, and the cost of being wrong the other way is an
+        # application that closes itself.
         logging.getLogger(__name__).warning(
             "could not run the Skia self-test out of process (%s); "
-            "falling back to an in-process check", exc,
+            "using the Qt text engine", exc,
         )
-        return _run_self_test()
+        return f"the Skia self-test could not be run: {exc}"
 
     if completed.returncode == 0:
         return None
