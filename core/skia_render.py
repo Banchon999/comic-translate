@@ -222,22 +222,22 @@ class SkiaTextRenderer:
 
             if spec.shadow is not None:
                 self._paint_pass(canvas, line_spec, x, y, layout_width,
-                                 self._shadow_paint(spec))
+                                 self._shadow_paint(spec), ink=spec.shadow.color)
             for outline in sorted(spec.outlines, key=lambda o: o.width, reverse=True):
                 if outline.width <= 0:
                     continue
                 self._paint_pass(canvas, line_spec, x, y, layout_width,
-                                 self._outline_paint(outline))
+                                 self._outline_paint(outline), ink=outline.color)
             self._paint_pass(canvas, line_spec, x, y, layout_width,
-                             self._fill_paint(spec))
+                             self._fill_paint(spec), ink=spec.fill_color)
 
             y += natural_height * spec.style.line_spacing
 
-    def _paint_pass(self, canvas, spec, x, y, layout_width, paint):
-        paragraph = self._paragraph(spec, paint, layout_width)
+    def _paint_pass(self, canvas, spec, x, y, layout_width, paint, ink=None):
+        paragraph = self._paragraph(spec, paint, layout_width, ink=ink)
         paragraph.paint(canvas, x, y)
 
-    def _paragraph(self, spec: TextRenderSpec, paint, layout_width: float):
+    def _paragraph(self, spec: TextRenderSpec, paint, layout_width: float, ink=None):
         style = spec.style
         paragraph_style = skia.textlayout.ParagraphStyle()
         paragraph_style.setTextAlign(_skia_align(style.alignment))
@@ -250,6 +250,14 @@ class SkiaTextRenderer:
             text_style.setLetterSpacing(float(style.letter_spacing))
         if style.underline:
             text_style.setDecoration(skia.textlayout.TextDecoration.kUnderline)
+            # The decoration colour has to be set explicitly. Skia does not
+            # take it from the foreground paint the way it takes it from
+            # setColor, so a text style carrying a paint draws the glyphs and
+            # silently omits the underline — which is exactly what happened:
+            # switching to Skia lost the underline on every block that had one.
+            text_style.setDecorationColor(
+                _skia_color(ink) if ink is not None else skia.ColorBLACK
+            )
         text_style.setForegroundPaint(paint)
         paragraph_style.setTextStyle(text_style)
 
@@ -350,14 +358,15 @@ class SkiaTextRenderer:
                 x = column_x + (widest - cluster_w) / 2.0
                 if spec.shadow is not None:
                     self._paint_pass(canvas, cluster_spec, x, y, cluster_layout_w,
-                                     self._shadow_paint(cluster_spec))
+                                     self._shadow_paint(cluster_spec),
+                                     ink=spec.shadow.color)
                 for outline in sorted(spec.outlines, key=lambda o: o.width, reverse=True):
                     if outline.width <= 0:
                         continue
                     self._paint_pass(canvas, cluster_spec, x, y, cluster_layout_w,
-                                     self._outline_paint(outline))
+                                     self._outline_paint(outline), ink=outline.color)
                 self._paint_pass(canvas, cluster_spec, x, y, cluster_layout_w,
-                                 self._fill_paint(cluster_spec))
+                                 self._fill_paint(cluster_spec), ink=spec.fill_color)
                 y += cluster_h
 
 
