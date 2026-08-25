@@ -511,6 +511,13 @@ class EventHandler:
         if self.viewer.current_rect and self.viewer.current_rect.rect().width() > 0 and self.viewer.current_rect.rect().height() > 0:
             self.viewer.rectangles.append(self.viewer.current_rect)
             self.viewer.rectangle_created.emit(self.viewer.current_rect)
+            # A box the user just drew is the one they are working on, so it is
+            # selected the moment it exists. Cleaning reads *selected* boxes —
+            # that is what tells a hand-drawn region apart from the ones the
+            # detector added, which arrive through add_rectangle and are never
+            # selected. Without this, drawing a box and pressing Clean marks
+            # nothing and looks like the button is broken.
+            self.viewer.select_rectangle(self.viewer.current_rect)
         elif self.viewer.current_rect:
             self.viewer._scene.removeItem(self.viewer.current_rect)
         self.viewer.current_rect = None

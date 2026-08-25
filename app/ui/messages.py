@@ -218,6 +218,27 @@ class Messages:
         )
 
     @staticmethod
+    def show_nothing_to_clean(parent):
+        """Clean was pressed with no area marked.
+
+        Cleaning reads brush strokes, lasso and wand regions, and boxes the user
+        has selected. With none of those the operation has nothing to do, and it
+        used to return silently — which reads as a broken button rather than as
+        a missing step.
+        """
+        return MMessage.info(
+            text=QCoreApplication.translate(
+                "Messages",
+                "Nothing is marked to clean.\n"
+                "Draw a box over the leftover text, or paint it with the brush, "
+                "lasso or magic wand, then press Clean."
+            ),
+            parent=parent,
+            duration=None,
+            closable=True
+        )
+
+    @staticmethod
     def show_batch_skipped_summary(parent, skipped_count: int):
         """
         Show a persistent summary when a batch finished with skipped images.
