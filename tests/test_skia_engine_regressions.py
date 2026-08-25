@@ -33,9 +33,10 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 from app.ui.canvas import skia_paint
 from app.ui.canvas.save_renderer import ImageSaveRenderer
-from app.ui.canvas.text_item import TextBlockItem
+from app.ui.canvas.text_item import OutlineInfo, OutlineType, TextBlockItem
 from core import skia_text, text_engine
 from core.enums import LayoutDirection
+from core.skia_render import CharRun, OutlineLayer, TextRenderSpec
 from core.text_measure import TextStyle
 from core.text_style import build_text_item_state
 
@@ -309,3 +310,344 @@ def test_underline_is_drawn_in_each_pass_not_only_the_fill(qapp):
         - _ink(_underline_state(False, **outlined))
     )
     assert added > 50, f"underline contributed only {added} px with an outline on"
+
+
+# ---------------------------------------------------------------------------
+# Per-range character formats and per-range outlines (commit 9652d17)
+# ---------------------------------------------------------------------------
+#
+# Both defects had one cause: the Skia renderer built a single Skia paragraph
+# from `item.toPlainText()` and one `TextStyle`, so anything `update_text_format`
+# had applied to a range of characters was gone the instant the engine
+# switched to Skia — a bolded/recoloured word rendered uniformly, and an
+# outline scoped to a selection stroked the entire block.
+
+def _render_item(item):
+    """Render one TextBlockItem onto a blank white page and return RGB pixels."""
+    renderer = ImageSaveRenderer(np.full((CANVAS_H, CANVAS_W, 3), 255, dtype=np.uint8))
+    renderer.scene.addItem(item)
+    return renderer.render_to_image()
+
+
+def _mixed_format_item():
+    """"red BOLD plain" with chars 0-3 coloured red and chars 4-8 bold+blue.
+
+    Reproduces the per-range formatting `update_text_format` applies to a
+    user's selection: two `QTextCursor` ranges merged onto the same document
+    that `set_plain_text` just populated uniformly.
+    """
+    item = TextBlockItem(text="")
+    item.set_plain_text("red BOLD plain")
+    item.setTextWidth(260.0)
+    item.setPos(20, 20)
+
+    cursor = QtGui.QTextCursor(item.document())
+    cursor.setPosition(0)
+    cursor.setPosition(3, QtGui.QTextCursor.MoveMode.KeepAnchor)
+    red_format = QtGui.QTextCharFormat()
+    red_format.setForeground(QtGui.QColor("#dd0000"))
+    cursor.mergeCharFormat(red_format)
+
+    cursor.setPosition(4)
+    cursor.setPosition(8, QtGui.QTextCursor.MoveMode.KeepAnchor)
+    blue_bold_format = QtGui.QTextCharFormat()
+    blue_bold_format.setForeground(QtGui.QColor("#0044dd"))
+    blue_bold_format.setFontWeight(QtGui.QFont.Weight.Bold)
+    cursor.mergeCharFormat(blue_bold_format)
+
+    return item
+
+
+def _reddish_mask(rgb):
+    r = rgb[..., 0].astype(np.int32)
+    g = rgb[..., 1].astype(np.int32)
+    b = rgb[..., 2].astype(np.int32)
+    return (r > 150) & (g < 100) & (b < 100)
+
+
+def _blueish_mask(rgb):
+    r = rgb[..., 0].astype(np.int32)
+    g = rgb[..., 1].astype(np.int32)
+    b = rgb[..., 2].astype(np.int32)
+    return (b > 150) & (r < 100) & (g < 100)
+
+
+class TestCharRuns:
+    """Unit tests for `skia_paint._char_runs`."""
+
+    @requires_skia
+    def test_char_runs_splits_at_format_boundaries(self, qapp):
+        """A block with two restyled ranges must come back as four runs at the exact boundaries, or Skia paints it uniformly and the restyling is lost."""
+        item = _mixed_format_item()
+        text = skia_paint._plain_text(item)
+        runs = skia_paint._char_runs(item, text)
+
+        assert len(runs) > 1
+        boundaries = [(run.start, run.end) for run in runs]
+        assert boundaries == [(0, 3), (3, 4), (4, 8), (8, 14)]
+
+        red_run, gap_run, bold_run, tail_run = runs
+        assert red_run.color == "#ffdd0000"
+        assert red_run.bold is False
+        assert bold_run.color == "#ff0044dd"
+        assert bold_run.bold is True
+        assert gap_run.color is None
+        assert tail_run.color is None
+
+    @requires_skia
+    def test_char_runs_degrades_to_empty_on_length_mismatch(self, qapp):
+        """If the document walk's length disagrees with the text it is given, `_char_runs` must return no runs rather than risk painting a style onto the wrong word."""
+        item = _mixed_format_item()
+        text = skia_paint._plain_text(item)
+        assert () == skia_paint._char_runs(item, text + "xx")
+
+
+@requires_skia
+def test_skia_renders_mixed_character_formats_with_distinct_colours(qapp):
+    """Bolding/recolouring one word in a block must still show under Skia, not flatten to the block's single fill colour."""
+    text_engine.set_engine(text_engine.SKIA)
+    item = _mixed_format_item()
+    image = _render_item(item)
+
+    red = int(_reddish_mask(image).sum())
+    blue = int(_blueish_mask(image).sum())
+    assert red > 20, f"only {red} red pixels rendered — per-range colour lost under Skia"
+    assert blue > 20, f"only {blue} blue pixels rendered — per-range colour lost under Skia"
+
+
+# ---------------------------------------------------------------------------
+# `TextRenderSpec.runs_for`
+# ---------------------------------------------------------------------------
+
+
+@requires_skia
+def test_runs_for_splits_uniform_text_at_outline_boundary():
+    """A uniformly-styled spec with no `char_runs` must still split at an outline's own start/end, or the outline has only one run to attach to and covers it entirely."""
+    text = "x" * 14
+    spec = TextRenderSpec(
+        text=text,
+        style=TextStyle(),
+        outlines=(OutlineLayer(width=2.0, color="#ffffff", start=0, end=3),),
+    )
+    runs = spec.runs_for(text)
+
+    assert len(runs) > 1
+    boundaries = sorted({run.start for run in runs} | {run.end for run in runs})
+    assert 3 in boundaries
+
+
+# ---------------------------------------------------------------------------
+# A selection-scoped outline must not stroke the whole block.
+# ---------------------------------------------------------------------------
+
+def _uniformly_styled_item(text="red BOLD plain"):
+    """A block with no per-range character formats — the case that broke.
+
+    A uniform block is exactly one character run, and any outline touching
+    that one run used to cover it entirely regardless of the outline's own
+    start/end.
+    """
+    item = TextBlockItem(text="")
+    item.set_plain_text(text)
+    item.setTextWidth(260.0)
+    item.setPos(20, 20)
+    return item
+
+
+def _green_selection_outline_item():
+    item = _uniformly_styled_item()
+    item.selection_outlines = [
+        OutlineInfo(0, 3, QtGui.QColor("#00cc00"), 4.0, OutlineType.Selection)
+    ]
+    return item
+
+
+def _column_span(mask):
+    """(min, max) column index where `mask` is set anywhere, or None."""
+    columns = np.where(mask.any(axis=0))[0]
+    if columns.size == 0:
+        return None
+    return int(columns.min()), int(columns.max())
+
+
+def _greenish_mask(rgb):
+    r = rgb[..., 0].astype(np.int32)
+    g = rgb[..., 1].astype(np.int32)
+    b = rgb[..., 2].astype(np.int32)
+    return (g > 120) & (r < 120) & (b < 120)
+
+
+def _ink_mask(rgb):
+    """Any pixel visibly darker than the blank white page behind it."""
+    r = rgb[..., 0].astype(np.int32)
+    g = rgb[..., 1].astype(np.int32)
+    b = rgb[..., 2].astype(np.int32)
+    return (r < 230) | (g < 230) | (b < 230)
+
+
+def _assert_outline_covers_only_first_word(image):
+    green_span = _column_span(_greenish_mask(image))
+    ink_span = _column_span(_ink_mask(image))
+    assert green_span is not None, "no green outline pixels rendered at all"
+    assert ink_span is not None, "no text ink rendered at all"
+
+    ink_width = ink_span[1] - ink_span[0]
+    green_right_relative = green_span[1] - ink_span[0]
+    assert green_right_relative < ink_width / 2, (
+        f"green outline reaches {green_right_relative}px into a {ink_width}px-wide "
+        "block — it should cover only the first word, not the whole block"
+    )
+
+
+@requires_skia
+def test_skia_scoped_outline_does_not_stroke_the_whole_block(qapp):
+    """An outline applied to only "red" must not stroke the whole uniformly-styled block once Skia paints it."""
+    text_engine.set_engine(text_engine.SKIA)
+    item = _green_selection_outline_item()
+    image = _render_item(item)
+    _assert_outline_covers_only_first_word(image)
+
+
+def test_qt_scoped_outline_does_not_stroke_the_whole_block(qapp):
+    """Sibling of the Skia test under the Qt engine, so a Skia-only regression here is distinguishable from a shared one."""
+    text_engine.set_engine(text_engine.QT)
+    item = _green_selection_outline_item()
+    image = _render_item(item)
+    _assert_outline_covers_only_first_word(image)
+
+
+# ---------------------------------------------------------------------------
+# Wrapping: Skia must reach the same line breakdown Qt did.
+#
+# `TextRenderSpec.box` is measured by Qt — it is the item's own rect — while
+# the layout inside it is Skia's, and the two read the same string about 1.1 px
+# differently. Two defects came out of that seam, both found by rendering the
+# feature matrix and looking at it rather than by any assertion:
+#
+#   * a line Qt fits wrapped under Skia, and the wrapped remainder fell outside
+#     the surface (sized from the same too-narrow width) and was clipped away;
+#   * when a source line did wrap, `_draw_horizontal` still advanced by a
+#     single line height, painting the next source line on top of the
+#     continuation of the previous one.
+# ---------------------------------------------------------------------------
+
+
+def _wrap_state(text, **overrides):
+    args = dict(
+        text=text, font_family="", font_size=24.0, text_color="#000000",
+        alignment=QtCore.Qt.AlignmentFlag.AlignHCenter, line_spacing=1.2,
+        outline_color=None, outline_width=0.0, bold=False, italic=False,
+        underline=False, position=(20, 20), rotation=0.0, scale=1.0,
+        transform_origin=(0, 0), width=250.0, height=120.0,
+        direction=QtCore.Qt.LayoutDirection.LeftToRight, vertical=False,
+        outline=False,
+    )
+    args.update(overrides)
+    return build_text_item_state(**args)
+
+
+def _ink_rows(state_dict, height=400, width=400):
+    """Which pixel rows carry ink, rendered large enough that nothing clips."""
+    renderer = ImageSaveRenderer(
+        np.full((height, width, 3), 255, dtype=np.uint8)
+    )
+    renderer.add_state_to_image({"text_items_state": [state_dict]})
+    image = renderer.render_to_image()
+    return (image[:, :, :3].min(axis=2) < 128).any(axis=1)
+
+
+def _ink_bands(rows):
+    """Count runs of inked rows — one band per painted line of text."""
+    bands, previous = 0, False
+    for row in rows:
+        if row and not previous:
+            bands += 1
+        previous = bool(row)
+    return bands
+
+
+@requires_skia
+def test_skia_does_not_wrap_a_line_qt_fits_on_one(qapp):
+    """A short line must stay one line under Skia.
+
+    Qt sizes the box to its own measurement of the text; Skia reads the same
+    string a little wider, so laying out inside that box wrapped the last word
+    onto a line Qt never had — and the surface, sized from the same width,
+    then clipped it off entirely.
+    """
+    state = _wrap_state("small print here", font_size=10.0)
+
+    text_engine.set_engine(text_engine.QT)
+    qt_bands = _ink_bands(_ink_rows(state))
+    text_engine.set_engine(text_engine.SKIA)
+    skia_bands = _ink_bands(_ink_rows(state))
+
+    assert qt_bands == 1, f"the Qt baseline itself wrapped ({qt_bands} lines)"
+    assert skia_bands == 1, (
+        f"Skia split a single line into {skia_bands} — it is wrapping text Qt "
+        "did not wrap"
+    )
+
+
+@requires_skia
+def test_skia_does_not_clip_a_line_it_wrapped(qapp):
+    """Whatever Skia lays out must fit the surface it was given.
+
+    The surface is sized from the same layout width as the draw, so widening
+    one without the other silently cuts the overflow off. Rendering the full
+    string must therefore never produce *less* ink than rendering a prefix of
+    it.
+    """
+    text_engine.set_engine(text_engine.SKIA)
+    full = int(_ink_rows(_wrap_state("日本語のテキスト", font_size=22.0)).sum())
+    prefix = int(_ink_rows(_wrap_state("日本語のテキス", font_size=22.0)).sum())
+    assert full >= prefix, (
+        "adding a character reduced the inked area — the last one is being "
+        "clipped off the surface"
+    )
+
+
+@requires_skia
+def test_wrapped_source_line_does_not_collide_with_the_next(qapp):
+    """A source line that wraps must push the following line down, not overlap it.
+
+    `letter_spacing` widens "Sphinx of black" past the box so it wraps to two
+    visual lines; the explicit newline then adds a third. Advancing by a single
+    line height painted "quartz" directly on top of "black".
+    """
+    state = _wrap_state("Sphinx of black\nquartz", letter_spacing=4.0)
+
+    text_engine.set_engine(text_engine.QT)
+    qt_bands = _ink_bands(_ink_rows(state))
+    text_engine.set_engine(text_engine.SKIA)
+    skia_bands = _ink_bands(_ink_rows(state))
+
+    assert qt_bands == 3, f"the Qt baseline drew {qt_bands} lines, expected 3"
+    assert skia_bands == qt_bands, (
+        f"Skia drew {skia_bands} bands of ink where Qt drew {qt_bands} — a "
+        "wrapped line is being painted over by the one after it"
+    )
+
+
+@requires_skia
+def test_layout_width_widens_to_skia_measurement_only_when_unwrapped(qapp):
+    """The widening is conditional: a genuinely wrapped block must still wrap.
+
+    Guards against a fix that simply lets every block lay out at its natural
+    width, which would stop a user-narrowed block from wrapping at all.
+    """
+    from core.skia_render import SkiaTextRenderer, TextRenderSpec
+    from core.text_measure import TextStyle
+
+    renderer = SkiaTextRenderer()
+    style = TextStyle(font_family="", font_size=24.0)
+    narrow_box = 80.0
+
+    unwrapped = TextRenderSpec(text="Sphinx of black quartz", style=style,
+                               soft_wrapped=False)
+    wrapped = TextRenderSpec(text="Sphinx of black quartz", style=style,
+                             soft_wrapped=True)
+
+    assert renderer._layout_width(narrow_box, wrapped) < renderer._layout_width(
+        narrow_box, unwrapped
+    ), "soft_wrapped is not being honoured — both cases lay out the same width"

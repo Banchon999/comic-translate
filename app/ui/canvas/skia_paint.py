@@ -137,7 +137,33 @@ def spec_for_item(item) -> TextRenderSpec:
         shadow=shadow,
         gradient=gradient,
         box=(rect.width(), rect.height()) if rect.width() > 0 else None,
+        soft_wrapped=_soft_wraps(item, text),
     )
+
+
+def _soft_wraps(item, text: str) -> bool:
+    """Does the document lay a source line out over more than one visual line?
+
+    Asked of Qt because Qt owns the document, and answered by counting laid-out
+    lines rather than by comparing widths: `QTextDocument.idealWidth()` is the
+    width of the *longest wrapped line* once wrapping happens, so it reads
+    narrower than the text width exactly when the text did wrap, which is the
+    wrong way round to test against.
+
+    Defaulting to True on any surprise keeps the previous behaviour, since the
+    only thing this unlocks is permission to widen the layout box.
+    """
+    try:
+        document = item.document()
+        laid_out = sum(
+            document.findBlockByNumber(index).layout().lineCount()
+            for index in range(document.blockCount())
+        )
+    except Exception:
+        return True
+    if laid_out <= 0:
+        return True
+    return laid_out > text.count("\n") + 1
 
 
 def _alignment(item) -> Alignment:

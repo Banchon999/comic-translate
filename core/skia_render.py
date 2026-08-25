@@ -146,6 +146,17 @@ class TextRenderSpec:
     char_runs: Sequence[CharRun] = field(default_factory=tuple)
     #: Box to lay out within. None measures the text and uses that.
     box: Optional[tuple[float, float]] = None
+    #: Whether the source document actually wraps a line onto the next.
+    #:
+    #: `box` is measured by Qt — it is the text item's own rect — while the
+    #: layout below is Skia's, and the two disagree about a string's width by
+    #: about a pixel. Laying out inside a box a hair narrower than Skia's own
+    #: measurement pushes the last word onto a second line that Qt never had,
+    #: which then paints outside the box and gets clipped. So the wrap decision
+    #: is taken where the document lives, on the Qt side, and carried here:
+    #: False means "this did not wrap, do not let it", and `_layout_width`
+    #: widens to Skia's own measurement to guarantee that.
+    soft_wrapped: bool = True
 
     def runs_for(self, text: str) -> list[CharRun]:
         """The spans to build the paragraph from, one pushStyle each.
@@ -242,8 +253,11 @@ class SkiaTextRenderer:
         left, top, right, bottom = self.bleed(spec)
 
         # Size the surface from the width the text is actually laid out at, so
-        # a centred line is centred in the pixels that get returned.
-        layout_width = self._layout_width(content_w)
+        # a centred line is centred in the pixels that get returned. `spec` has
+        # to go in for the same reason it does at draw time: if the surface is
+        # sized from the box while the text is laid out wider, the last word is
+        # drawn off the edge and clipped away.
+        layout_width = self._layout_width(content_w, spec)
         padded_w = layout_width + 2 * self.measurer.document_margin
 
         width = int(math.ceil(padded_w + left + right)) or 1
@@ -273,10 +287,22 @@ class SkiaTextRenderer:
 
     # -- horizontal --------------------------------------------------------
 
-    def _layout_width(self, content_w: float) -> float:
-        """Inner width to lay out at, given a measured outer box width."""
+    def _layout_width(self, content_w: float, spec: Optional[TextRenderSpec] = None) -> float:
+        """Inner width to lay out at, given a measured outer box width.
+
+        When the source document does not wrap, the width is widened to Skia's
+        own measurement of the longest line so that Skia cannot wrap either.
+        `LAYOUT_SLACK_PX` alone is not enough for that: it was fitted against
+        Skia-measured boxes, and a Qt-measured box runs about 1.1-1.3 px
+        narrower than Skia reads the same string, which is over the slack.
+        """
         inner = content_w - 2 * self.measurer.document_margin
-        return max(1.0, math.ceil(inner) + LAYOUT_SLACK_PX)
+        width = max(1.0, math.ceil(inner) + LAYOUT_SLACK_PX)
+        if spec is not None and not spec.soft_wrapped:
+            for line in spec.text.split("\n"):
+                natural_w, _ = self.measurer._natural_size(line, spec.style)
+                width = max(width, math.ceil(natural_w) + LAYOUT_SLACK_PX)
+        return width
 
     def _draw_horizontal(self, canvas, spec, origin, content_w):
         """Paint one line at a time, advancing by the spaced line height.
@@ -291,7 +317,7 @@ class SkiaTextRenderer:
         margin = self.measurer.document_margin
         x = origin[0] + margin
         y = origin[1] + margin
-        layout_width = self._layout_width(content_w)
+        layout_width = self._layout_width(content_w, spec)
 
         for line in spec.text.split("\n"):
             line_spec = _with_text(spec, line)
@@ -306,17 +332,23 @@ class SkiaTextRenderer:
                 self._paint_pass(canvas, line_spec, x, y, layout_width,
                                  self._outline_paint(outline), ink=outline.color,
                                  outline=outline)
-            self._paint_pass(canvas, line_spec, x, y, layout_width,
-                             self._fill_paint(spec), ink=spec.fill_color,
-                             run_colors=True)
+            painted = self._paint_pass(canvas, line_spec, x, y, layout_width,
+                                       self._fill_paint(spec), ink=spec.fill_color,
+                                       run_colors=True)
 
-            y += natural_height * spec.style.line_spacing
+            # One source line can still occupy several visual lines when it is
+            # too wide for the box. Advancing by a single line height then
+            # paints the *next* source line on top of this one's continuation —
+            # two lines of text superimposed. Advance by what was really drawn.
+            y += natural_height * spec.style.line_spacing * _visual_lines(
+                painted, natural_height)
 
     def _paint_pass(self, canvas, spec, x, y, layout_width, paint, ink=None,
                     outline=None, run_colors=False):
         paragraph = self._paragraph(spec, paint, layout_width, ink=ink,
                                     outline=outline, run_colors=run_colors)
         paragraph.paint(canvas, x, y)
+        return paragraph
 
     def _paragraph(self, spec: TextRenderSpec, paint, layout_width: float, ink=None,
                    outline: Optional[OutlineLayer] = None, run_colors: bool = False):
@@ -528,6 +560,23 @@ def _skia_align(alignment):
         return mapping[Alignment(int(alignment))]
     except (ValueError, KeyError, TypeError):
         return skia.textlayout.TextAlign.kCenter
+
+
+def _visual_lines(paragraph, natural_height: float) -> int:
+    """How many lines a laid-out paragraph actually occupies.
+
+    skia-python 144 exposes no line count on `Paragraph` — only `Height` — so
+    it is divided out. Rounding rather than flooring because a wrapped
+    paragraph's height is a whole multiple of the line height up to float
+    error, and never less than one line.
+    """
+    if natural_height <= 0:
+        return 1
+    try:
+        height = float(paragraph.Height)
+    except (AttributeError, TypeError, ValueError):
+        return 1
+    return max(1, int(round(height / natural_height)))
 
 
 def _solid_paint(color):
