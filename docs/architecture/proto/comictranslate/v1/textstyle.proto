@@ -1,0 +1,158 @@
+// The rendered translation layer: what a TextBlockItem looks like on the page.
+//
+// This mirrors `app/ui/canvas/text/text_item_properties.py`'s
+// TextItemProperties, with ONE structural change that is the single most
+// important decision in this contract:
+//
+//   TextItemProperties.text carries either plain text or **Qt-flavoured HTML**
+//   (`QTextDocument.toHtml()` — see `TextBlockItem.is_html` and
+//   `controllers/text.py`'s `_last_item_html`). That HTML is a Qt-version-
+//   specific dialect no other text engine parses, and it is persisted verbatim
+//   into `.ctpr` project files. A Skia/Flutter client cannot consume it.
+//
+//   So the wire format never carries markup. It carries plain text plus
+//   explicit style runs — exactly the representation `psd_exporter.py`'s
+//   `_extract_text_runs` already derives from the QTextDocument in order to
+//   author editable PSD text layers. Promoting that function out of the PSD
+//   exporter into the shared core is what makes this contract implementable,
+//   and it is the same work that frees the project format from Qt.
+//
+// Offsets in every run are UTF-16 code units, not bytes and not code points.
+// Qt, Dart, PSD and JavaScript all index text in UTF-16; Python does not.
+// `psd_exporter.py`'s `_u16_len` already exists for this reason. Choosing
+// anything else here means a conversion at three of the four boundaries.
+
+syntax = "proto3";
+
+package comictranslate.v1;
+
+import "comictranslate/v1/common.proto";
+
+option go_package = "github.com/Banchon999/comic-translate/gen/comictranslate/v1;comictranslatev1";
+
+enum Alignment {
+  ALIGNMENT_UNSPECIFIED = 0;
+  ALIGNMENT_LEFT = 1;
+  ALIGNMENT_CENTER = 2;
+  ALIGNMENT_RIGHT = 3;
+  ALIGNMENT_JUSTIFY = 4;
+}
+
+enum LayoutDirection {
+  LAYOUT_DIRECTION_UNSPECIFIED = 0;
+  LAYOUT_DIRECTION_LTR = 1;
+  LAYOUT_DIRECTION_RTL = 2;
+}
+
+// A contiguous span sharing one character format. Mirrors
+// `psd_exporter.py`'s TextStyleRun.
+message CharRun {
+  uint32 start = 1;  // UTF-16 code unit offset, inclusive
+  uint32 end = 2;    // exclusive
+  string font_family = 3;
+  float font_size = 4;
+  string fill_color = 5;  // "#RRGGBB" or "#RRGGBBAA"
+  bool bold = 6;
+  bool italic = 7;
+  bool underline = 8;
+}
+
+// Mirrors ParagraphStyleRun.
+message ParagraphRun {
+  uint32 start = 1;
+  uint32 end = 2;
+  Alignment alignment = 3;
+}
+
+// A per-range outline. Mirrors `text_item.py`'s OutlineInfo, whose `type`
+// distinguishes a document-wide outline from a selection-scoped one; the wire
+// form drops the flag and represents a document-wide outline as a run covering
+// [0, len), which is what every consumer actually tests for
+// (`_find_full_document_outline`).
+message OutlineRun {
+  uint32 start = 1;
+  uint32 end = 2;
+  string color = 3;
+  float width = 4;
+}
+
+message ShadowStyle {
+  bool enabled = 1;
+  string color = 2;
+  PointF offset = 3;  // Default (4.0, 4.0)
+  float blur = 4;
+}
+
+// Item-wide by design: Qt resolves a gradient brush against the laid-out
+// document, so it cannot be scoped to a range without the sweep restarting per
+// glyph run. A Skia implementation must reproduce that: one shader across the
+// whole laid-out paragraph, not per-run.
+message GradientStyle {
+  bool enabled = 1;
+  string color = 2;      // The far stop; the near stop is the item's fill.
+  float angle = 3;       // Degrees, default 90.
+}
+
+// The rendered text object. Geometry is in page pixel coordinates.
+message TextItem {
+  string id = 1;
+  string block_id = 2;  // TextBlock this was rendered from, empty if hand-added.
+
+  // Plain text only. Line breaks are U+000A; the Qt side must normalise the
+  // U+2028/U+2029 that QTextDocument.toPlainText() emits (see
+  // `search_replace.py`'s `_qt_plain_to_user` and `psd_exporter.py:480`).
+  string text = 3;
+
+  // Defaults applied to any range no CharRun covers.
+  string font_family = 4;
+  float font_size = 5;
+  string fill_color = 6;
+  bool bold = 7;
+  bool italic = 8;
+  bool underline = 9;
+  Alignment alignment = 10;
+
+  repeated CharRun char_runs = 11;
+  repeated ParagraphRun paragraph_runs = 12;
+  repeated OutlineRun outline_runs = 13;
+
+  float line_spacing = 14;    // Proportional, 1.2 = 120%
+  float letter_spacing = 15;
+  LayoutDirection direction = 16;
+  bool vertical = 17;         // Vertical CJK layout
+
+  PointF position = 18;
+  float rotation = 19;        // Degrees
+  float scale = 20;
+  PointF transform_origin = 21;
+
+  // The laid-out text box, NOT the painted bounds. Curvature makes an item
+  // paint outside its box; `text_item.py` keeps `text_rect()` and
+  // `boundingRect()` apart for exactly this reason and only the former is
+  // geometry. Sending the painted bounds instead is the bug that has already
+  // been written once.
+  float width = 22;
+  float height = 23;
+
+  ShadowStyle shadow = 24;
+  GradientStyle gradient = 25;
+  float curvature = 26;
+}
+
+// An inpaint patch: a cleaned rectangle composited over the artwork.
+// Mirrors the dicts `app/ui/commands/base.py` stores ('bbox', 'hash', image).
+message InpaintPatch {
+  string hash = 1;
+  BoxXYXY bbox = 2;
+  ImageRef image = 3;
+}
+
+// Everything the client needs to draw a finished page, and everything the
+// server needs to reproduce it. This is the value that replaces the
+// `image_states[path]['viewer_state']` dict.
+message PageRender {
+  string page_id = 1;
+  ImageRef base_image = 2;          // Artwork, uncleaned
+  repeated InpaintPatch patches = 3;
+  repeated TextItem text_items = 4;
+}

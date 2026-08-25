@@ -1,0 +1,85 @@
+// The unit of work that flows through the whole pipeline.
+//
+// Field-for-field this is `modules/utils/textblock.py`'s TextBlock, with three
+// deliberate departures:
+//
+//   1. `xyxy` is required in practice; the Python class defaults it to None and
+//      every consumer then has to guard. The contract makes it always present.
+//   2. Derived values (`xywh`, `center`, `source_lang_direction`) are not on the
+//      wire. They are one line of arithmetic on either side and a second copy
+//      is a second thing to keep in sync.
+//   3. `font_color` is a hex string, never a tuple. The Python attribute is
+//      typed `str|tuple` and both forms are in circulation, which is exactly
+//      the kind of ambiguity a wire format should end.
+
+syntax = "proto3";
+
+package comictranslate.v1;
+
+import "comictranslate/v1/common.proto";
+
+option go_package = "github.com/Banchon999/comic-translate/gen/comictranslate/v1;comictranslatev1";
+
+// Mirrors TextBlock.text_class, the switch used throughout the pipeline for
+// bubble-specific behaviour (per-type font selection, bubble-clipped masks).
+enum TextClass {
+  TEXT_CLASS_UNSPECIFIED = 0;
+  TEXT_CLASS_TEXT_BUBBLE = 1;  // "text_bubble"
+  TEXT_CLASS_TEXT_FREE = 2;    // "text_free"
+}
+
+// Mirrors TextBlock.direction, which drives `source_lang_direction` and the
+// vertical layout path.
+enum TextDirection {
+  TEXT_DIRECTION_UNSPECIFIED = 0;
+  TEXT_DIRECTION_HORIZONTAL = 1;
+  TEXT_DIRECTION_VERTICAL = 2;
+}
+
+// A line of source text located inside a block, as produced by detection and
+// consumed by `group_items_into_lines`.
+message TextLine {
+  Polygon quad = 1;
+  string text = 2;
+}
+
+// Text detection found but dropped as too small to be worth OCR'ing. Kept
+// because the manual workflow surfaces them and a round-trip must not lose
+// them. Mirrors TextBlock.skipped_small_texts.
+message SkippedSmallText {
+  BoxXYXY box = 1;
+  string reason = 2;
+}
+
+message TextBlock {
+  // Stable within a session. The Python object has no identity of its own —
+  // call sites match blocks by list position, which breaks the moment the
+  // client reorders or the server re-detects. The ID is the fix, and it is the
+  // one field with no Python counterpart today.
+  string id = 1;
+
+  BoxXYXY text_bbox = 2;      // TextBlock.xyxy
+  BoxXYXY bubble_bbox = 3;    // TextBlock.bubble_xyxy, unset for free text
+  Polygon text_segm_points = 4;  // TextBlock.segm_pts
+  TextClass text_class = 5;
+  float angle = 6;
+  PointF tr_origin_point = 7;
+
+  repeated TextLine lines = 8;
+  repeated string texts = 9;             // Per-line OCR output
+  repeated SkippedSmallText skipped_small_texts = 10;
+  string text = 11;                      // Joined source text
+  string translation = 12;
+
+  float line_spacing = 13;
+  string alignment = 14;                 // "left" | "center" | "right"
+
+  string source_lang = 15;               // Canonical English name, per lang_mapping
+  string target_lang = 16;
+  string script = 17;
+
+  int32 min_font_size = 18;
+  int32 max_font_size = 19;
+  string font_color = 20;                // "#RRGGBB"
+  TextDirection direction = 21;
+}
