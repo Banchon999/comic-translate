@@ -58,6 +58,23 @@ jobs:
           }
           Write-Output "Skia bundled: $($found[0].Name)"
 
+          # The file being present is not the same as the runtime working. A
+          # build shipped with skia*.pyd in place and still died the instant
+          # Render was pressed: `import skia` succeeded, so the engine was
+          # selected, and the fault came later inside the native library.
+          # Run the real probe in the built exe — it constructs a font manager,
+          # builds and lays out a paragraph and rasterises a surface, which is
+          # what the render path actually does.
+          $exe = Get-ChildItem -Path dist -Recurse -File -Filter 'ComicTranslate.exe' |
+                 Select-Object -First 1
+          if (-not $exe) { Write-Error "no ComicTranslate.exe in dist"; exit 1 }
+          & $exe.FullName --skia-self-test
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "the Skia runtime self-test failed in the bundle (exit $LASTEXITCODE) - the app would fall back to Qt, or crash"
+            exit 1
+          }
+          Write-Output "Skia runtime self-test passed in the frozen bundle"
+
       - name: Package zip
         shell: pwsh
         run: Compress-Archive -Path dist/ComicTranslate -DestinationPath dist/ComicTranslate-Windows-x86_64.zip

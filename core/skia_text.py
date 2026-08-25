@@ -57,6 +57,9 @@ inventing a second convention.
 
 from __future__ import annotations
 
+import logging
+import subprocess
+import sys
 import unicodedata
 from functools import lru_cache
 from typing import Optional
@@ -89,14 +92,125 @@ DEFAULT_DOCUMENT_MARGIN = 4.0
 
 
 def is_available() -> bool:
-    """True when skia-python imported and the measurer can be constructed."""
-    return skia is not None
+    """True when skia-python imported **and** its runtime actually works.
+
+    The import landing is not enough, and assuming it was is how a frozen
+    Windows build shipped that closed itself the instant Render was pressed.
+    `import skia` succeeded there, so this returned True and Skia was selected;
+    the fault came later, inside the native library. A native access violation
+    is not a Python exception — no `except` catches it and the process is
+    simply gone — so it has to be ruled out *before* the engine is chosen
+    rather than handled when it happens.
+
+    `self_test` therefore exercises the pieces the render path really uses, and
+    in a frozen build runs them in a separate process, so a fault takes the
+    probe down instead of the app.
+    """
+    return skia is not None and self_test() is None
 
 
 def unavailable_reason() -> Optional[str]:
     if skia is None:
         return f"skia-python is not importable: {_SKIA_IMPORT_ERROR}"
+    return self_test()
+
+
+def _run_self_test() -> Optional[str]:
+    """Exercise every Skia component the render path needs. None means healthy.
+
+    Deliberately end-to-end rather than a set of `is not None` checks: the
+    failure being guarded against is a native one, and the only way to know a
+    paragraph can be built and rasterised is to build and rasterise one.
+    """
+    if skia is None:
+        return f"skia-python is not importable: {_SKIA_IMPORT_ERROR}"
+    try:
+        collection = skia.textlayout.FontCollection()
+        collection.setDefaultFontManager(skia.FontMgr())
+        unicode_ = skia.Unicode.ICU_Make()
+        if unicode_ is None:
+            return "skia.Unicode.ICU_Make() returned nothing"
+
+        style = skia.textlayout.ParagraphStyle()
+        builder = skia.textlayout.ParagraphBuilder.make(style, collection, unicode_)
+        builder.addText("Ag")
+        paragraph = builder.Build()
+        paragraph.layout(1000.0)
+        if paragraph.Height <= 0:
+            return "a laid-out paragraph reported no height"
+
+        surface = skia.Surface.MakeRasterN32Premul(8, 8)
+        canvas = surface.getCanvas()
+        canvas.clear(skia.Color4f(0, 0, 0, 0))
+        paragraph.paint(canvas, 0, 0)
+        surface.makeImageSnapshot().convert(
+            colorType=skia.kRGBA_8888_ColorType,
+            alphaType=skia.kUnpremul_AlphaType,
+        ).toarray()
+    except Exception as exc:
+        return f"{type(exc).__name__}: {exc}"
     return None
+
+
+#: Cached verdict: False = not yet run, otherwise the reason string or None.
+_self_test_result: object = False
+
+
+def self_test(force: bool = False) -> Optional[str]:
+    """Why Skia cannot be used here, or None if it can. Cached after the first call."""
+    global _self_test_result
+    if force or _self_test_result is False:
+        _self_test_result = (
+            _self_test_out_of_process() if _is_frozen() else _run_self_test()
+        )
+        if _self_test_result is not None:
+            logging.getLogger(__name__).warning(
+                "Skia self-test failed, falling back to the Qt text engine: %s",
+                _self_test_result,
+            )
+    return _self_test_result  # type: ignore[return-value]
+
+
+def _is_frozen() -> bool:
+    return bool(getattr(sys, "frozen", False)) or hasattr(sys, "_MEIPASS")
+
+
+#: Argument that makes the app run the probe and exit instead of starting up.
+SELF_TEST_FLAG = "--skia-self-test"
+
+
+def _self_test_out_of_process() -> Optional[str]:
+    """Run the probe in a child process, so a native fault cannot take the app down.
+
+    Only in a frozen build, and only once per launch. `sys.executable` is the
+    bundled exe itself, so it is re-invoked with `SELF_TEST_FLAG`, which
+    `comic.py` handles before any window exists. A crash shows up as a non-zero
+    or signal exit code rather than as a dead application.
+    """
+    try:
+        completed = subprocess.run(
+            [sys.executable, SELF_TEST_FLAG],
+            capture_output=True,
+            timeout=60,
+            check=False,
+        )
+    except Exception as exc:
+        # Could not even start the probe — that is not evidence against Skia,
+        # so run it here and accept the risk rather than disabling the engine
+        # on an unrelated failure.
+        logging.getLogger(__name__).warning(
+            "could not run the Skia self-test out of process (%s); "
+            "falling back to an in-process check", exc,
+        )
+        return _run_self_test()
+
+    if completed.returncode == 0:
+        return None
+    detail = (completed.stderr or b"").decode("utf-8", "replace").strip()
+    return (
+        f"the Skia self-test process exited with {completed.returncode}"
+        + (f": {detail}" if detail else " (no output — a native crash)")
+    )
 
 
 @lru_cache(maxsize=1)
