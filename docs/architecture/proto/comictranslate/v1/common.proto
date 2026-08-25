@@ -1,0 +1,115 @@
+// Shared value types for the Comic Translate sidecar protocol.
+//
+// Design rules that apply to every file in this package:
+//
+//   * Page rasters never travel as a plain `bytes` field. See ImageRef.
+//   * Every long-running call is server-streaming and reports Progress, because
+//     the operations behind them take seconds to minutes and the Qt app already
+//     models them that way (controller.py's `progress_update` signal).
+//   * Enums mirror the Python/Qt values that already exist rather than
+//     inventing new vocabularies, so the mapping layer stays mechanical.
+
+syntax = "proto3";
+
+package comictranslate.v1;
+
+option go_package = "github.com/Banchon999/comic-translate/gen/comictranslate/v1;comictranslatev1";
+
+// ---------------------------------------------------------------------------
+// Image transport
+// ---------------------------------------------------------------------------
+
+// How a page raster crosses the process boundary.
+//
+// The sidecar is a same-host process, so copying a page through gRPC is pure
+// waste and, for webtoons, illegal by default: a 800x20000 RGB strip is ~48 MB
+// against gRPC's 4 MB default message limit. `shared` is the intended path;
+// `inline` exists for small crops (inpaint patches, OCR block crops) where the
+// bookkeeping costs more than the copy; `file` is the fallback for a transport
+// that cannot share memory (a future networked sidecar) and for the pages the
+// pipeline already materialises on disk (`app/path_materialization.py`).
+message ImageRef {
+  oneof source {
+    SharedImage shared = 1;
+    InlineImage inline = 2;
+    string file = 3;  // Absolute path, readable by both processes.
+  }
+}
+
+// A raster in a shared mapping. The producer keeps the mapping alive until the
+// consumer acknowledges the call that carried it; ownership never splits.
+message SharedImage {
+  // POSIX: the shm_open name. Windows: the CreateFileMapping object name.
+  string handle = 1;
+  uint64 offset = 2;      // Byte offset of pixel (0,0) within the mapping.
+  uint32 width = 3;
+  uint32 height = 4;
+  uint32 stride = 5;      // Bytes per row; may exceed width * channel_size.
+  PixelFormat format = 6;
+}
+
+message InlineImage {
+  bytes data = 1;
+  uint32 width = 2;
+  uint32 height = 3;
+  uint32 stride = 4;
+  PixelFormat format = 5;
+}
+
+// RGB888 is the pipeline's internal convention today: every numpy array handed
+// between modules/* is HxWx3 uint8 RGB, and `ImageSaveRenderer` builds its
+// QImage as Format_RGB888. RGBA8888 is listed because Skia and the inpaint
+// patch layer both want an alpha channel; GRAY8 is for masks.
+enum PixelFormat {
+  PIXEL_FORMAT_UNSPECIFIED = 0;
+  PIXEL_FORMAT_RGB888 = 1;
+  PIXEL_FORMAT_RGBA8888 = 2;
+  PIXEL_FORMAT_GRAY8 = 3;
+}
+
+// ---------------------------------------------------------------------------
+// Geometry
+// ---------------------------------------------------------------------------
+
+// Axis-aligned box in page pixel coordinates, x2/y2 exclusive.
+// Mirrors TextBlock.xyxy.
+message BoxXYXY {
+  int32 x1 = 1;
+  int32 y1 = 2;
+  int32 x2 = 3;
+  int32 y2 = 4;
+}
+
+message PointF {
+  float x = 1;
+  float y = 2;
+}
+
+// A closed polygon in page pixel coordinates. Mirrors TextBlock.segm_pts.
+message Polygon {
+  repeated PointF points = 1;
+}
+
+// ---------------------------------------------------------------------------
+// Progress and errors
+// ---------------------------------------------------------------------------
+
+// Mirrors controller.py's `progress_update = Signal(int, int, int, int, bool)`
+// — (page index, page count, step index, step count, changing page) — with the
+// human-readable label the Qt app currently derives at the call site.
+message Progress {
+  int32 page_index = 1;
+  int32 page_count = 2;
+  int32 step_index = 3;
+  int32 step_count = 4;
+  bool changed_page = 5;
+  string stage = 6;    // Stable identifier: "detect", "ocr", "translate", ...
+  string detail = 7;   // Already-localised text for the status bar, or empty.
+}
+
+// A page the pipeline declined to process. Mirrors `image_skipped`.
+message SkippedPage {
+  string page_id = 1;
+  string reason_code = 2;  // Stable identifier, e.g. "no_text_detected".
+  string detail = 3;
+}

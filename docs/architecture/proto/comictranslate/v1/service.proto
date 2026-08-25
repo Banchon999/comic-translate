@@ -1,0 +1,284 @@
+// The sidecar service surface.
+//
+// Transport: a Unix domain socket (POSIX) or named pipe (Windows) into a
+// child process the client spawns and owns. Not a TCP port — the pipeline
+// holds the user's API keys and glossaries, and a loopback port is reachable
+// by every other process on the machine.
+//
+// Every stage below is already a method on `pipeline/main_pipeline.py`'s
+// ComicTranslatePipeline. The difference is that those methods read their
+// inputs off the QMainWindow (185 `main_page.*` accesses across `pipeline/`)
+// and write their outputs back into it by mutating `main.blk_list` and pushing
+// Qt undo commands. This contract makes both explicit, which is why the
+// decoupling work in Phase 0 has to land before any of it can be served.
+
+syntax = "proto3";
+
+package comictranslate.v1;
+
+import "comictranslate/v1/common.proto";
+import "comictranslate/v1/textblock.proto";
+import "comictranslate/v1/textstyle.proto";
+
+option go_package = "github.com/Banchon999/comic-translate/gen/comictranslate/v1;comictranslatev1";
+
+// ---------------------------------------------------------------------------
+// Session
+// ---------------------------------------------------------------------------
+
+service SessionService {
+  rpc OpenSession(OpenSessionRequest) returns (OpenSessionResponse);
+  rpc CloseSession(CloseSessionRequest) returns (CloseSessionResponse);
+
+  // Register pages. The sidecar materialises each into its own working
+  // directory the way `projects.py` already does, and returns the page_id the
+  // rest of the API is keyed by.
+  rpc AddPages(AddPagesRequest) returns (AddPagesResponse);
+
+  // Push the settings that affect pipeline behaviour AND cache keys. Sent
+  // whole rather than diffed: `pipeline/cache_manager.py` keys OCR and
+  // translation on a fingerprint of exactly this payload, so a partial update
+  // is a stale-cache bug waiting to happen.
+  rpc ApplySettings(ApplySettingsRequest) returns (ApplySettingsResponse);
+}
+
+message OpenSessionRequest {
+  string client_version = 1;
+  // Capabilities the client can honour, so the server can refuse early rather
+  // than half-way through a batch. E.g. "shm", "vertical_text", "curved_text".
+  repeated string capabilities = 2;
+}
+
+message OpenSessionResponse {
+  string session_id = 1;
+  string server_version = 2;
+  repeated string capabilities = 3;
+}
+
+message CloseSessionRequest { string session_id = 1; }
+message CloseSessionResponse {}
+
+message AddPagesRequest {
+  string session_id = 1;
+  repeated string file_paths = 2;  // Archives (cbz/pdf/epub) expand server-side.
+}
+
+message AddPagesResponse {
+  repeated PageInfo pages = 1;
+}
+
+message PageInfo {
+  string page_id = 1;
+  string working_path = 2;   // What the pipeline reads.
+  string original_path = 3;  // What the file tree groups by (path_originals).
+  uint32 width = 4;
+  uint32 height = 5;
+  bool webtoon = 6;
+}
+
+// Mirrors what `SettingsPage.get_tool_selection` / `get_llm_settings` /
+// `get_extra_context` feed the pipeline today. Names are the internal English
+// identifiers, never the localised labels.
+message PipelineSettings {
+  string detector = 1;
+  string ocr_engine = 2;
+  string translator = 3;
+  string inpainter = 4;
+  string source_lang = 5;
+  string target_lang = 6;
+  string device = 7;             // "cpu" | "cuda"
+  bool use_ai_text_segmentation = 8;
+  bool denoise_cleaned = 9;      // "Tidy JPEG artefacts around cleaned text"
+  string glossary_profile = 10;
+  string prompt_preset = 11;
+  string extra_context = 12;
+  TextRenderDefaults render_defaults = 13;
+}
+
+// Mirrors `modules/rendering/render.py`'s TextRenderingSettings.
+message TextRenderDefaults {
+  Alignment alignment = 1;
+  string font_family = 2;
+  string bubble_font_family = 3;   // font_family_for_block's text_bubble case
+  string free_font_family = 4;     // ...and its text_free case
+  string color = 5;
+  bool outline = 6;
+  string outline_color = 7;
+  float outline_width = 8;
+  bool bold = 9;
+  bool italic = 10;
+  bool underline = 11;
+  float line_spacing = 12;
+  int32 min_font_size = 13;
+  int32 max_font_size = 14;
+  bool upper_case = 15;
+}
+
+message ApplySettingsRequest {
+  string session_id = 1;
+  PipelineSettings settings = 2;
+}
+message ApplySettingsResponse {}
+
+// ---------------------------------------------------------------------------
+// Pipeline
+// ---------------------------------------------------------------------------
+
+// One method per manual-mode button, plus the batch driver. All are
+// server-streaming: they run for seconds to minutes and the UI has to stay
+// live, which is what `run_threaded` buys today.
+service PipelineService {
+  rpc Detect(StageRequest) returns (stream StageEvent);
+  rpc Ocr(StageRequest) returns (stream StageEvent);
+  rpc Translate(StageRequest) returns (stream StageEvent);
+  rpc Segment(StageRequest) returns (stream StageEvent);
+  rpc Clean(CleanRequest) returns (stream StageEvent);
+  rpc Render(StageRequest) returns (stream StageEvent);
+
+  // Detect through Render for every selected page. Mirrors
+  // `pipeline/batch_processor.py` and `pipeline/webtoon_batch/`.
+  rpc BatchProcess(BatchRequest) returns (stream StageEvent);
+
+  // Cancellation is gRPC context cancellation, not a method. A separate
+  // Cancel RPC needs a handle to the in-flight call and gRPC already has one.
+  rpc Export(ExportRequest) returns (stream StageEvent);
+}
+
+message StageRequest {
+  string session_id = 1;
+  repeated string page_ids = 2;
+  // Restrict to one block — the manual workflow's single-block OCR/translate,
+  // and the webtoon visible-area variants.
+  repeated string block_ids = 3;
+  // For the webtoon visible-area calls: the strip region currently on screen.
+  BoxXYXY region = 4;
+}
+
+message CleanRequest {
+  StageRequest base = 1;
+  // Brush, lasso and wand strokes all arrive as one thing, because
+  // `drawing_manager.add_region_stroke` already collapses them into one thing.
+  ImageRef mask = 2;
+}
+
+message BatchRequest {
+  string session_id = 1;
+  repeated string page_ids = 2;
+  bool skip_cached = 3;  // Honour cache_manager hits (`_apply_cached_ocr`).
+}
+
+message ExportRequest {
+  string session_id = 1;
+  repeated string page_ids = 2;
+  ExportFormat format = 3;
+  string output_dir = 4;
+  string bundle_name = 5;
+}
+
+enum ExportFormat {
+  EXPORT_FORMAT_UNSPECIFIED = 0;
+  EXPORT_FORMAT_PNG = 1;
+  EXPORT_FORMAT_JPEG = 2;
+  EXPORT_FORMAT_WEBP = 3;
+  EXPORT_FORMAT_PSD = 4;
+  EXPORT_FORMAT_CBZ = 5;
+  EXPORT_FORMAT_PDF = 6;
+  EXPORT_FORMAT_EPUB = 7;
+}
+
+// One stream, several shapes, because a stage reports progress and results
+// interleaved and splitting them across two streams reintroduces ordering.
+message StageEvent {
+  oneof event {
+    Progress progress = 1;
+    BlocksChanged blocks = 2;
+    PatchesChanged patches = 3;
+    RenderChanged render = 4;
+    SkippedPage skipped = 5;
+    StageDone done = 6;
+  }
+}
+
+message BlocksChanged {
+  string page_id = 1;
+  repeated TextBlock blocks = 2;  // Authoritative full list for the page.
+}
+
+message PatchesChanged {
+  string page_id = 1;
+  repeated InpaintPatch patches = 2;
+  bool replace_all = 3;  // false = append, true = the page's complete set
+}
+
+message RenderChanged {
+  string page_id = 1;
+  repeated TextItem text_items = 2;
+}
+
+message StageDone {
+  string stage = 1;
+  uint32 pages_done = 2;
+  repeated string written_paths = 3;  // Export only.
+}
+
+// ---------------------------------------------------------------------------
+// Text layout — the conditional service
+// ---------------------------------------------------------------------------
+
+// Auto-fit (`render.py`'s `pyside_word_wrap`) picks the largest point size at
+// which wrapped text fits its box, by binary search over Qt font metrics. It
+// is the server's, and it decides what the page looks like.
+//
+// If the client draws text with Skia while the server measures it with Qt,
+// the two disagree — same font, same size, different line breaks — and the
+// preview stops matching the export. There are exactly two coherent answers:
+//
+//   A. The client owns text end to end. The server sends geometry and source
+//      strings, the client shapes, wraps, fits and paints, and export is
+//      client-side too. This service then does not exist.
+//   B. The server stays the shaper of record. The client asks it to measure,
+//      and paints the returned line boxes without re-wrapping.
+//
+// Option B is what this service is for. It is the safer first cut — it keeps
+// the Thai cluster-safe path and the 932-line VerticalTextDocumentLayout
+// working unchanged — at the cost of a round trip per keystroke-driven
+// reflow, which is why it is scoped to auto-fit and not to interactive typing.
+service TextLayoutService {
+  rpc AutoFit(AutoFitRequest) returns (AutoFitResponse);
+  rpc Measure(MeasureRequest) returns (MeasureResponse);
+}
+
+message AutoFitRequest {
+  string session_id = 1;
+  string text = 2;
+  BoxXYXY roi = 3;
+  TextItem style = 4;         // Only the style fields are read.
+  bool no_space_language = 5; // is_no_space_lang(zh/ja/th)
+}
+
+message AutoFitResponse {
+  string wrapped_text = 1;    // Line breaks inserted
+  float font_size = 2;
+  repeated LineBox lines = 3;
+}
+
+message MeasureRequest {
+  string session_id = 1;
+  string text = 2;
+  TextItem style = 3;
+}
+
+message MeasureResponse {
+  float width = 1;
+  float height = 2;
+  repeated LineBox lines = 3;
+}
+
+message LineBox {
+  uint32 start = 1;  // UTF-16 offset into the measured text
+  uint32 end = 2;
+  PointF origin = 3; // Baseline start, relative to the text box
+  float width = 4;
+  float ascent = 5;
+  float descent = 6;
+}
