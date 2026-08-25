@@ -868,3 +868,65 @@ def test_exported_skia_glyphs_are_no_softer_than_qt_glyphs(qapp):
         f"Skia's glyph edges are {ratio:.2f}x as soft as Qt's — the raster is "
         "being made at a coarser resolution than it is drawn at"
     )
+
+
+# ---------------------------------------------------------------------------
+# Drop-shadow fidelity.
+#
+# SHADOW_BLUR_TO_SIGMA converts Qt's blur radius to Skia's Gaussian sigma. It
+# is fitted, and it is easy to fit wrongly — see the note on the constant for
+# the three metrics that give the wrong answer. This asserts the property that
+# actually matters, on the path that ships: the two engines' shadows must cover
+# comparable area at comparable darkness.
+#
+# Measured at two thresholds rather than one, because a single threshold reads
+# a change of shape as a change of amount: a tight dark shadow and a wide faint
+# one differ in where their pixels sit, not how many are "ink".
+# ---------------------------------------------------------------------------
+
+
+def _shadow_layer(engine, blur):
+    """How much darker the page got when the shadow was switched on."""
+    def render(shadow_enabled):
+        text_engine.set_engine(engine)
+        state = build_text_item_state(
+            text="Shadow", font_family="", font_size=40.0, text_color="#000000",
+            alignment=QtCore.Qt.AlignmentFlag.AlignLeft, line_spacing=1.2,
+            outline_color=None, outline_width=0.0, bold=True, italic=False,
+            underline=False, position=(40, 60), rotation=0.0, scale=1.0,
+            transform_origin=(0, 0), width=360.0, height=110.0,
+            direction=QtCore.Qt.LayoutDirection.LeftToRight, vertical=False,
+            outline=False, shadow_enabled=shadow_enabled,
+            shadow_color="#ff000000", shadow_offset=(18.0, 18.0),
+            shadow_blur=blur,
+        )
+        renderer = ImageSaveRenderer(np.full((260, 460, 3), 255, dtype=np.uint8))
+        renderer.add_state_to_image({"text_items_state": [state]})
+        return renderer.render_to_image().min(axis=2).astype(float)
+
+    return np.clip(render(False) - render(True), 0, 255)
+
+
+@requires_skia
+@pytest.mark.parametrize("blur", [3.0, 10.0, 20.0])
+def test_skia_shadow_covers_comparable_area_to_qt(qapp, blur):
+    """Skia's drop shadow must not be markedly tighter or wider than Qt's."""
+    qt_layer = _shadow_layer(text_engine.QT, blur)
+    skia_layer = _shadow_layer(text_engine.SKIA, blur)
+
+    assert qt_layer.sum() > 0, "the Qt baseline drew no shadow"
+    assert skia_layer.sum() > 0, "Skia drew no shadow at all"
+
+    mass = skia_layer.sum() / qt_layer.sum()
+    assert 0.85 < mass < 1.15, (
+        f"Skia's shadow carries {mass:.2f}x Qt's total darkness at blur {blur}"
+    )
+
+    for threshold in (64, 200):
+        qt_area = int((qt_layer > threshold).sum())
+        skia_area = int((skia_layer > threshold).sum())
+        ratio = skia_area / max(qt_area, 1)
+        assert 0.7 < ratio < 1.4, (
+            f"at blur {blur}, Skia covers {ratio:.2f}x Qt's area above "
+            f"darkness {threshold} — the blur conversion is off"
+        )

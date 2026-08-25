@@ -74,10 +74,31 @@ MAX_RENDER_SCALE = 3.0
 #:
 #: Fitted, not derived. QGraphicsDropShadowEffect's "blur radius" is not a
 #: standard deviation and Qt approximates the blur with stacked box passes, so
-#: there is no clean algebraic conversion. Measured against Qt over blur radii
-#: of 4, 10 and 20 by counting softly-shaded pixels: the textbook radius/2 came
-#: out 2.3-2.6x too diffuse at every radius, which reads as a muddy shadow that
-#: washes over the glyph. This lands within 15% of Qt across that range.
+#: there is no clean algebraic conversion.
+#:
+#: 0.15 was re-measured against the shipped path and kept. The shadow is
+#: isolated by differencing renders with and without it, so glyph ink cancels,
+#: and compared at four darkness thresholds over blur radii 3 to 20. Skia lands
+#: within 4-6% of Qt on total shadow mass and 0.93-1.10 on extent at every
+#: threshold but the deepest core at the widest blur. 0.23 and 0.30 are both
+#: clearly worse: at blur 20 they thin the core until almost nothing survives a
+#: >200 threshold (ratio 0.05 and 0.00 against Qt).
+#:
+#: **Do not fit this against a solid rectangle.** Doing so says 0.23, and it is
+#: wrong: QGraphicsDropShadowEffect renders the item into its own pixmap and
+#: blurs that, and it does not behave the same for a large filled rect as for
+#: glyphs. Fit against text, through the export renderer.
+#:
+#: Two other metrics were tried and both are dead ends worth naming so the
+#: measurement is not repeated. Per-pixel error against Qt over a text shadow is
+#: dominated by the engines rasterising the *glyph* differently, since the
+#: shadow is a blurred copy of it — the error surface comes out nearly flat
+#: (7.99 vs 7.86 between the worst and best candidate). RMS spread about a
+#: centroid measures the size of the shape casting the shadow, not the width of
+#: the blur. And a **single** darkness threshold cannot tell a tight dark shadow
+#: from a wide faint one, so an ink count at one threshold reads a change in
+#: shape as a change in amount — which is how these shadows were first, wrongly,
+#: reported as 18-29% too diffuse.
 SHADOW_BLUR_TO_SIGMA = 0.15
 
 
