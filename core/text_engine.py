@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from core import skia_text
+from core import render_guard, skia_text
 from core.text_measure import set_measurer
 
 QT = "qt"
@@ -30,12 +30,19 @@ SKIA = "skia"
 EngineName = Literal["qt", "skia"]
 
 def default_engine() -> str:
-    """Skia where it is installed, Qt otherwise.
+    """Skia where it is installed and trusted, Qt otherwise.
 
-    Pure: it constructs nothing, so it is safe to call during import and from
-    `core.text_measure` without either module having to be ready.
+    Two conditions, because there are two ways Skia can be unusable and only
+    one of them is visible in advance. `is_available()` runs a self-test, which
+    proves the runtime works. `render_guard` covers what a self-test cannot:
+    a fault somewhere the probe does not reach, which would otherwise crash the
+    application on every launch with no way out.
     """
-    return SKIA if skia_text.is_available() else QT
+    if not skia_text.is_available():
+        return QT
+    if render_guard.previous_run_crashed_rendering():
+        return QT
+    return SKIA
 
 
 _engine: str = default_engine()
@@ -67,10 +74,16 @@ def set_engine(name: str) -> None:
     if name not in (QT, SKIA):
         raise ValueError(f"unknown text engine {name!r}; expected one of {(QT, SKIA)}")
 
-    if name == SKIA and not skia_text.is_available():
-        raise RuntimeError(
-            f"cannot select the Skia text engine: {skia_text.unavailable_reason()}"
-        )
+    if name == SKIA:
+        if not skia_text.is_available():
+            raise RuntimeError(
+                f"cannot select the Skia text engine: {skia_text.unavailable_reason()}"
+            )
+        # Asking for Skia by name is an explicit decision and outranks a
+        # marker left by some earlier session — otherwise one crash would
+        # disable the fast engine permanently, with the checkbox ticked and
+        # Qt quietly doing the drawing.
+        render_guard.clear()
 
     # Record the choice first, then clear the measurer so the next call to
     # `get_measurer` re-resolves against it. Installing one here instead would

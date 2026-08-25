@@ -23,6 +23,7 @@ from PySide6 import QtCore
 from PySide6.QtCore import QRectF
 from PySide6.QtGui import QImage, QPainter
 
+from core import render_guard
 from core.enums import Alignment, LayoutDirection
 from core.skia_render import (
     CharRun,
@@ -42,6 +43,9 @@ logger = logging.getLogger(__name__)
 _reported: set[str] = set()
 
 _renderer: Optional[SkiaTextRenderer] = None
+
+#: The crash guard only wraps the first render of the session.
+_first_render_done = False
 
 
 def _enum_int(value, default: int) -> int:
@@ -182,6 +186,26 @@ def paint_item(painter: QPainter, item) -> bool:
     painter for this one frame: a text block that cannot be rendered should
     look wrong at worst, never take the editor down mid-paint.
     """
+    # Only around the *first* render of the session: enough to catch a crash
+    # that reproduces, and free on a page with forty blocks. If the process
+    # dies inside the call below there is no exception and no exit path, so the
+    # marker staying on disk is the only evidence the next launch will have.
+    global _first_render_done
+    if _first_render_done:
+        return _paint_item(painter, item)
+
+    render_guard.mark_render_started()
+    try:
+        return _paint_item(painter, item)
+    finally:
+        # Reached however the render ended — drawn, refused, or raised. Any of
+        # those means the process survived it, which is all the marker claims.
+        render_guard.mark_render_finished()
+        _first_render_done = True
+
+
+def _paint_item(painter: QPainter, item) -> bool:
+    """The render itself, with the crash guard already handled by the caller."""
     try:
         spec = spec_for_item(item)
         rgba, (offset_x, offset_y), scale = renderer().render(
