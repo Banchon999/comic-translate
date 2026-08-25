@@ -154,7 +154,19 @@ def _run_self_test_inner() -> Optional[str]:
         collection.setDefaultFontManager(skia.FontMgr())
         unicode_ = skia.Unicode.ICU_Make()
         if unicode_ is None:
-            return "skia.Unicode.ICU_Make() returned nothing"
+            # The failure that shipped. On Windows skia-python loads ICU from
+            # an `icudtl.dat` beside the executable, and PyInstaller does not
+            # collect it — it is a data file, so nothing in the import graph
+            # points at it. ICU_Make then returns None and the first
+            # ParagraphBuilder dereferences a null pointer: a native access
+            # violation, no traceback, process gone. Linux links ICU into the
+            # extension module instead, which is why it only bites when frozen
+            # on Windows.
+            return (
+                "skia.Unicode.ICU_Make() returned nothing - icudtl.dat is "
+                "missing from the bundle. It must sit beside the executable "
+                "or in _internal/. Falling back to the Qt text engine."
+            )
 
         style = skia.textlayout.ParagraphStyle()
         builder = skia.textlayout.ParagraphBuilder.make(style, collection, unicode_)

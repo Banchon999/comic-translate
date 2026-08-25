@@ -23,12 +23,39 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      - name: Locate Skia's ICU data file
+        shell: pwsh
+        run: |
+          # skia-python needs icudtl.dat beside the executable on Windows, and
+          # PyInstaller does not collect it: it is a data file, not a Python
+          # import, so nothing in the dependency graph points at it. Without it
+          # skia.Unicode.ICU_Make() returns None and the first ParagraphBuilder
+          # dereferences a null pointer — a native access violation that kills
+          # the process with no traceback. That is what shipped.
+          #
+          # Linux does not have this problem, which is why it went unnoticed:
+          # there skia-python links ICU statically into the single .so.
+          $icu = python -c "import pathlib, skia, sys; p = pathlib.Path(skia.__file__).parent; hits = list(p.rglob('icudtl.dat')); print(hits[0] if hits else '')"
+          if (-not $icu) {
+            $site = python -c "import sysconfig; print(sysconfig.get_paths()['purelib'])"
+            $found = Get-ChildItem -Path $site -Recurse -File -Filter 'icudtl.dat' -ErrorAction SilentlyContinue |
+                     Select-Object -First 1
+            if ($found) { $icu = $found.FullName }
+          }
+          if (-not $icu) {
+            Write-Error "icudtl.dat not found - the Skia text engine cannot start without it"
+            exit 1
+          }
+          Write-Output "icudtl.dat: $icu"
+          "ICU_DATA_FILE=$icu" | Out-File -FilePath $env:GITHUB_ENV -Append
+
       - name: Build app with PyInstaller
         run: |
           pyinstaller --noconfirm --clean --windowed `
             --name ComicTranslate `
             --icon resources/icons/icon.ico `
             --add-data "resources;resources" `
+            --add-data "$env:ICU_DATA_FILE;." `
             comic.py
 
       - name: Smoke test bundle
@@ -68,9 +95,21 @@ jobs:
           $exe = Get-ChildItem -Path dist -Recurse -File -Filter 'ComicTranslate.exe' |
                  Select-Object -First 1
           if (-not $exe) { Write-Error "no ComicTranslate.exe in dist"; exit 1 }
-          & $exe.FullName --skia-self-test
-          if ($LASTEXITCODE -ne 0) {
-            Write-Error "the Skia runtime self-test failed in the bundle (exit $LASTEXITCODE) - the app would fall back to Qt, or crash"
+
+          # Start-Process -Wait, not the call operator. This is a --windowed
+          # build, so `& $exe` returns immediately without waiting and leaves
+          # $LASTEXITCODE empty -- which compares unequal to 0 and would fail
+          # this step even when the runtime is healthy. The probe's reason also
+          # has to be redirected, since a windowed exe has no console to
+          # inherit and its stderr would otherwise be lost.
+          $errFile = Join-Path $env:RUNNER_TEMP 'skia-self-test.err'
+          $proc = Start-Process -FilePath $exe.FullName `
+                                -ArgumentList '--skia-self-test' `
+                                -Wait -PassThru -NoNewWindow `
+                                -RedirectStandardError $errFile
+          $detail = if (Test-Path $errFile) { (Get-Content $errFile -Raw).Trim() } else { '' }
+          if ($proc.ExitCode -ne 0) {
+            Write-Error "the Skia runtime self-test failed in the bundle (exit $($proc.ExitCode)): $detail"
             exit 1
           }
           Write-Output "Skia runtime self-test passed in the frozen bundle"
