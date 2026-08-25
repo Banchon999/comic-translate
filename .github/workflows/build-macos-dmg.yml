@@ -31,6 +31,17 @@ jobs:
           MACOSX_DEPLOYMENT_TARGET: '12.0'
         run: pyinstaller ct-mac.spec
 
+      # Same reason as the other builds: a missing skia is silent, because
+      # core/skia_text.py guards the import and the app falls back to Qt.
+      # Checked before the DMG is packed, against the .app PyInstaller made.
+      - name: Verify the Skia text engine is bundled
+        run: |
+          if ! find dist -name 'skia*.so' -print -quit | grep -q .; then
+            echo "skia-python is not in the bundle - the Skia text engine would be unavailable" >&2
+            exit 1
+          fi
+          echo "Skia bundled: $(find dist -name 'skia*.so' -print -quit)"
+
       - name: Build DMG
         run: |
           chmod +x builddmg.sh

@@ -80,6 +80,21 @@ jobs:
           }
           Write-Output "torch, torchvision and transformers are all present"
 
+      # skia-python installs as a single extension module, not a package
+      # directory, so the directory check used for the PyTorch stack would not
+      # find it. A missing skia is silent by design — core/skia_text.py guards
+      # the import and the app falls back to the Qt renderer — so without this
+      # the build ships green with the Skia text engine quietly unavailable.
+      - name: Verify the Skia text engine is bundled
+        shell: pwsh
+        run: |
+          $found = Get-ChildItem -Path dist -Recurse -File -Filter 'skia*.pyd' -ErrorAction SilentlyContinue
+          if (-not $found) {
+            Write-Error "skia-python is not in the bundle - the Skia text engine would be unavailable"
+            exit 1
+          }
+          Write-Output "Skia bundled: $($found[0].Name)"
+
       - name: Package zip
         shell: pwsh
         run: Compress-Archive -Path dist/ComicTranslate -DestinationPath dist/ComicTranslate-Windows-x86_64-full.zip
