@@ -9,7 +9,11 @@ from dataclasses import dataclass
 from enum import Enum
 from . import handles
 from .text.vertical_layout import VerticalTextDocumentLayout
-from app.ui.qt_values import to_qt_layout_direction
+from app.ui.qt_values import to_qt_color, to_qt_layout_direction
+# Re-exported: these moved to core so the pipeline can build them without
+# Qt. Same classes, so the project encoder and every existing holder of one
+# are unaffected, and `from .text_item import OutlineInfo` still works.
+from core.text_style import OutlineInfo, OutlineType  # noqa: F401
 from modules.rendering.text_effects import arc_bulge, arc_placements, gradient_line
 
 
@@ -32,17 +36,6 @@ class TextBlockState:
             transform_origin=item.transformOriginPoint()
         )
     
-class OutlineType(Enum):
-    Full_Document = 'full_document'
-    Selection = 'selection'
-    
-@dataclass
-class OutlineInfo:
-    start: int
-    end: int
-    color: QColor
-    width: float
-    type: OutlineType
 
 class TextBlockItem(QGraphicsTextItem):
     text_changed = Signal(str)
@@ -806,7 +799,7 @@ class TextBlockItem(QGraphicsTextItem):
                 if outline_info.width != width:
                     continue
                 fmt = QTextCharFormat()
-                fmt.setForeground(outline_info.color)
+                fmt.setForeground(to_qt_color(outline_info.color))
                 cursor.setPosition(outline_info.start)
                 cursor.setPosition(outline_info.end, QTextCursor.KeepAnchor)
                 cursor.mergeCharFormat(fmt)
@@ -1229,7 +1222,7 @@ class TextBlockItem(QGraphicsTextItem):
             latest_outline = containing_outlines[-1]  # Get the last one from the list
             outline_properties = {
                 'outline': True,
-                'outline_color': latest_outline.color.name(),
+                'outline_color': to_qt_color(latest_outline.color).name(),
                 'outline_width': latest_outline.width
             }
         else:

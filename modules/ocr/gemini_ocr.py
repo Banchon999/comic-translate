@@ -1,10 +1,15 @@
+from __future__ import annotations
+
 import numpy as np
 import requests
 
 from .base import OCREngine
 from ..utils.textblock import TextBlock, adjust_text_line_coordinates
 from ..utils.translator_utils import MODEL_MAP
-from app.ui.settings.settings_page import SettingsPage
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.ui.settings.settings_page import SettingsPage
 
 
 class GeminiOCR(OCREngine):

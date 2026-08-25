@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 import numpy as np
 from PIL import Image, UnidentifiedImageError
 
-from app.path_materialization import ensure_path_materialized
+from core.path_materialization import ensure_path_materialized
 from modules.utils.textblock import sort_blk_list
 from modules.detection.heuristic_lines import annotate_blocks_with_heuristic_lines
 from modules.utils.language_utils import to_canonical_language_name

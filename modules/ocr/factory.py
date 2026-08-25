@@ -2,7 +2,7 @@ import json
 import hashlib
 
 from modules.utils.device import resolve_device, torch_available
-from app.account.auth.token_storage import get_token
+from core.credentials import get_token
 from .base import OCREngine
 from .microsoft_ocr import MicrosoftOCR
 from .google_ocr import GoogleOCR

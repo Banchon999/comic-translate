@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import requests
 import base64
 import numpy as np
@@ -10,13 +12,17 @@ from .base import TranslationEngine
 from modules.utils.textblock import TextBlock 
 from modules.utils.language_utils import resolve_auto_source_language
 
-from app.account.auth.auth_client import AuthClient
-from app.account.auth.token_storage import get_token
-from app.ui.settings.settings_page import SettingsPage
+from typing import TYPE_CHECKING
+
+from core.credentials import get_token
 from app.account.config import WEB_API_TRANSLATE_URL
 from modules.utils.exceptions import InsufficientCreditsException, ContentFlaggedException
 from modules.utils.platform_utils import get_client_os
 
+
+if TYPE_CHECKING:
+    from app.account.auth.auth_client import AuthClient
+    from app.ui.settings.settings_page import SettingsPage
 
 logger = logging.getLogger(__name__)
 
