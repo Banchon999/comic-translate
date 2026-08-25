@@ -17,6 +17,7 @@ from app.ui.canvas.text.text_item_properties import TextItemProperties
 from modules.utils.textblock import TextBlock
 from modules.rendering.render import TextRenderingSettings, manual_wrap, is_vertical_block, pyside_word_wrap, font_family_for_block
 from app.validation import font_selected
+from app.ui.qt_values import to_qt_layout_direction
 from modules.utils.language_utils import get_language_code, get_layout_direction, is_no_space_lang
 from modules.utils.language_utils import to_canonical_language_name
 from modules.utils.image_utils import get_smart_text_color
@@ -365,7 +366,7 @@ class TextController:
         target_en = self.main.lang_mapping.get(target_lang, target_lang)
         t_direction = get_layout_direction(target_en)
         t_text_option = self.main.t_text_edit.document().defaultTextOption()
-        t_text_option.setTextDirection(t_direction)
+        t_text_option.setTextDirection(to_qt_layout_direction(t_direction))
         self.main.t_text_edit.document().setDefaultTextOption(t_text_option)
 
         if self.main.curr_img_idx >= 0:

@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from enum import Enum
 from . import handles
 from .text.vertical_layout import VerticalTextDocumentLayout
+from app.ui.qt_values import to_qt_layout_direction
 from modules.rendering.text_effects import arc_bulge, arc_placements, gradient_line
 
 
@@ -194,10 +195,11 @@ class TextBlockItem(QGraphicsTextItem):
 
     def _apply_text_direction(self):
         text_option = self.document().defaultTextOption()
-        text_option.setTextDirection(self.direction)
+        text_option.setTextDirection(to_qt_layout_direction(self.direction))
         self.document().setDefaultTextOption(text_option)
 
     def set_direction(self, direction):
+        direction = to_qt_layout_direction(direction)
         if self.direction != direction:
             self.direction = direction
             self._apply_text_direction()
