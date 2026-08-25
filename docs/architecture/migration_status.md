@@ -829,3 +829,46 @@ first version of this test did exactly that.
    that must not die. Unverifiable now means Qt.
 
 **Status:** 493 tests passing, ruff clean, headless 87/87.
+
+### Wave 9b — the guard had the same bug it was written to catch
+
+Once export was known to render through Skia on a `QThreadPool` worker while
+the canvas paints on the GUI thread, every piece of shared render state had to
+be re-read with that in mind. The crash guard written an hour earlier did not
+survive that reading.
+
+It tracked "the first render of the session" with a **bare boolean**. With two
+renders overlapping, whichever returned first removed the marker and set the
+flag — while the other was still inside Skia. A crash in that one would leave
+nothing on disk and the next launch would walk straight back into it. The guard
+failed in exactly the concurrent case it exists for.
+
+Now reference-counted under a lock: the marker is taken when the count rises
+from zero and released only when it returns to zero. A test drives two
+overlapping renders and asserts the marker survives the first return; reverting
+to the flag makes it fail.
+
+**Verified under the app's real concurrency**, not a synthetic thread test:
+Qt's own `QThreadPool` and `GenericWorker` — the machinery the Render button
+and the export path actually use — running `pyside_word_wrap` on four workers
+(19,200 measurements) while the GUI thread painted through `ImageSaveRenderer`.
+Results were compared against a baseline rather than merely surviving, because
+a race can corrupt an answer without crashing and a wrong measurement lays text
+out wrongly on a shipped page. No drift, no crash.
+
+That is evidence the fix holds under realistic load *on this platform*. It is
+not proof of absence on Windows, and nothing here can be.
+
+**Status:** 495 tests passing, ruff clean, headless 87/87, parity 0 px,
+real-page E2E unchanged.
+
+### Where the Windows crash stands
+
+| | |
+|---|---|
+| Root cause | **Not confirmed.** Cannot be, without the Windows crash log |
+| Likeliest candidate | The Skia data race (Wave 9) — fixed |
+| If that was it | Gone |
+| If it was not | The self-test catches a runtime failure before Skia is chosen; the render guard falls back on the next launch; the faulthandler log names the faulting module |
+| Residual worst case | One crash, then the app self-heals to Qt |
+| User workaround, no rebuild | Untick `Settings > Tools > Draw text with Skia` — takes effect immediately |
