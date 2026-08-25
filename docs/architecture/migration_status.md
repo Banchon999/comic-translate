@@ -502,3 +502,47 @@ four forms, so there is no seam bug there.
 - The Skia-in-bundle assertion added to all four build workflows has still
   never executed — dispatching them needs `actions:write`, which this session
   does not have (403 through both the CLI and the GitHub API).
+
+### Wave 4 — the parity gate, and a quality defect it did not catch
+
+**Preview and export are now pixel-identical.** All 11 features × both engines,
+**0 differing pixels** — the Phase 1 gate, met exactly:
+
+| | plain | outline | shadow | gradient | grad+outline | letter sp. | underline | RTL | CJK | Thai | wrapped |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Qt | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| Skia | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+
+A first run of that harness showed Qt mismatching on 10 of 11 cases and Skia
+on none, which looked like a Qt bug and was a harness bug: `ImageSaveRenderer`
+supersamples 2× and scales back down, and the harness rendered the preview at
+1×. Only the Qt path is sensitive to that, because a Skia raster is a bitmap
+either way.
+
+Chasing that down found a real defect the gate cannot see, because the gate
+compares each engine to itself:
+
+**Exported Skia text was visibly soft.** `paint_item` rasterised at the item's
+logical size and blitted with `drawImage`, so the export's 2× transform
+*upscaled* a 1× bitmap and the downscale returned it soft — the supersampling
+that sharpens Qt's glyphs was blurring Skia's. Measured at 56% more half-lit
+edge pixels per unit of ink, and plainly visible as a grey halo at 3× zoom.
+Canvas zoom had the same problem, magnifying a bitmap instead of re-rendering.
+
+`render()` now takes the device scale, sizes the surface by it and scales the
+canvas to match — layout untouched, sampling finer. `paint_item` blits by
+logical rectangle rather than at a point, since rendering at scale while
+blitting at a point would draw the block at twice its size. Both halves have a
+test. The scale is clamped rather than refused: dropping one block to Qt
+mid-page would be a visible change of typeface, worse than one slightly soft
+block.
+
+Edge softness relative to Qt: **1.56× → 1.17×**, and the halo is gone by eye.
+
+This is worth stating plainly, because it is the second time it has happened:
+**the preview/export parity gate cannot catch a defect present in both paths.**
+Both defects that mattered most on this branch — the doubled shadow and this
+one — passed it at zero differing pixels. What caught them was rendering the
+matrix and looking at it.
+
+**Status:** 449 tests passing, ruff clean, headless gate 87/87, parity 0 px.
