@@ -731,3 +731,46 @@ the crash log will now say where, which it could not before.
 `apply_text_engine()` on change, so it takes effect without a restart.
 
 **Status:** 473 tests passing, ruff clean, headless 87/87.
+
+### Wave 8b — a crash must not repeat forever
+
+The self-test proves the Skia *runtime* works. It cannot prove every path the
+renderer takes is safe, so a fault somewhere the probe does not reach would
+still crash the app — on every launch, with no way out. That is the difference
+between a bug and an unusable product.
+
+**`core/render_guard.py`**: the first Skia render of a session leaves a marker
+on disk and removes it when it returns, however it returns — drawn, refused or
+raised. Finding it at startup means the previous run entered a render and never
+came back, which is the only trace a native fault leaves: there is no exception
+and no exit path to record one from. That session uses Qt.
+
+- A plain **file**, not QSettings, because `core` stays Qt-free.
+- The write is **fsynced** — the point is to survive a process dying without
+  unwinding.
+- **Two writes per session**, not per render: only the first is wrapped, which
+  is enough to catch a crash that reproduces and free on a forty-block page.
+- **Not permanent.** `set_engine("skia")` clears it, so ticking the checkbox
+  outranks an older session's crash. Otherwise one bad render would disable the
+  fast engine for good, with the setting reading "on" while Qt did the drawing.
+
+**Startup cost.** The frozen probe re-launches the executable — ~0.5 s from
+source, more in a bundle — which would be paid on every launch. The verdict is
+now cached against a fingerprint of the executable (path, size, mtime), so an
+update re-probes and a new build never inherits the old one's verdict. Only
+frozen builds consult the cache; from a checkout the probe always runs, so a
+developer sees their own change.
+
+**Status:** 485 tests passing, ruff clean, headless 87/87.
+
+### What each layer actually catches
+
+Worth keeping straight, because the crash got through by falling between them:
+
+| Layer | Catches | Blind to |
+|---|---|---|
+| Test suite / parity / feature matrix | logic and rendering defects | anything specific to a frozen bundle |
+| `--skia-self-test` in the build workflow | a runtime that cannot start, **before shipping** | faults outside the probed path |
+| `self_test()` at launch | the same, on the user's machine | the same |
+| `render_guard` | a crash anywhere in the render path | the first crash — it prevents the second |
+| `faulthandler` log | tells you where it died | nothing; it is the record of last resort |
