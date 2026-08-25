@@ -774,3 +774,58 @@ Worth keeping straight, because the crash got through by falling between them:
 | `self_test()` at launch | the same, on the user's machine | the same |
 | `render_guard` | a crash anywhere in the render path | the first crash — it prevents the second |
 | `faulthandler` log | tells you where it died | nothing; it is the record of last resort |
+
+### Wave 9 — the likeliest cause of the crash: a data race, not a bundling problem
+
+Chasing the Windows crash found a genuine concurrency bug, and it explains the
+symptom better than anything about bundling.
+
+**Skia was reached from two threads at once, on shared objects.**
+`_font_collection()` and `_unicode()` were process-wide `lru_cache` singletons.
+The app reaches them from two threads as a matter of course:
+
+| Path | Thread |
+|---|---|
+| Render button → `manual_wrap` → `pyside_word_wrap` → measurer | `QThreadPool` worker (`GenericWorker`) |
+| Canvas painting text items → `skia_paint.paint_item` | GUI thread |
+| Export → `_run_export_plan` → `ImageSaveRenderer` → `paint_item` | `QThreadPool` worker |
+
+Neither object is documented as thread-safe.
+
+**It is a real race, and that was measured rather than assumed.** skia-python
+releases the GIL during its calls: a spinner thread kept running at about 37%
+of its idle rate while a measurement loop was inside Skia, which it could not
+do if the GIL were held. So both threads genuinely execute inside Skia at the
+same time, on the same objects. A data race there surfaces as a native access
+violation with no Python traceback and no exit path — the exact shape of the
+reported crash.
+
+Fixed structurally: the objects are now **thread-local**, so nothing is shared
+and there is nothing to race. One construction per worker thread (the pool
+reuses them) — 12.5 ms once, against 0.062 ms per steady-state measurement.
+
+**Honest status: candidate, not confirmed.** A stress run on Linux did not
+reproduce a crash, which proves very little — that is the nature of a race, and
+why the fix is structural rather than a lock. Without the Windows crash log it
+cannot be attributed. It is a genuine latent bug either way.
+
+The test holds every thread at a barrier while comparing identities: letting
+them exit first compares ids of freed objects, and CPython reuses those
+addresses. Written the naive way it reported sharing that was not there — the
+first version of this test did exactly that.
+
+**Three bugs of my own found while fixing this:**
+
+1. The self-test built one *bare* paragraph — no per-run styles, no outline, no
+   shadow, no scaled surface. Those are the calls a mismatched native
+   dependency fails in, so the probe could pass while the path it stood for
+   crashed. It now drives the real renderer (8 ms).
+2. Doing that recursed infinitely: `SkiaTextRenderer.__init__` asks
+   `is_available()`, which runs the probe, which constructs a renderer.
+   Thousands of nested `RuntimeError`s. Fixed with a re-entrancy guard, pinned
+   by a test that removes it and asserts the recursion returns.
+3. When the probe could not be *started*, the code ran the check in-process —
+   performing the very operation that might kill the process, in the process
+   that must not die. Unverifiable now means Qt.
+
+**Status:** 493 tests passing, ruff clean, headless 87/87.

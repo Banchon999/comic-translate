@@ -64,7 +64,6 @@ import subprocess
 import sys
 import threading
 import unicodedata
-from functools import lru_cache
 from typing import Optional
 
 from core.enums import LayoutDirection
