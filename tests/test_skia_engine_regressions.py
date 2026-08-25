@@ -745,3 +745,126 @@ def test_latin_measurement_agrees_between_engines(qapp):
 
     assert skia_w == pytest.approx(qt_rect.width(), rel=0.05)
     assert skia_h == pytest.approx(qt_rect.height(), rel=0.05)
+
+
+# ---------------------------------------------------------------------------
+# Device scale: the raster has to be made at the resolution it will be drawn at.
+#
+# `ImageSaveRenderer` draws the scene into a surface twice the page size and
+# scales the result back down. Glyphs Qt rasterises into that surface are
+# sharpened by the pass. A Skia raster made at 1x is *upscaled* by the same
+# transform and then downscaled again, so the pass that sharpens Qt's text was
+# softening Skia's — 56% more half-lit edge pixels per unit of ink, visible as a
+# grey halo around every glyph in an exported page.
+#
+# Two things have to hold together, and breaking either is a visible bug:
+# render at the painter's scale, and blit by logical rectangle. Rendering at
+# scale while blitting at a point would draw the block at twice its size.
+# ---------------------------------------------------------------------------
+
+
+@requires_skia
+def test_render_at_scale_produces_a_denser_raster_for_the_same_layout(qapp):
+    """Scaling samples the same layout more finely; it does not re-lay it out."""
+    from core.skia_render import SkiaTextRenderer, TextRenderSpec
+    from core.text_measure import TextStyle
+
+    renderer = SkiaTextRenderer()
+    spec = TextRenderSpec(text="Sharpness", style=TextStyle(font_size=30.0))
+
+    one, origin_one, used_one = renderer.render(spec, scale=1.0)
+    two, origin_two, used_two = renderer.render(spec, scale=2.0)
+
+    assert used_one == 1.0
+    assert used_two == 2.0
+    assert two.shape[0] == pytest.approx(one.shape[0] * 2, abs=2)
+    assert two.shape[1] == pytest.approx(one.shape[1] * 2, abs=2)
+    # The offset is logical, so it must not scale with the surface.
+    assert origin_two == pytest.approx(origin_one)
+
+
+@requires_skia
+def test_render_scale_is_clamped_not_refused(qapp):
+    """An unreasonable scale is clamped, so no block ever falls back over it."""
+    from core.skia_render import MAX_RENDER_SCALE, SkiaTextRenderer, TextRenderSpec
+    from core.text_measure import TextStyle
+
+    renderer = SkiaTextRenderer()
+    spec = TextRenderSpec(text="Sharpness", style=TextStyle(font_size=30.0))
+
+    _, _, used = renderer.render(spec, scale=99.0)
+    assert used == MAX_RENDER_SCALE
+
+    _, _, floor = renderer.render(spec, scale=0.1)
+    assert floor == 1.0, "scaling below 1x would render coarser than the page"
+
+
+@requires_skia
+def test_scaled_raster_is_blitted_at_its_logical_size(qapp):
+    """A block painted under a 2x transform must not come out twice as big.
+
+    The whole point of the scaled raster is more samples in the same space.
+    Blitting it at a point instead of into a logical rectangle puts down one
+    device pixel per sample and doubles the block.
+    """
+    item = TextBlockItem(text="Sharpness")
+    item.set_font_size(28.0)
+    text_engine.set_engine(text_engine.SKIA)
+
+    def painted_extent(scale):
+        size = int(400 * scale)
+        image = QtGui.QImage(size, size, QtGui.QImage.Format.Format_ARGB32)
+        image.fill(0)
+        painter = QtGui.QPainter(image)
+        painter.scale(scale, scale)
+        try:
+            item.paint(painter, QtWidgets.QStyleOptionGraphicsItem())
+        finally:
+            painter.end()
+        buffer = image.constBits()
+        array = np.frombuffer(buffer, dtype=np.uint8).reshape(size, size, 4)
+        columns = np.nonzero(array[:, :, 3].any(axis=0))[0]
+        assert columns.size, "nothing was painted"
+        # Back into logical units so the two scales are comparable.
+        return (columns.max() - columns.min()) / scale
+
+    assert painted_extent(2.0) == pytest.approx(painted_extent(1.0), rel=0.05), (
+        "the block changed size with the painter scale — the scaled raster is "
+        "not being blitted at its logical size"
+    )
+
+
+@requires_skia
+def test_exported_skia_glyphs_are_no_softer_than_qt_glyphs(qapp):
+    """The quality claim itself, measured on the export the user ships.
+
+    Edge softness is counted as half-lit pixels per unit of solid ink, and
+    compared against Qt in the same run rather than against a fixed number, so
+    the assertion does not depend on which fonts the machine happens to have.
+    Rendering the raster at 1x while the export works at 2x measured 1.56x
+    Qt's softness; sampling at the painter's scale brings it to 1.17x.
+    """
+    def softness(engine):
+        text_engine.set_engine(engine)
+        state = build_text_item_state(
+            text="Sharpness", font_family="", font_size=44.0,
+            text_color="#000000", alignment=QtCore.Qt.AlignmentFlag.AlignLeft,
+            line_spacing=1.2, outline_color=None, outline_width=0.0, bold=True,
+            italic=False, underline=False, position=(20, 30), rotation=0.0,
+            scale=1.0, transform_origin=(0, 0), width=380.0, height=90.0,
+            direction=QtCore.Qt.LayoutDirection.LeftToRight, vertical=False,
+            outline=False,
+        )
+        renderer = ImageSaveRenderer(np.full((140, 420, 3), 255, dtype=np.uint8))
+        renderer.add_state_to_image({"text_items_state": [state]})
+        grey = renderer.render_to_image().min(axis=2).astype(int)
+        ink = int((grey < 64).sum())
+        half_lit = int(((grey >= 64) & (grey <= 192)).sum())
+        assert ink > 0, f"{engine} rendered no text"
+        return half_lit / ink
+
+    ratio = softness(text_engine.SKIA) / softness(text_engine.QT)
+    assert ratio < 1.35, (
+        f"Skia's glyph edges are {ratio:.2f}x as soft as Qt's — the raster is "
+        "being made at a coarser resolution than it is drawn at"
+    )

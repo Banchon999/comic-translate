@@ -16,9 +16,11 @@ torn or garbage text rather than a crash.
 from __future__ import annotations
 
 import logging
+import math
 from typing import Optional
 
 from PySide6 import QtCore
+from PySide6.QtCore import QRectF
 from PySide6.QtGui import QImage, QPainter
 
 from core.enums import Alignment, LayoutDirection
@@ -182,7 +184,9 @@ def paint_item(painter: QPainter, item) -> bool:
     """
     try:
         spec = spec_for_item(item)
-        rgba, (offset_x, offset_y) = renderer().render(spec)
+        rgba, (offset_x, offset_y), scale = renderer().render(
+            spec, scale=_device_scale(painter)
+        )
     except SurfaceTooLarge as exc:
         _report_once("surface-too-large", exc)
         return False
@@ -207,9 +211,43 @@ def paint_item(painter: QPainter, item) -> bool:
 
     painter.save()
     painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
-    painter.drawImage(-offset_x, -offset_y, image)
+    # The raster carries `scale` device pixels per logical pixel, so it is
+    # placed by logical rectangle rather than at a point. Drawing it at a point
+    # would put it down one device pixel per sample and blow the block up by
+    # the scale factor.
+    painter.drawImage(
+        QRectF(-offset_x, -offset_y, width / scale, height / scale),
+        image,
+        QRectF(0, 0, width, height),
+    )
     painter.restore()
     return True
+
+
+def _device_scale(painter: QPainter) -> float:
+    """Device pixels per logical pixel under the painter's current transform.
+
+    The export renderer draws the scene into a surface twice the page size and
+    scales the result back down, which sharpens glyphs Qt rasterises into it.
+    A Skia raster made at 1x is *upscaled* by that same transform instead, so
+    the pass that sharpens Qt's text was softening Skia's — measurably: 56%
+    more half-lit edge pixels per unit of ink, and visible as a grey halo at
+    any zoom. Canvas zoom has the same shape of problem.
+
+    The larger of the two axes, so anisotropic or rotated transforms sample at
+    least finely enough; 1.0 on anything unreadable.
+    """
+    try:
+        transform = painter.transform()
+        scale = max(
+            math.hypot(transform.m11(), transform.m12()),
+            math.hypot(transform.m21(), transform.m22()),
+        )
+    except Exception:
+        return 1.0
+    if not math.isfinite(scale) or scale <= 0:
+        return 1.0
+    return scale
 
 
 def _report_once(key: str, exc: BaseException) -> None:

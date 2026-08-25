@@ -72,7 +72,7 @@ CLIP_CASES = {
 def test_nothing_is_drawn_against_the_surface_edge(renderer, name):
     """Ink touching an edge means the surface was sized too small."""
     text = "ありがとう" if CLIP_CASES[name].vertical else "Hello world"
-    rgba, _ = renderer.render(TextRenderSpec(text=text, style=CLIP_CASES[name]))
+    rgba, _, _ = renderer.render(TextRenderSpec(text=text, style=CLIP_CASES[name]))
     assert not _touches_edge(rgba), f"{name}: ink reaches the surface edge"
 
 
@@ -82,16 +82,16 @@ def test_a_line_is_not_re_wrapped_at_its_own_width(renderer):
     One line of text must occupy one line's worth of height.
     """
     style = TextStyle(font_size=24, font_family="")
-    one_line, _ = renderer.render(TextRenderSpec(text="Hello world", style=style))
-    two_lines, _ = renderer.render(TextRenderSpec(text="Hello\nworld", style=style))
+    one_line, _, _ = renderer.render(TextRenderSpec(text="Hello world", style=style))
+    two_lines, _, _ = renderer.render(TextRenderSpec(text="Hello\nworld", style=style))
     assert one_line.shape[0] < two_lines.shape[0]
 
 
 def test_letter_spacing_widens_the_surface(renderer):
-    plain, _ = renderer.render(
+    plain, _, _ = renderer.render(
         TextRenderSpec(text="Hello", style=TextStyle(font_size=24))
     )
-    spaced, _ = renderer.render(
+    spaced, _, _ = renderer.render(
         TextRenderSpec(text="Hello", style=TextStyle(font_size=24, letter_spacing=8.0))
     )
     assert spaced.shape[1] > plain.shape[1]
@@ -106,8 +106,8 @@ def test_line_spacing_moves_the_second_line_down(renderer):
     tight = TextStyle(font_size=24, font_family="", line_spacing=1.0)
     loose = TextStyle(font_size=24, font_family="", line_spacing=2.5)
 
-    tight_rgba, _ = renderer.render(TextRenderSpec(text="A\nB", style=tight))
-    loose_rgba, _ = renderer.render(TextRenderSpec(text="A\nB", style=loose))
+    tight_rgba, _, _ = renderer.render(TextRenderSpec(text="A\nB", style=tight))
+    loose_rgba, _, _ = renderer.render(TextRenderSpec(text="A\nB", style=loose))
 
     # The gap between the two lines is the run of blank rows between them.
     def blank_run(rgba):
@@ -120,8 +120,8 @@ def test_line_spacing_moves_the_second_line_down(renderer):
 
 def test_outline_grows_the_surface_symmetrically(renderer):
     style = TextStyle(font_size=24, font_family="")
-    plain, plain_origin = renderer.render(TextRenderSpec(text="Hi", style=style))
-    outlined, outlined_origin = renderer.render(
+    plain, plain_origin, _ = renderer.render(TextRenderSpec(text="Hi", style=style))
+    outlined, outlined_origin, _ = renderer.render(
         TextRenderSpec(text="Hi", style=style, outlines=(OutlineLayer(4.0, "#ffffff"),))
     )
     assert outlined.shape[0] == plain.shape[0] + 8
@@ -132,7 +132,7 @@ def test_outline_grows_the_surface_symmetrically(renderer):
 
 def test_narrower_outline_stays_visible_over_a_wider_one(renderer):
     """Widest first, or a thick stroke buries the thin one under it."""
-    rgba, _ = renderer.render(TextRenderSpec(
+    rgba, _, _ = renderer.render(TextRenderSpec(
         text="O",
         style=TextStyle(font_size=48, font_family=""),
         fill_color="#000000",
@@ -148,13 +148,13 @@ def test_narrower_outline_stays_visible_over_a_wider_one(renderer):
 
 def test_shadow_offsets_the_surface_only_in_its_own_direction(renderer):
     style = TextStyle(font_size=24, font_family="")
-    down_right, origin = renderer.render(TextRenderSpec(
+    down_right, origin, _ = renderer.render(TextRenderSpec(
         text="Hi", style=style, shadow=ShadowSpec("#000000", (6.0, 6.0), 0.0)
     ))
     # Offset down and right: nothing is added above or to the left.
     assert origin == (0.0, 0.0)
 
-    up_left, origin_up_left = renderer.render(TextRenderSpec(
+    up_left, origin_up_left, _ = renderer.render(TextRenderSpec(
         text="Hi", style=style, shadow=ShadowSpec("#000000", (-6.0, -6.0), 0.0)
     ))
     assert origin_up_left == (6.0, 6.0)
@@ -162,7 +162,7 @@ def test_shadow_offsets_the_surface_only_in_its_own_direction(renderer):
 
 
 def test_gradient_produces_more_than_one_colour(renderer):
-    rgba, _ = renderer.render(TextRenderSpec(
+    rgba, _, _ = renderer.render(TextRenderSpec(
         text="GRADIENT",
         style=TextStyle(font_size=36, font_family=""),
         fill_color="#ff0000",
@@ -176,7 +176,7 @@ def test_gradient_produces_more_than_one_colour(renderer):
 def test_vertical_columns_run_right_to_left(renderer):
     """The first source line is the rightmost column, as vertical CJK reads."""
     style = TextStyle(font_size=28, font_family="", vertical=True)
-    rgba, _ = renderer.render(TextRenderSpec(text="ア\nB", style=style))
+    rgba, _, _ = renderer.render(TextRenderSpec(text="ア\nB", style=style))
 
     columns = _alpha(rgba).any(axis=0).nonzero()[0]
     midpoint = rgba.shape[1] / 2
@@ -186,7 +186,7 @@ def test_vertical_columns_run_right_to_left(renderer):
 
 
 def test_empty_text_renders_an_empty_surface(renderer):
-    rgba, _ = renderer.render(
+    rgba, _, _ = renderer.render(
         TextRenderSpec(text="", style=TextStyle(font_size=24))
     )
     assert _alpha(rgba).sum() == 0
@@ -211,5 +211,5 @@ def test_the_cap_admits_a_realistically_large_block(renderer):
         style=TextStyle(font_size=24),
         box=(4000.0, 4000.0),
     )
-    rgba, _ = renderer.render(ok)
+    rgba, _, _ = renderer.render(ok)
     assert rgba.shape[0] >= 4000

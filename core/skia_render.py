@@ -62,6 +62,14 @@ MAX_SURFACE_PIXELS = 64 * 1024 * 1024
 #: moving centred text by more than half a pixel.
 LAYOUT_SLACK_PX = 1.0
 
+#: Ceiling on the device scale a text raster is rendered at.
+#:
+#: The export renderer works at 2x, and a hidpi canvas can ask for more. Past
+#: about 3x the extra samples stop being visible after the downscale while the
+#: surface keeps growing with the square of the scale, so this bounds both the
+#: memory and the time a single block can cost.
+MAX_RENDER_SCALE = 3.0
+
 #: Qt's shadow blur radius to Skia's Gaussian sigma.
 #:
 #: Fitted, not derived. QGraphicsDropShadowEffect's "blur radius" is not a
@@ -242,12 +250,28 @@ class SkiaTextRenderer:
 
     # -- painting ----------------------------------------------------------
 
-    def render(self, spec: TextRenderSpec) -> tuple[np.ndarray, tuple[float, float]]:
-        """Return ``(rgba, (offset_x, offset_y))``.
+    def render(
+        self, spec: TextRenderSpec, scale: float = 1.0
+    ) -> tuple[np.ndarray, tuple[float, float], float]:
+        """Return ``(rgba, (offset_x, offset_y), scale)``.
 
         The offset is where the text box's own top-left sits inside the
-        returned array; it is non-zero whenever a shadow or outline bleeds to
-        the left or above. Callers blit at `item_pos - offset`.
+        returned array, in **logical** units; it is non-zero whenever a shadow
+        or outline bleeds to the left or above. Callers blit at
+        `item_pos - offset` and size the target rect logically.
+
+        `scale` renders the same layout into a surface that many times larger,
+        with the canvas scaled to match, so the geometry is untouched and only
+        the sampling gets finer. Pass the painter's device scale: the export
+        renderer draws the scene into a 2x surface and scales it back down, and
+        a bitmap rasterised at 1x is *upscaled* by that transform, so the pass
+        that sharpens Qt's glyphs was softening Skia's. It matters on the
+        canvas too, where zooming in otherwise magnifies a bitmap.
+
+        The returned scale is the one actually used, which may be less than the
+        one asked for: a large block at 2x is four times the pixels, and
+        clamping to the surface cap keeps a big shadowed block rendering
+        slightly soft instead of failing over to Qt mid-page.
         """
         content_w, content_h = self.content_size(spec)
         left, top, right, bottom = self.bleed(spec)
@@ -260,18 +284,37 @@ class SkiaTextRenderer:
         layout_width = self._layout_width(content_w, spec)
         padded_w = layout_width + 2 * self.measurer.document_margin
 
-        width = int(math.ceil(padded_w + left + right)) or 1
-        height = int(math.ceil(content_h + top + bottom)) or 1
+        logical_w = padded_w + left + right
+        logical_h = content_h + top + bottom
 
-        if width * height > MAX_SURFACE_PIXELS:
+        base_w = int(math.ceil(logical_w)) or 1
+        base_h = int(math.ceil(logical_h)) or 1
+
+        if base_w * base_h > MAX_SURFACE_PIXELS:
             raise SurfaceTooLarge(
-                f"{width}x{height} exceeds the {MAX_SURFACE_PIXELS}px surface cap. "
+                f"{base_w}x{base_h} exceeds the {MAX_SURFACE_PIXELS}px surface cap. "
                 "Render long strips in chunks rather than as one surface."
             )
+
+        # Clamp rather than raise: at 1x this block already fits, so the only
+        # question is how finely to sample it. Dropping to Qt for one block
+        # mid-page would be a visible change of typeface, which is worse than
+        # rendering that block at 1x.
+        scale = max(1.0, min(float(scale), MAX_RENDER_SCALE))
+        while scale > 1.0 and (math.ceil(logical_w * scale)
+                               * math.ceil(logical_h * scale)) > MAX_SURFACE_PIXELS:
+            scale -= 0.25
+
+        width = int(math.ceil(logical_w * scale)) or 1
+        height = int(math.ceil(logical_h * scale)) or 1
 
         surface = skia.Surface.MakeRasterN32Premul(width, height)
         canvas = surface.getCanvas()
         canvas.clear(skia.Color4f(0, 0, 0, 0))
+        if scale != 1.0:
+            # Everything below draws in logical units; this is the only place
+            # that knows about the device scale.
+            canvas.scale(scale, scale)
 
         origin = (left, top)
         if spec.style.vertical:
@@ -283,7 +326,7 @@ class SkiaTextRenderer:
         rgba = image.convert(
             colorType=skia.kRGBA_8888_ColorType, alphaType=skia.kUnpremul_AlphaType
         ).toarray()
-        return rgba, origin
+        return rgba, origin, scale
 
     # -- horizontal --------------------------------------------------------
 
