@@ -651,3 +651,97 @@ def test_layout_width_widens_to_skia_measurement_only_when_unwrapped(qapp):
     assert renderer._layout_width(narrow_box, wrapped) < renderer._layout_width(
         narrow_box, unwrapped
     ), "soft_wrapped is not being honoured — both cases lay out the same width"
+
+
+# ---------------------------------------------------------------------------
+# Vertical CJK: the two engines must agree on the *algorithm*, even where the
+# font metrics they read differ.
+#
+# They do differ, measurably: for CJK text Qt reports the line box of the
+# primary (Latin) font and substitutes glyphs at draw time, while Skia resolves
+# the font that actually contains the glyphs and reads its taller line box.
+# On this machine that is DejaVu Sans against WenQuanYi Zen Hei, and it makes
+# Skia's measurement 6.9% taller for a horizontal CJK line — compounding to
+# 19.3% for a vertical one, where the error is carried by every stacked glyph.
+#
+# Those numbers are font-stack specific and would be a fragile thing to assert.
+# What is not font-specific, and what actually pins the layout contract, is how
+# `line_spacing` is applied: in vertical CJK it is the gap *between columns*
+# (行間), not between stacked glyphs. Both engines must do that, or the same
+# document lays out differently depending on which one drew it.
+# ---------------------------------------------------------------------------
+
+
+@requires_skia
+def test_vertical_line_spacing_widens_columns_without_stretching_glyphs(qapp):
+    """In vertical CJK, line spacing separates columns, not the glyphs in them."""
+    from core.skia_text import SkiaTextMeasurer
+    from core.text_measure import TextStyle
+
+    measurer = SkiaTextMeasurer()
+    text = "縦書きの\nテキスト"
+
+    def measured(line_spacing):
+        return measurer.measure(
+            text,
+            TextStyle(font_family="", font_size=22.0, vertical=True,
+                      line_spacing=line_spacing),
+        )
+
+    tight_w, tight_h = measured(1.0)
+    loose_w, loose_h = measured(2.0)
+
+    assert loose_w > tight_w * 1.5, (
+        "doubling line spacing did not widen the columns — vertical line "
+        f"spacing is not being applied ({tight_w:.1f} -> {loose_w:.1f})"
+    )
+    assert loose_h == pytest.approx(tight_h), (
+        "line spacing stretched the glyph stack; in vertical text it belongs "
+        f"between columns, not between glyphs ({tight_h:.1f} -> {loose_h:.1f})"
+    )
+
+
+def test_qt_vertical_line_spacing_has_the_same_meaning(qapp):
+    """The sibling half, so the two engines are pinned to one another's rule."""
+    from app.ui.canvas.text_item import TextBlockItem
+
+    def measured(line_spacing):
+        item = TextBlockItem(text="x")
+        item.set_font_size(22.0)
+        item.set_line_spacing(line_spacing)
+        item.set_text("縦書きの\nテキスト", 250.0)
+        item.set_vertical(True)
+        rect = item.text_rect()
+        return rect.width(), rect.height()
+
+    tight_w, tight_h = measured(1.0)
+    loose_w, loose_h = measured(2.0)
+
+    assert loose_w > tight_w * 1.3
+    assert loose_h == pytest.approx(tight_h)
+
+
+@requires_skia
+def test_latin_measurement_agrees_between_engines(qapp):
+    """Latin text is the common case and the engines must measure it alike.
+
+    Loose enough not to break on a runner with a different font stack, tight
+    enough to catch a real divergence: the observed gap is about 1% of width
+    and none of height.
+    """
+    from core.skia_text import SkiaTextMeasurer
+    from core.text_measure import TextStyle
+    from app.ui.canvas.text_item import TextBlockItem
+
+    text = "Sphinx of black"
+    item = TextBlockItem(text="x")
+    item.set_font_size(22.0)
+    item.set_text(text, 250.0)
+    qt_rect = item.text_rect()
+
+    skia_w, skia_h = SkiaTextMeasurer().measure(
+        text, TextStyle(font_family="", font_size=22.0, line_spacing=1.2)
+    )
+
+    assert skia_w == pytest.approx(qt_rect.width(), rel=0.05)
+    assert skia_h == pytest.approx(qt_rect.height(), rel=0.05)
