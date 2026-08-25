@@ -19,7 +19,7 @@ from app.ui.commands.box import DeleteBoxesCommand
 
 from modules.utils.textblock import TextBlock
 from modules.utils.file_handler import FileHandler
-from modules.utils.pipeline_config import validate_settings
+from app.validation import validate_settings
 from modules.utils.download import mandatory_models, set_download_callback, ensure_mandatory_models
 from pipeline.main_pipeline import ComicTranslatePipeline
 
