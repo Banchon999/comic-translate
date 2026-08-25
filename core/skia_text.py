@@ -57,7 +57,9 @@ inventing a second convention.
 
 from __future__ import annotations
 
+import json
 import logging
+import os
 import subprocess
 import sys
 import unicodedata
@@ -159,16 +161,79 @@ _self_test_result: object = False
 def self_test(force: bool = False) -> Optional[str]:
     """Why Skia cannot be used here, or None if it can. Cached after the first call."""
     global _self_test_result
-    if force or _self_test_result is False:
-        _self_test_result = (
-            _self_test_out_of_process() if _is_frozen() else _run_self_test()
+    if not force and _self_test_result is not False:
+        return _self_test_result  # type: ignore[return-value]
+
+    if not _is_frozen():
+        _self_test_result = _run_self_test()
+    else:
+        # The frozen probe re-launches the whole executable, which costs a
+        # second or more of startup on every run. The answer only changes when
+        # the installation does, so it is remembered against a fingerprint of
+        # the executable and re-taken after an update.
+        cached = None if force else _read_cached_verdict()
+        if cached is not None:
+            _self_test_result = cached[1]
+        else:
+            _self_test_result = _self_test_out_of_process()
+            _write_cached_verdict(_self_test_result)
+
+    if _self_test_result is not None:
+        logging.getLogger(__name__).warning(
+            "Skia self-test failed, falling back to the Qt text engine: %s",
+            _self_test_result,
         )
-        if _self_test_result is not None:
-            logging.getLogger(__name__).warning(
-                "Skia self-test failed, falling back to the Qt text engine: %s",
-                _self_test_result,
-            )
     return _self_test_result  # type: ignore[return-value]
+
+
+def _install_fingerprint() -> str:
+    """Identifies this build, so the cached verdict is dropped when it changes."""
+    try:
+        stat = os.stat(sys.executable)
+        return f"{sys.executable}|{stat.st_size}|{int(stat.st_mtime)}"
+    except Exception:
+        return sys.executable
+
+
+def _verdict_path() -> Optional[str]:
+    try:
+        from modules.utils.paths import get_user_data_dir
+
+        directory = get_user_data_dir()
+        os.makedirs(directory, exist_ok=True)
+        return os.path.join(directory, "skia-self-test.json")
+    except Exception:
+        return None
+
+
+def _read_cached_verdict() -> Optional[tuple[str, Optional[str]]]:
+    """The remembered verdict for *this* build, or None to re-probe."""
+    path = _verdict_path()
+    if not path:
+        return None
+    try:
+        with open(path, encoding="utf-8") as handle:
+            stored = json.load(handle)
+        if stored.get("fingerprint") != _install_fingerprint():
+            return None
+        return (stored["fingerprint"], stored.get("reason"))
+    except Exception:
+        return None
+
+
+def _write_cached_verdict(reason: Optional[str]) -> None:
+    path = _verdict_path()
+    if not path:
+        return
+    try:
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(
+                {"fingerprint": _install_fingerprint(), "reason": reason}, handle
+            )
+    except Exception:
+        logging.getLogger(__name__).debug(
+            "could not cache the Skia self-test verdict", exc_info=True
+        )
 
 
 def _is_frozen() -> bool:

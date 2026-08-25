@@ -115,3 +115,63 @@ def test_the_probe_reports_a_failure_by_exit_code(monkeypatch):
 
     monkeypatch.setattr(skia_text, "_run_self_test", explode)
     assert comic._run_skia_self_test() == 2
+
+
+# ---------------------------------------------------------------------------
+# Caching the frozen verdict.
+#
+# The frozen probe re-launches the whole executable, which costs a second or
+# more of startup. Paying that on every launch would be a visible regression
+# for a shipped app, so the answer is remembered against a fingerprint of the
+# executable — and has to be dropped when that changes, or a broken build would
+# inherit the previous one's clean bill of health.
+# ---------------------------------------------------------------------------
+
+
+def test_the_verdict_is_remembered_for_this_build(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    skia_text._write_cached_verdict(None)
+
+    cached = skia_text._read_cached_verdict()
+    assert cached is not None and cached[1] is None
+
+
+def test_a_failure_is_remembered_too(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    skia_text._write_cached_verdict("the runtime is broken")
+
+    cached = skia_text._read_cached_verdict()
+    assert cached is not None and cached[1] == "the runtime is broken"
+
+
+def test_a_different_build_is_not_trusted(tmp_path, monkeypatch):
+    """An update must be re-probed, not given the old build's verdict."""
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    skia_text._write_cached_verdict(None)
+
+    monkeypatch.setattr(skia_text, "_install_fingerprint", lambda: "a different build")
+    assert skia_text._read_cached_verdict() is None
+
+
+def test_an_unreadable_cache_just_means_probe_again(tmp_path, monkeypatch):
+    """A corrupt cache must never be fatal — it only decides whether to re-probe."""
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    path = skia_text._verdict_path()
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write("not json at all")
+    assert skia_text._read_cached_verdict() is None
+
+
+@requires_skia
+def test_the_cache_is_not_consulted_when_running_from_source(tmp_path, monkeypatch):
+    """Only a frozen build pays for the out-of-process probe, so only it caches.
+
+    A developer running from a checkout must see the effect of their change
+    immediately, not a verdict recorded before it.
+    """
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    monkeypatch.setattr(skia_text, "_is_frozen", lambda: False)
+    skia_text._write_cached_verdict("a stale verdict that must be ignored")
+
+    skia_text._self_test_result = False
+    assert skia_text.self_test() is None
