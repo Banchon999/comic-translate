@@ -243,3 +243,30 @@ def test_a_probe_that_cannot_start_declines_skia(monkeypatch):
         "run the crashing operation in the process that must survive it"
     )
     assert "could not be run" in reason
+
+
+@requires_skia
+def test_the_probe_exercises_the_real_renderer(qapp):
+    """A probe that does not resemble the work it stands for proves little.
+
+    The primitive checks cover Skia's own objects; this covers what the app
+    asks of them — per-run styles, an outline stroke, a blurred shadow and a
+    scaled surface. Those are the calls a mismatched native dependency tends to
+    fail in, and building one plain paragraph reaches none of them.
+    """
+    assert skia_text._render_path_self_test() is None
+
+
+@requires_skia
+def test_the_probe_does_not_recurse_through_the_renderer(qapp):
+    """`SkiaTextRenderer.__init__` asks `is_available()`, which runs the probe.
+
+    Without a re-entrancy guard that is an infinite regress — and it is not
+    hypothetical: driving the real renderer from the probe produced exactly
+    that, thousands of nested RuntimeErrors deep.
+    """
+    skia_text._self_test_result = False
+    assert skia_text.self_test(force=True) is None
+    assert skia_text._self_test_running is False, (
+        "the re-entrancy flag was left set, so nothing would probe again"
+    )

@@ -108,16 +108,39 @@ def is_available() -> bool:
     in a frozen build runs them in a separate process, so a fault takes the
     probe down instead of the app.
     """
-    return skia is not None and self_test() is None
+    if skia is None:
+        return False
+    # The probe drives the real renderer, whose constructor asks this question.
+    # Answering it by running the probe again is an infinite regress, so while
+    # a probe is in flight the answer is "yes" — that is precisely what the
+    # probe is in the middle of establishing.
+    if _self_test_running:
+        return True
+    return self_test() is None
 
 
 def unavailable_reason() -> Optional[str]:
     if skia is None:
         return f"skia-python is not importable: {_SKIA_IMPORT_ERROR}"
+    if _self_test_running:
+        return None
     return self_test()
 
 
+#: True while a probe is executing, to keep `is_available` from re-entering it.
+_self_test_running = False
+
+
 def _run_self_test() -> Optional[str]:
+    global _self_test_running
+    _self_test_running = True
+    try:
+        return _run_self_test_inner()
+    finally:
+        _self_test_running = False
+
+
+def _run_self_test_inner() -> Optional[str]:
     """Exercise every Skia component the render path needs. None means healthy.
 
     Deliberately end-to-end rather than a set of `is not None` checks: the
@@ -149,6 +172,45 @@ def _run_self_test() -> Optional[str]:
             colorType=skia.kRGBA_8888_ColorType,
             alphaType=skia.kUnpremul_AlphaType,
         ).toarray()
+    except Exception as exc:
+        return f"{type(exc).__name__}: {exc}"
+
+    return _render_path_self_test()
+
+
+def _render_path_self_test() -> Optional[str]:
+    """Drive the real renderer, not a bare paragraph.
+
+    A probe that does not resemble the work being probed can pass while the
+    thing it stands for crashes. The checks above cover Skia's own primitives;
+    this covers what the app actually asks of them — per-run styles pushed and
+    popped, an outline stroke, a blurred shadow, a mask filter, an image filter
+    and a scaled surface. Those are the calls a mismatched native dependency
+    tends to fail in, and none of them is reached by building one plain
+    paragraph.
+
+    Imported here rather than at module scope because `core.skia_render`
+    imports this module.
+    """
+    try:
+        from core.skia_render import (
+            OutlineLayer,
+            ShadowSpec,
+            SkiaTextRenderer,
+            TextRenderSpec,
+        )
+
+        spec = TextRenderSpec(
+            text="Ag\nyj",                      # two lines: exercises the line loop
+            style=TextStyle(font_family="", font_size=18.0, line_spacing=1.2),
+            fill_color="#101014",
+            outlines=(OutlineLayer(width=2.0, color="#ffffff"),),
+            shadow=ShadowSpec(color="#a0000000", offset=(2.0, 2.0), blur=4.0),
+            soft_wrapped=False,
+        )
+        rgba, _, _ = SkiaTextRenderer().render(spec, scale=2.0)
+        if getattr(rgba, "size", 0) <= 0:
+            return "the renderer produced an empty raster"
     except Exception as exc:
         return f"{type(exc).__name__}: {exc}"
     return None
