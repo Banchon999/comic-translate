@@ -190,3 +190,40 @@ def test_the_merged_image_is_what_a_non_photoshop_viewer_will_show(exported):
     assert rgb.max() > rgb.min(), (
         "the merged image is a single flat colour, not the page"
     )
+
+
+def test_layer_pixels_use_a_compression_every_reader_implements(exported):
+    """PhotoshopAPI defaults to ZipPrediction; almost nothing but Photoshop reads it.
+
+    This is what made the export open as a blank canvas: the document size and
+    every group and layer name parse fine, because those live in the layer
+    *records*, and then each channel's pixels turn out to be Zip-compressed and
+    a reader without Zip support recovers nothing from them. Photoshop itself
+    writes RLE.
+
+    Read straight out of the bytes — psd-tools decodes Zip perfectly well, so
+    the assertions above stay green either way, which is exactly why they did
+    not catch this.
+    """
+    from psd_tools.psd import PSD
+    from psd_tools.constants import Compression
+
+    _, path = exported
+    with open(path, "rb") as handle:
+        raw = PSD.read(handle)
+
+    layer_info = raw.layer_and_mask_information.layer_info
+    readable = {Compression.RAW, Compression.RLE}
+
+    checked = 0
+    for record, channels in zip(layer_info.layer_records, layer_info.channel_image_data):
+        if record.right - record.left <= 0 or record.bottom - record.top <= 0:
+            continue  # a group divider or a text layer: no pixels to compress
+        checked += 1
+        used = {channel.compression for channel in channels}
+        assert used <= readable, (
+            f"layer {record.name!r} stores its pixels as {used} — a reader "
+            f"without Zip support decodes nothing and the layer appears empty"
+        )
+
+    assert checked >= 2, "expected the Raw Image and patch layers to have pixels"

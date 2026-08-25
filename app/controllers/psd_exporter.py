@@ -171,6 +171,8 @@ def _write_page_psd(page: PsdPageData, out_path: str) -> None:
 	)
 	doc.add_layer(base_layer)
 
+	_force_rle_compression(doc)
+
 	# Force Photoshop to re-render all text layers on open
 	invalidate = getattr(doc, "invalidate_text_cache", None)
 	if callable(invalidate):
@@ -1038,6 +1040,34 @@ def _map_justification(alignment: Any) -> Any | None:
 		if hasattr(enum_obj, name):
 			return getattr(enum_obj, name)
 	return None
+
+
+def _force_rle_compression(doc: Any) -> None:
+	"""Make the document write its layer pixels with RLE, not ZipPrediction.
+
+	PhotoshopAPI defaults to ZipPrediction, the least widely implemented of
+	PSD's four compression methods -- Photoshop itself writes RLE. A reader
+	that only handles Raw and RLE recovers *nothing* from a ZipPrediction
+	channel, so the file opens at the right size with every group and layer
+	named correctly and not one pixel anywhere: the whole canvas comes up
+	transparent. Same class of bug as the black merged image section, and the
+	same reason it matters -- an export only Photoshop can open is not an
+	export.
+
+	RLE costs file size on artwork that Zip packs well, and buys the file
+	being readable everywhere. `compression` is a write-only property on
+	LayeredFile and setting it is a no-op on the layer constructors, so it has
+	to be set here on the document. Guarded because an install whose enum
+	predates `rle` should still export, badly, rather than not at all.
+	"""
+	rle = getattr(getattr(psapi, "enum", None), "Compression", None)
+	rle = getattr(rle, "rle", None)
+	if rle is None:
+		return
+	try:
+		doc.compression = rle
+	except Exception:  # pragma: no cover - depends on the PhotoshopAPI build
+		logger.exception("Could not set the PSD layer compression; layers may not be readable outside Photoshop")
 
 
 def _to_psapi_image_data(rgb_image: np.ndarray) -> np.ndarray:
