@@ -680,3 +680,54 @@ are answered and resolved.
 
 **Status:** 464 tests passing, ruff clean, headless 87/87, preview/export
 parity 0 px, feature matrix unchanged.
+
+### Wave 8 — the first Skia-default build crashed, and why nothing caught it
+
+A frozen Windows build closed itself the instant Render was pressed, with **no
+log at all**. Two claims recorded earlier in this document were wrong, and
+together they produced exactly that failure.
+
+**"The guarded import means it degrades rather than crashes" is false for
+native faults.** It holds for import failure only. The render path calls into
+native Skia, and an access violation there is not a Python exception — the
+`except Exception` in `paint_item` never runs, because the interpreter is
+already gone.
+
+**`is_available()` only proved the module imported.** It never checked that
+`FontMgr`, `FontCollection`, `Unicode.ICU_Make` or an actual paragraph build
+work — precisely what can differ inside a bundle. So Skia was made the default
+on a runtime that could not run.
+
+**Nothing caught it because every gate shared the same blind spot.** The tests,
+the parity harness and the feature matrix all run against a *source* checkout
+where the runtime is healthy. The build workflow's assertion checked only that
+`skia*.pyd` was present in `dist` — the file being there is not the runtime
+working, which is the same mistake `is_available()` made.
+
+Fixes:
+
+- `self_test()` builds a font collection, lays out a paragraph and rasterises a
+  surface — what the render path actually does. In a **frozen** build it runs
+  in a separate process via a new `--skia-self-test` entry point, so a native
+  fault takes the disposable probe down instead of the app. A failed or crashed
+  probe means Qt, and the engine, the engine list and the measurer all agree on
+  it.
+- `app/crash_log.py` routes logging, `sys.excepthook`, `threading.excepthook`
+  and Qt's own message handler to a rotating file under the user data
+  directory, and arms **`faulthandler`** against it. That is the load-bearing
+  part: it is the only thing that records a native fault, and its output names
+  the loaded extension modules, which identifies the faulting library. Verified
+  against a real SIGSEGV rather than asserted.
+  Log path: `<user data>/logs/comic-translate.log`.
+- The Windows build workflows now run the **built exe** with `--skia-self-test`
+  and fail if the runtime does not work.
+
+**Honest limit:** the self-test covers Skia's core runtime. If the fault is
+elsewhere in the render path it will pass and the app will still crash — but
+the crash log will now say where, which it could not before.
+
+**Immediate workaround for a shipped build:** untick
+`Settings > Tools > Draw text with Skia`. The checkbox is wired to
+`apply_text_engine()` on change, so it takes effect without a restart.
+
+**Status:** 473 tests passing, ruff clean, headless 87/87.
