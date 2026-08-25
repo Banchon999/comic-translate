@@ -538,7 +538,7 @@ class BatchProcessor:
             get_best_render_area(blk_list, image, inpaint_input_img)
 
             font = render_settings.font_family
-            setting_font_color = QColor(render_settings.color)
+            setting_font_color = render_settings.color
 
             max_font_size = render_settings.max_font_size
             min_font_size = render_settings.min_font_size
@@ -588,7 +588,7 @@ class BatchProcessor:
                     self.main_page.blk_rendered.emit(translation, font_size, blk, image_path)
 
                 # Smart Color Override
-                font_color = get_smart_text_color(blk.font_color, setting_font_color)
+                font_color = QColor(get_smart_text_color(blk.font_color, setting_font_color))
 
                 # Use TextItemProperties for consistent text item creation
                 text_props = TextItemProperties(

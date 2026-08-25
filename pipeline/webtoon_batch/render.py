@@ -66,7 +66,7 @@ class RenderMixin:
 
         render_settings = self.main_page.render_settings()
         font = render_settings.font_family
-        base_font_color = QColor(render_settings.color)
+        base_font_color = render_settings.color
         max_font_size = render_settings.max_font_size
         min_font_size = render_settings.min_font_size
         line_spacing = float(render_settings.line_spacing)
@@ -133,7 +133,7 @@ class RenderMixin:
                 return_metrics=True,
             )
 
-            font_color = get_smart_text_color(block.font_color, base_font_color)
+            font_color = QColor(get_smart_text_color(block.font_color, base_font_color))
             if should_emit_live:
                 render_block = block.deep_copy()
                 render_block.translation = wrapped_translation

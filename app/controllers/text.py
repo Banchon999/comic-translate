@@ -126,10 +126,9 @@ class TextController:
         render_settings = self.render_settings()
         font_family = font_family_for_block(render_settings, blk)
         text_color_str = render_settings.color
-        text_color = QColor(text_color_str)
 
         # Smart Color Override
-        text_color = get_smart_text_color(blk.font_color, text_color)
+        text_color = QColor(get_smart_text_color(blk.font_color, text_color_str))
 
         id = render_settings.alignment_id
         alignment = self.main.button_to_alignment[id]
@@ -938,7 +937,7 @@ class TextController:
             direction = render_settings.direction
             max_font_size = self.main.settings_page.get_max_font_size()
             min_font_size = self.main.settings_page.get_min_font_size()
-            setting_font_color = QColor(render_settings.color)
+            setting_font_color = render_settings.color
             outline_color = (
                 QColor(render_settings.outline_color)
                 if render_settings.outline
@@ -1002,7 +1001,7 @@ class TextController:
                             return_metrics=True,
                         )
 
-                        font_color = get_smart_text_color(blk.font_color, setting_font_color)
+                        font_color = QColor(get_smart_text_color(blk.font_color, setting_font_color))
                         text_props = TextItemProperties(
                             text=wrapped,
                             font_family=blk_font_family,

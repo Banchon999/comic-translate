@@ -1,7 +1,7 @@
 import numpy as np
 import base64
 import imkit as imk
-from PySide6.QtGui import QColor
+from core.color import resolve_text_color
 from typing import Any
 
 from modules.utils.textblock import TextBlock
@@ -255,8 +255,8 @@ def encode_image_array(img_array: np.ndarray):
 
 def get_smart_text_color(
     detected_color: tuple|str,
-    setting_color: QColor
-    ) -> QColor:
+    setting_color: tuple|str,
+    ) -> str|None:
     """
     Determines the best text color to use based on the detected color from the image
     and the user's preferred setting color.
@@ -265,24 +265,11 @@ def get_smart_text_color(
       - If detection succeeded, use the detected colour (it came from
         actual pixel analysis and is most likely correct).
       - If detection is empty / invalid, fall back to the user setting.
+
+    Returns a canonical hex string. Callers on the Qt side wrap it in a
+    QColor at the point of use; this module must stay importable without Qt.
     """
-    if not detected_color:
-        return setting_color
-
-    try:
-        if isinstance(detected_color, str):
-            detected_color = QColor(detected_color)
-        else:
-            detected_color = QColor(*detected_color)
-        if not detected_color.isValid():
-            return setting_color
-
-        return detected_color
-
-    except Exception:
-        pass
-
-    return setting_color
+    return resolve_text_color(detected_color, setting_color)
 
 def _resolve_block_crop_bounds(
     img: np.ndarray,
