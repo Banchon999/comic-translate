@@ -872,3 +872,64 @@ real-page E2E unchanged.
 | If it was not | The self-test catches a runtime failure before Skia is chosen; the render guard falls back on the next launch; the faulthandler log names the faulting module |
 | Residual worst case | One crash, then the app self-heals to Qt |
 | User workaround, no rebuild | Untick `Settings > Tools > Draw text with Skia` — takes effect immediately |
+
+### Wave 10 — the actual cause: a missing ICU data file
+
+The `build-windows` run found it, and it is **not** the data race Wave 9
+proposed. That guess was wrong; the build log settled it:
+
+```
+SkIcuLoader: datafile missing: ...\dist\ComicTranslate\icudtl.dat
+SkIcuLoader: datafile missing: ...\dist\ComicTranslate\_internal\icudtl.dat
+skia.Unicode.ICU_Make() returned nothing
+```
+
+On Windows, skia-python loads ICU from an `icudtl.dat` beside the executable.
+PyInstaller does not collect it — it is a data file, so nothing in the import
+graph points at it. `ICU_Make()` then returns **None**, and the first
+`ParagraphBuilder.make(style, collection, None)` dereferences a null pointer: a
+native access violation, no traceback, process gone the instant Render is
+pressed.
+
+**Why none of the testing here could have caught it.** On Linux skia-python
+links ICU *statically* into the single `.so` — verified by listing the
+installed package, which contains no `.dat` at all. The dependency exists only
+on Windows, and only once frozen. Every gate in this repo runs on Linux from a
+source checkout.
+
+The wheel does ship the file, as a `.data` entry — confirmed by downloading
+`skia_python-144.0.post2-cp314-cp314-win_amd64.whl` and listing it:
+
+| Entry | Size |
+|---|---|
+| `skia.cp314-win_amd64.pyd` | 15.21 MB |
+| `skia_python-*.data/data/Lib/site-packages/icudtl.dat` | 10.47 MB |
+
+pip installs it beside `skia.pyd`; the build now locates it there and adds it
+to the bundle, failing loudly if it is absent.
+
+**Two bugs in this branch's own tooling, both visible in that same log:**
+
+1. `& $exe --skia-self-test` does not wait for a `--windowed` build. It
+   returned immediately with `$LASTEXITCODE` empty, which compares unequal to
+   zero — so the step would have failed *even on a healthy runtime*. It caught
+   this one by luck. Now `Start-Process -Wait -PassThru`, with stderr
+   redirected since a windowed exe has no console to inherit.
+2. The first locator `rglob`'d from the skia module's parent — which on Windows
+   *is* site-packages, so it walked every installed package. Minutes on
+   `build-windows-full` with torch collected, for a file whose path is known.
+   Now checked directly.
+
+**What actually worked.** The self-test caught this exactly where it was placed
+to: the build failed with a precise reason instead of shipping. The specific
+`if unicode_ is None` check added in Wave 8 is what produced the diagnosis.
+
+**What did not.** Wave 9 named the data race "the likeliest candidate" for this
+crash. It was not the cause. The race is a genuine bug and the fix stands, but
+it was reasoning in the absence of evidence, and the evidence was one workflow
+dispatch away the whole time. The lesson is the cheap decisive test beats the
+plausible theory — the platform difference that hid this could not have been
+reasoned around, only observed.
+
+**Status:** 495 tests passing, ruff clean, headless 87/87. Awaiting a
+`build-windows` run on the fix.
