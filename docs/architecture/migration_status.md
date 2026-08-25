@@ -299,3 +299,76 @@ asserting a property of the runner's font set — which is what one of them did,
 and it failed on CI while passing locally. The Qt/Skia agreement cases still
 run everywhere: both engines fall back identically, so comparing them stays
 meaningful even where the script does not render.
+
+---
+
+## 2026-08-25 — Pre-ship audit: five real defects found and Wave 1 fixed
+
+The greenfield rebuild was cancelled; this branch is being closed out to a
+shippable standard instead. A gap audit was run over the whole branch before
+declaring it done, and it found **five correctness defects**, not just untested
+paths. Two of them contradicted claims made in this very file.
+
+### Corrections to what this document previously claimed
+
+The Phase 2 entry above says selection, handles, **editing** and undo are
+"untouched — only the pixels change", and lists **drop shadow** under "features
+covered". Both were wrong:
+
+- **Editing was broken under Skia.** The Skia branch in `TextBlockItem.paint`
+  returned before `super().paint()`, and `super().paint()` is what draws Qt's
+  caret and drag-selection band. Typing into a block with Skia on gave no
+  cursor and no visible selection.
+- **The drop shadow was drawn twice.** `apply_shadow()` attached a
+  `QGraphicsDropShadowEffect` unconditionally while Skia was also baking a
+  shadow into its raster.
+
+Neither failed a test, and neither was caught by the preview/export parity
+gate — parity compares Skia against Skia, so a defect present in both paths
+passes. That is a real limit of that gate and worth remembering.
+
+### The five defects
+
+| # | Defect | Status |
+|---|---|---|
+| 1 | Caret and selection invisible while editing under Skia | **fixed** |
+| 2 | Per-range rich text flattened to a single style | open |
+| 3 | Per-range outlines lose their range and stroke the whole block | open |
+| 4 | Drop shadow rendered twice | **fixed** |
+| 5 | Text direction captured but never applied — RTL ignored | **fixed** |
+
+Plus: curvature falls back to Qt (disclosed, but unguarded by any test), and
+vertical CJK ignores letter spacing.
+
+### Wave 1 — fixed and verified
+
+- **Editing stays on the Qt path.** The Skia branch is now guarded by
+  `not self.editing_mode`; a block flips back to Skia when focus leaves it.
+- **Shadow.** `apply_shadow()` clears the Qt effect when Skia is painting, and
+  `controller.apply_text_engine` re-applies it across every text item on an
+  engine switch — without that, a page already on screen keeps whichever
+  treatment it was built with.
+- **RTL.** skia-python 144 exposes *no* direction setter: `ParagraphStyle` has
+  only `setTextAlign`/`setStrutStyle`/`setTextStyle`, and there is no
+  `TextDirection` enum at all. Verified by inspection, not assumed. The
+  direction is therefore carried in the text itself, wrapped in Unicode
+  directional isolates (`core/skia_text.apply_base_direction`), applied
+  identically by the measurer and the renderer so they cannot diverge.
+  Proven: rendering `"abc مرحبا"` LTR vs RTL now differs by 2,998 px under
+  Skia. It differed by zero before — the string opens with a strong LTR
+  character, so ICU's implicit guess could never have flipped it.
+- **Shadow blur fidelity.** Skia's shadow measured 2.3–2.6× more diffuse than
+  Qt's at the same setting, which reads as a muddy shadow washing over the
+  glyph. The textbook `radius/2` sigma is wrong here because Qt's blur radius
+  is not a standard deviation. `SHADOW_BLUR_TO_SIGMA = 0.15` was fitted by
+  measuring soft-pixel counts against Qt at radii 4/10/20; it lands within 15%
+  across that range.
+
+`build_text_item_state()` gained the effect fields (`shadow_*`, `gradient_*`,
+`letter_spacing`, `curvature`). Their absence is *why* the doubled shadow was
+invisible: the test harness could not construct a block that had one.
+
+pytest 420 passed, ruff clean.
+
+**Next:** defects 2 and 3 (per-range rich text and per-range outlines), then
+curved text on Skia, then the full visual matrix and a real-page run.

@@ -312,7 +312,10 @@ class TextBlockItem(QGraphicsTextItem):
         self.apply_shadow()
 
     def apply_shadow(self):
-        if not self.shadow_enabled:
+        # Skia bakes the shadow into the raster it hands back, so attaching
+        # Qt's effect as well renders it twice — darker and double-offset.
+        # Re-applied on every engine switch (see controller.apply_text_engine).
+        if not self.shadow_enabled or text_engine.paints_with_skia():
             self.setGraphicsEffect(None)
             return
 
@@ -745,7 +748,17 @@ class TextBlockItem(QGraphicsTextItem):
         # so it replaces everything below rather than layering with it. Curved
         # text is handled above and stays on the Qt path: the arc is baked into
         # a QPainterPath and has no Skia equivalent yet.
-        if text_engine.paints_with_skia() and skia_paint.paint_item(painter, self):
+        #
+        # Editing stays on the Qt path too. The caret and the drag-selection
+        # band are drawn by super().paint() through Qt's text control, and this
+        # branch returns before it — so painting an item being typed into with
+        # Skia leaves the user with no cursor and no visible selection. The
+        # block flips back to Skia the moment focus leaves it.
+        if (
+            not self.editing_mode
+            and text_engine.paints_with_skia()
+            and skia_paint.paint_item(painter, self)
+        ):
             if self.selected:
                 handles.paint_handles(
                     painter, self.text_rect(), handles.item_view_scale(self, option, painter)

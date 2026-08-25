@@ -61,6 +61,7 @@ import unicodedata
 from functools import lru_cache
 from typing import Optional
 
+from core.enums import LayoutDirection
 from core.text_measure import TextMeasurer, TextStyle
 
 try:  # pragma: no cover - exercised by whether the import lands
@@ -110,6 +111,37 @@ def _unicode():
     # ParagraphBuilder.make requires an explicit Unicode in this binding; one
     # instance is enough and building it is not cheap.
     return skia.Unicode.ICU_Make()
+
+
+#: Unicode directional isolates. Wrapping a run in one of these sets the base
+#: direction for what is inside it, and they are zero-width so they change no
+#: metric. RLI/LRI open; PDI closes.
+LRI, RLI, PDI = "\u2066", "\u2067", "\u2069"
+
+
+def apply_base_direction(text: str, style: TextStyle) -> str:
+    """Force `text` to lay out in the block's own direction.
+
+    skia-python 144 exposes no direction setter — `ParagraphStyle` offers only
+    `setTextAlign`, `setStrutStyle` and `setTextStyle`, and there is no
+    `TextDirection` enum at all — so the direction has to be carried in the
+    text itself.
+
+    Left alone, ICU guesses the base direction from the first strong character.
+    That is right most of the time and wrong exactly where it matters: an
+    Arabic block that opens with a Latin name or a digit lays out
+    left-to-right, against the direction the user explicitly chose.
+
+    Both the measurer and the renderer call this, and they must keep doing so —
+    the wrap alters glyph order, so measuring the bare string and painting the
+    wrapped one is a way to make the two disagree.
+    """
+    if not text:
+        return text
+    rtl = int(getattr(style.direction, "value", style.direction)) == int(
+        LayoutDirection.RightToLeft
+    )
+    return (RLI if rtl else LRI) + text + PDI
 
 
 def _font_style(style: TextStyle):
@@ -180,7 +212,7 @@ class SkiaTextMeasurer(TextMeasurer):
         builder = skia.textlayout.ParagraphBuilder.make(
             paragraph_style, _font_collection(), _unicode()
         )
-        builder.addText(text)
+        builder.addText(apply_base_direction(text, style))
         paragraph = builder.Build()
         paragraph.layout(UNCONSTRAINED_WIDTH)
         return paragraph

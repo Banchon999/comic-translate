@@ -401,8 +401,17 @@ class ComicTranslate(ComicTranslateUI):
             )
             text_engine.set_engine(text_engine.QT)
 
-        if self.image_viewer is not None and self.image_viewer.scene() is not None:
-            self.image_viewer.scene().update()
+        # Whether Qt's drop-shadow effect belongs on an item depends on the
+        # engine, so every item already on the canvas has to be asked again.
+        # Without this, switching engines leaves the shadow either doubled or
+        # missing until the item is touched.
+        viewer = self.image_viewer
+        if viewer is not None:
+            for item in getattr(viewer, 'text_items', []) or []:
+                if hasattr(item, 'apply_shadow'):
+                    item.apply_shadow()
+            if viewer.scene() is not None:
+                viewer.scene().update()
 
     def connect_rect_item_signals(self, rect_item, force_reconnect: bool = False): return self.rect_item_ctrl.connect_rect_item_signals(rect_item, force_reconnect=force_reconnect)
     def apply_inpaint_patches(self, patches): return self.image_ctrl.apply_inpaint_patches(patches)

@@ -149,10 +149,25 @@ def build_text_item_state(
     direction: Any,
     vertical: bool,
     outline: bool,
+    # The drawn effects. Optional because the batch renderers do not set them —
+    # they render freshly translated blocks, which carry no effects yet. They
+    # are in the signature so that anything reconstructing a *saved* item, and
+    # every test, can build the states users actually create. Leaving them out
+    # is why a doubled drop shadow went unnoticed: the harness could not
+    # express a block that had one.
+    letter_spacing: float = 0.0,
+    shadow_enabled: bool = False,
+    shadow_color: Any = None,
+    shadow_offset: Sequence[float] = (4.0, 4.0),
+    shadow_blur: float = 0.0,
+    gradient_enabled: bool = False,
+    gradient_color: Any = None,
+    gradient_angle: float = 90.0,
+    curvature: float = 0.0,
 ) -> dict:
     """State dict for one rendered block, as the batch renderers produce it.
 
-    Keyword-only: the two call sites pass twenty fields, and a positional slip
+    Keyword-only: the call sites pass twenty-odd fields, and a positional slip
     between `width`/`height` or `bold`/`italic` would be silent.
     """
     return TextItemState(
@@ -176,6 +191,15 @@ def build_text_item_state(
         width=width,
         height=height,
         vertical=vertical,
+        letter_spacing=letter_spacing,
+        shadow_enabled=shadow_enabled,
+        shadow_color=shadow_color,
+        shadow_offset=tuple(shadow_offset),
+        shadow_blur=shadow_blur,
+        gradient_enabled=gradient_enabled,
+        gradient_color=gradient_color,
+        gradient_angle=gradient_angle,
+        curvature=curvature,
         selection_outlines=(
             full_document_outline(text, outline_color, outline_width) if outline else []
         ),
