@@ -62,6 +62,7 @@ import logging
 import os
 import subprocess
 import sys
+import threading
 import unicodedata
 from functools import lru_cache
 from typing import Optional
@@ -343,18 +344,44 @@ def _self_test_out_of_process() -> Optional[str]:
     )
 
 
-@lru_cache(maxsize=1)
+#: Per-thread Skia objects. **Not** a process-wide singleton, deliberately.
+#:
+#: `FontCollection` and `SkUnicode` are not documented as thread-safe, and this
+#: application reaches them from two threads at once as a matter of course: the
+#: Render button runs `manual_wrap` — and therefore the measurer — on a
+#: `QThreadPool` worker, while the canvas paints text items through the same
+#: objects on the GUI thread.
+#:
+#: That is a real race, not a theoretical one: skia-python releases the GIL
+#: during its calls, so both threads genuinely execute inside Skia at the same
+#: time. Measured here — a spinner thread kept running at about 37% of its idle
+#: rate while a measurement loop was in Skia, which it could not do if the GIL
+#: were held.
+#:
+#: Sharing them was one `lru_cache` away from a data race that would surface as
+#: a native access violation with no Python traceback: precisely the shape of
+#: the crash reported from a frozen Windows build. Giving each thread its own
+#: costs one construction per worker — the pool reuses threads, so it is
+#: bounded and small — and removes the sharing entirely.
+_thread_local = threading.local()
+
+
 def _font_collection():
-    collection = skia.textlayout.FontCollection()
-    collection.setDefaultFontManager(skia.FontMgr())
+    collection = getattr(_thread_local, "font_collection", None)
+    if collection is None:
+        collection = skia.textlayout.FontCollection()
+        collection.setDefaultFontManager(skia.FontMgr())
+        _thread_local.font_collection = collection
     return collection
 
 
-@lru_cache(maxsize=1)
 def _unicode():
-    # ParagraphBuilder.make requires an explicit Unicode in this binding; one
-    # instance is enough and building it is not cheap.
-    return skia.Unicode.ICU_Make()
+    # ParagraphBuilder.make requires an explicit Unicode in this binding.
+    instance = getattr(_thread_local, "unicode", None)
+    if instance is None:
+        instance = skia.Unicode.ICU_Make()
+        _thread_local.unicode = instance
+    return instance
 
 
 #: Unicode directional isolates. Wrapping a run in one of these sets the base
