@@ -428,3 +428,77 @@ block must not be erased — but any harness that skips OCR has to set
 architectural inconsistency rather than a user-visible defect); the full
 per-feature visual matrix needs a re-run and a re-read after these fixes; the
 Skia-in-bundle assertion in the four build workflows has never executed.
+
+### Wave 3 — the feature matrix, read rather than diffed
+
+Rebuilt the 29-case contact sheet (every feature `TextBlockItem` supports:
+fill, bold/italic/underline, three outline weights, two shadows, two
+gradients, letter and line spacing, three alignments, rotation, scale,
+curvature, vertical CJK, horizontal CJK, Thai, Arabic RTL, mixed-script RTL,
+long wrap, 10pt, 40pt, and one case with everything on at once) and rendered it
+under both engines.
+
+**Two defects, neither of which failed a test.** Both live at the seam where a
+Qt-measured box meets a Skia layout: `TextRenderSpec.box` is the text item's
+own rect, measured by Qt, and the two engines read the same string about
+1.1–1.3 px differently — over `LAYOUT_SLACK_PX`, which had been fitted against
+Skia-measured boxes.
+
+| Symptom | Cause |
+|---|---|
+| "small print here" rendered as "small print"; `日本語のテキスト` lost its final `ト`; a mixed RTL line lost "123" | Skia wrapped a line Qt fits, and the surface — sized from the same too-narrow width — clipped the remainder away |
+| With letter spacing on, "quartz" painted directly on top of "black" | `_draw_horizontal` painted one paragraph per *source* line but advanced `y` by a single line height, so a source line that wrapped had the next one drawn over its continuation |
+
+The wrap decision now comes from where the document actually lives. Qt is
+asked whether any source line occupies more than one visual line — by counting
+laid-out lines, not comparing widths, since `QTextDocument.idealWidth()`
+collapses to the longest wrapped line exactly when wrapping happens. When Qt
+did not wrap, `_layout_width` widens to Skia's own measurement so Skia cannot
+either; when Qt did wrap, the box still constrains, so a user-narrowed block
+keeps wrapping. Line advance now follows the lines a paragraph really
+occupied (skia-python 144 exposes no line count on `Paragraph`, only `Height`,
+so it is divided out).
+
+After the fixes every case matches Qt line for line. Ink ratios: letter
+spacing 0.950 → 1.003, CJK 0.896 → 0.961, mixed RTL 0.834 → 1.069.
+
+**Curved text is not a defect.** Curvature is handled *before* the Skia branch
+in `TextBlockItem.paint`, and both the viewer and the export renderer call
+`set_curvature`, so a curved block takes the identical Qt path either way —
+measured at **zero** differing pixels between engines at curvature ±0.6, while
+flat text differs. Preview and export agree; it is an architectural gap, not
+something a customer sees.
+
+**Vertical CJK is a font difference, not a layout bug.** Sweeping line spacing
+through both engines shows they apply it identically — in vertical text it
+separates columns (行間), not stacked glyphs. What differs is which font each
+engine measures: Qt reports the line box of the primary Latin font and
+substitutes CJK glyphs only at draw time, while Skia resolves the font that
+actually has them. Here, DejaVu Sans against WenQuanYi Zen Hei — 6.9% taller
+for a horizontal CJK line, compounding to 19.3% vertical. Latin, the common
+case, is within 1.1% of width and 0.0% of height. Neither side is worth
+changing: matching Qt would mean measuring CJK with a font that has no CJK
+glyphs. The tests pin the line-spacing rule rather than the percentages, which
+would only pin this machine's fontconfig.
+
+An earlier reading that vertical CJK was being *clipped* was wrong — the
+contact-sheet tile was smaller than the block. At full size every glyph is
+present under both engines.
+
+**Corrected along the way:** the first sheet showed no drop shadow at all in
+either engine, which looked like a defect and was a harness bug — hex colours
+here follow Qt's `#AARRGGBB`, not CSS's `#RRGGBBAA`, so `#000000a0` is
+transparent. `core.color.to_rgba` and `QColor` were verified to agree on all
+four forms, so there is no seam bug there.
+
+**Status:** 445 tests passing, ruff clean, headless gate 87/87.
+
+**Open, and deliberately so:**
+
+- Shadow diffusion still reads 18–29% heavier under Skia than Qt at blur radii
+  3 and 10. `SHADOW_BLUR_TO_SIGMA` is being re-fitted.
+- Skia remains **opt-in**. Flipping the default changes rendering for every
+  existing user and is the owner's call, not this branch's.
+- The Skia-in-bundle assertion added to all four build workflows has still
+  never executed — dispatching them needs `actions:write`, which this session
+  does not have (403 through both the CLI and the GitHub API).
