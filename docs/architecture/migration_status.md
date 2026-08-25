@@ -122,3 +122,75 @@ gate. `tests/test_headless_pipeline.py` runs the same check inside the normal
 suite via the import hook, so regressions fail fast.
 
 **Next:** Phase 1 — `skia-python` behind the `TextMeasurer` seam.
+
+---
+
+## 2026-08-25 — Phase 1: Skia measurer + parity harness
+
+`core/skia_text.py` implements the seam with `skia-python` 144.0 (Skia m144),
+Qt-free so a headless process can use it. Added to `requirements.txt` but
+guarded: `is_available()` reports the import and the app keeps the Qt measurer
+when it is missing, the way the optional OCR engines degrade.
+
+### Two systematic offsets, each worth ~25-30%
+
+A naive Skia measurer came out **28-31% narrow and 35-39% short** on every
+string. Two causes, both corrected and both pinned by tests:
+
+1. **Points vs pixels.** `font_size` means points everywhere here, because
+   `QFont(family, size)` takes points. Skia's `setFontSize` takes pixels. At the
+   96 DPI Qt reports, 24pt is 32px — a flat 25%.
+2. **Document margin.** `QTextDocument` carries a 4px margin, so every Qt
+   measurement in this codebase includes +8 on each axis.
+
+With both applied, against the Qt measurer at 24pt:
+
+| case | Δwidth | Δheight |
+|---|---|---|
+| Latin, 1 and 2 lines, caps, bold | **0.00px** | −2.2% |
+| Thai | **0.00px** | 0.0% |
+| Japanese | **0.00px** | +4.1% |
+| Arabic | −1.00px | −2.2% |
+| *italic* | *−7.00px (−3.6%)* | −2.2% |
+| *vertical CJK* | *−5.2%* | *+17.2%* |
+
+Width is exact for upright text in every script tested. Height carries Qt's
+integer line rounding. **Italic is a genuine divergence** — the two resolve
+different italic faces for the same family — and has its own tolerance so a
+regression elsewhere still fails. **Vertical CJK diverges by design**: Qt uses
+`VerticalTextDocumentLayout`, Skia has no vertical writing mode, and the two
+stack glyphs by different rules.
+
+A claim in the first draft was wrong and is corrected in the code: Thai does not
+measure taller because a string carries stacked marks. `กาน` and `สวัสดีครับ`
+get the identical box (59px at 24pt, against Latin's 46px). It is the *face*
+that reserves the room, used or not — which is still exactly why the height is
+read from the paragraph rather than assumed.
+
+### The Phase 1 gate: preview/export parity
+
+`tests/test_render_parity.py` renders the same state through
+`ImageViewer.add_text_item` (what the canvas shows) and
+`ImageSaveRenderer.add_state_to_image` (what every raster export is made from)
+and compares pixels. **13 cases pass at zero differing pixels** — plain, bold,
+italic, no/thick outline, rotated, scaled, right-aligned, wide spacing, Thai,
+Japanese, Arabic RTL, vertical CJK, single character.
+
+Two guard tests keep the harness honest: one asserts it *can* see a difference,
+one asserts the export is not simply blank. Without those a parity test passes
+by comparing nothing.
+
+PNG, WebP and the PSD merged-image section all come from `render_to_image`, so
+this covers all three raster formats; PSD *text layers* are separate and remain
+covered by `test_psd_export.py`.
+
+### Deliberately not switched over
+
+The Skia measurer is **not** the default. Measuring with Skia while
+`TextBlockItem` still paints with Qt is precisely the preview/export divergence
+this whole programme exists to avoid. Phase 2 moves the painter, and the
+measurer switches with it.
+
+pytest **381 passed**, ruff clean, headless gate 87/87.
+
+**Next:** Phase 2 — Skia-backed canvas item, then switch the measurer with it.
