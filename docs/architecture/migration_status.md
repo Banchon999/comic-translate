@@ -933,3 +933,41 @@ reasoned around, only observed.
 
 **Status:** 495 tests passing, ruff clean, headless 87/87. Awaiting a
 `build-windows` run on the fix.
+
+### Wave 10b — confirmed fixed
+
+`build-windows` run 26 on `8edf8d2` succeeded, and the log confirms it for the
+right reasons rather than merely going green:
+
+```
+ICU_DATA_FILE: C:\...\Python\3.14.5\x64\Lib\site-packages\icudtl.dat
+Skia bundled: skia.cp314-win_amd64.pyd
+Skia runtime self-test passed in the frozen bundle
+```
+
+- The locator found `icudtl.dat` at exactly the path predicted from the wheel
+  inspection, and the step took **1 second** — the direct-path lookup avoided
+  the site-packages scan.
+- The self-test **ran inside the frozen exe and passed** (~500 ms; the step's
+  0-second display is second-granularity, not a skipped step).
+- **No `SkIcuLoader: datafile missing` lines**, which the failing run printed
+  prominently. That absence is the actual proof.
+
+Artifact: `Comic-Translate-Windows`, 138 MB, run 32870927809.
+
+**The crash is resolved.** A bundle built from this branch has a working Skia
+runtime, verified by the same probe that caught the failure.
+
+### What this episode is worth remembering for
+
+| | |
+|---|---|
+| Caught it | The self-test, at exactly the point it was placed to catch it |
+| Found it | The build log — one workflow dispatch |
+| Did not find it | Two hours of reasoning about a race condition, on the wrong platform |
+| Why | The dependency exists only on Windows, only when frozen. Linux links ICU into the `.so`; there is no `.dat` to miss. No amount of local testing could have reached it |
+
+The general lesson: when a failure is platform-specific and the platform is not
+available, the cheap decisive test on the real platform beats any amount of
+plausible theory. The dispatch was available the whole time and should have
+been pressed for sooner.
