@@ -635,3 +635,48 @@ Skia is the default: if skia-python does not land in the frozen Windows
 bundle, every Windows user silently falls back to Qt. The import is guarded, so
 it degrades rather than crashes. Likely fix if it fails: `--collect-all skia`
 or `--hidden-import skia` in the PyInstaller command.
+
+### Wave 7 — per-range formatting across lines, found by a review bot
+
+Two P2 findings from `chatgpt-codex-connector` on `core/skia_render.py`. Both
+were real, and one was worse than reported.
+
+`char_runs` and `outlines` index the whole block, but `_draw_horizontal` hands
+a paragraph one **source line** at a time and `_draw_vertical` one **cluster**
+at a time, while `runs_for()` clamps every offset against the text it is given.
+Document-wide offsets against a short line therefore applied line 1's
+formatting to every line and dropped anything starting past it.
+
+Measured on `"AAAA\nBBBB"`:
+
+| Case | Before | After |
+|---|---|---|
+| Char run `(5,9)` blue on line 2 | rendered **red** — line 1's colour | blue |
+| Outline scoped `(0,4)` → line 1 | painted on **both** lines (1927 / 2320 px) | line 1 only |
+| Outline scoped `(5,9)` → line 2 | painted **nowhere** (0 / 0 px) | line 2 only |
+| Outline `(0,9)` whole block | both — right by accident | both |
+| Vertical, runs `(0,2)` / `(2,4)` | both clusters **black** | red then blue |
+| *Single line*, same runs | correct | correct |
+
+That last row is why it survived: **every per-range test to date used
+single-line text**, so the multi-line axis was never exercised at all.
+
+The fix belongs in `_with_text`, not at the call sites: it now takes the
+slice's start offset and rebases both range kinds itself, so every caller that
+narrows the text narrows the ranges with it and the two cannot drift.
+`end=None` ("to the end") stays open-ended in each slice. Vertical clusters
+advance by their **own length**, since `_vertical_clusters` groups a combining
+mark with its base.
+
+This had already shipped — Skia became the default in `691f317` — so a user who
+bolded, recoloured or outlined a word on any line after the first got the wrong
+result.
+
+Worth noting about the process: this is the first defect on this branch found
+by neither the test suite nor the visual matrix, but by a reviewer reading the
+diff. The matrix renders one styled block per case and never a *partially*
+styled multi-line one, so it could not have caught this. Both review threads
+are answered and resolved.
+
+**Status:** 464 tests passing, ruff clean, headless 87/87, preview/export
+parity 0 px, feature matrix unchanged.
