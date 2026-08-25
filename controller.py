@@ -401,6 +401,17 @@ class ComicTranslate(ComicTranslateUI):
             )
             text_engine.set_engine(text_engine.QT)
 
+        # Recorded because a native crash leaves only the log, and the first
+        # question about one is always which engine was drawing. Without this
+        # the log says a render started and stops, with no way to tell whether
+        # Skia was even involved.
+        logging.getLogger(__name__).info(
+            "text engine in use: %s (requested %s, default %s)",
+            text_engine.engine(),
+            self.settings_page.get_text_engine(),
+            text_engine.default_engine(),
+        )
+
         # Whether Qt's drop-shadow effect belongs on an item depends on the
         # engine, so every item already on the canvas has to be asked again.
         # Without this, switching engines leaves the shadow either doubled or
