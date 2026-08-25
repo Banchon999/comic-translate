@@ -210,6 +210,30 @@ class SettingsPage(QtWidgets.QWidget):
     def get_denoise_cleaned_areas(self) -> bool:
         return self.ui.denoise_checkbox.isChecked()
 
+    #: Marks that the "Skia on by default" change has been applied to this
+    #: profile. Bump the suffix only if a later default change needs to reach
+    #: existing users again.
+    SKIA_DEFAULT_MIGRATION_KEY = 'skia_text_engine_default_applied'
+
+    @staticmethod
+    def _migrate_skia_default(settings) -> None:
+        """Turn Skia on once for a profile that predates it being the default.
+
+        Changing the fallback passed to `settings.value` is not enough on its
+        own. `skia_text_engine` is written on *every* settings save — it is part
+        of `get_all_settings()`, which autosaves about a second after any change
+        — so anyone who has ever touched a setting already has an explicit
+        `False` stored, and a new fallback would never be consulted for them.
+        The flip would silently reach new installs only.
+
+        Applied once and recorded, so a user who then turns Skia off stays off.
+        """
+        key = SettingsPage.SKIA_DEFAULT_MIGRATION_KEY
+        if settings.value(key, False, type=bool):
+            return
+        settings.setValue('skia_text_engine', True)
+        settings.setValue(key, True)
+
     def get_text_engine(self) -> str:
         """Which engine lays out and draws translated text.
 
@@ -527,8 +551,9 @@ class SettingsPage(QtWidgets.QWidget):
         # would be lying about what is drawing the page.
         from core import text_engine as _text_engine
 
+        self._migrate_skia_default(settings)
         self.ui.skia_text_checkbox.setChecked(
-            settings.value('skia_text_engine', False, type=bool)
+            settings.value('skia_text_engine', True, type=bool)
             and _text_engine.SKIA in _text_engine.available_engines()
         )
         self.ui.skia_text_checkbox.setEnabled(

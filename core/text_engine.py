@@ -6,9 +6,15 @@ a point size and line breaks from one set of metrics, the canvas draws with
 another, and the preview stops matching the export. Two independent settings
 make that state reachable, so there is one.
 
-`QT` is the default. `SKIA` is opt-in until the Skia painter has been through
-enough real pages to be trusted — `set_engine` refuses it when skia-python is
-missing rather than silently half-switching.
+**Skia is the default where it is installed**, and Qt everywhere else.
+`set_engine` refuses Skia when skia-python is missing rather than silently
+half-switching, so the fallback is explicit rather than accidental.
+
+The default lives in `default_engine()` and is a pure string — nothing is
+constructed to answer it. `core.text_measure._default_measurer` reads
+`engine()` to pick the matching measurer, which is what keeps the pair
+together: a module that imports only `text_measure` and never touches this one
+still measures with whatever is going to paint.
 """
 
 from __future__ import annotations
@@ -23,7 +29,16 @@ SKIA = "skia"
 
 EngineName = Literal["qt", "skia"]
 
-_engine: str = QT
+def default_engine() -> str:
+    """Skia where it is installed, Qt otherwise.
+
+    Pure: it constructs nothing, so it is safe to call during import and from
+    `core.text_measure` without either module having to be ready.
+    """
+    return SKIA if skia_text.is_available() else QT
+
+
+_engine: str = default_engine()
 
 
 def engine() -> str:
@@ -49,18 +64,17 @@ def set_engine(name: str) -> None:
     """
     global _engine
 
-    if name == QT:
-        _engine = QT
-        set_measurer(None)  # restores the lazy Qt default
-        return
-
-    if name != SKIA:
+    if name not in (QT, SKIA):
         raise ValueError(f"unknown text engine {name!r}; expected one of {(QT, SKIA)}")
 
-    if not skia_text.is_available():
+    if name == SKIA and not skia_text.is_available():
         raise RuntimeError(
             f"cannot select the Skia text engine: {skia_text.unavailable_reason()}"
         )
 
-    set_measurer(skia_text.SkiaTextMeasurer())
-    _engine = SKIA
+    # Record the choice first, then clear the measurer so the next call to
+    # `get_measurer` re-resolves against it. Installing one here instead would
+    # mean two places deciding what measures, and they could disagree — which
+    # is the one failure this module exists to prevent.
+    _engine = name
+    set_measurer(None)

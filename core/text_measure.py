@@ -110,6 +110,22 @@ def get_measurer() -> TextMeasurer:
 
 
 def _default_measurer() -> TextMeasurer:
+    """The measurer matching whichever engine is going to paint.
+
+    Deferred import: `core.text_engine` imports this module, so it cannot be
+    imported at the top. Reading the engine here rather than having
+    `set_engine` install a measurer directly is what keeps measurement and
+    painting from drifting apart — a module that imports only this one, as
+    `modules.rendering.render` does, still gets the measurer belonging to the
+    engine that will draw the result.
+    """
+    from core import text_engine
+
+    if text_engine.engine() == text_engine.SKIA:
+        from core.skia_text import SkiaTextMeasurer
+
+        return SkiaTextMeasurer()
+
     if importlib.util.find_spec("PySide6") is None:
         raise RuntimeError(
             "No text measurer is registered and PySide6 is not available. "
