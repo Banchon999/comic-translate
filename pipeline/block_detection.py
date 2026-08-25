@@ -1,13 +1,9 @@
 import logging
 from typing import List
-from PySide6 import QtCore
-
 from modules.detection.processor import TextBlockDetector
 from modules.detection.script_detection import ScriptDetector
 from modules.utils.textblock import TextBlock, sort_blk_list
 from modules.rendering.render import get_best_render_area
-from pipeline.webtoon_utils import get_first_visible_block
-from app.ui.commands.box import ReplaceDetectedBlocksCommand
 
 
 logger = logging.getLogger(__name__)
@@ -22,34 +18,8 @@ class BlockDetectionHandler:
         self.script_detector_cache = None
 
     def load_box_coords(self, blk_list: List[TextBlock]):
-        # Clear rectangles appropriately based on mode
-        if self.main_page.webtoon_mode:
-            self.main_page.image_viewer.clear_rectangles_in_visible_area()
-        else:
-            self.main_page.image_viewer.clear_rectangles()
-
-        if self.main_page.image_viewer.hasPhoto() and blk_list:
-            for blk in blk_list:
-                x1, y1, x2, y2 = blk.xyxy
-                rect = QtCore.QRectF(0, 0, x2 - x1, y2 - y1)
-                transform_origin = QtCore.QPointF(*blk.tr_origin_point) if blk.tr_origin_point else None
-
-                rect_item = self.main_page.image_viewer.add_rectangle(
-                    rect, QtCore.QPointF(x1, y1), blk.angle, transform_origin
-                )
-                self.main_page.connect_rect_item_signals(rect_item)
-
-            # In webtoon mode, use first visible block instead of just first block
-            if self.main_page.webtoon_mode:
-                first_block = get_first_visible_block(self.main_page.blk_list, self.main_page.image_viewer)
-                if first_block is None:
-                    first_block = self.main_page.blk_list[0]
-            else:
-                first_block = self.main_page.blk_list[0]
-
-            rect = self.main_page.rect_item_ctrl.find_corresponding_rect(first_block, 0.5)
-            self.main_page.image_viewer.select_rectangle(rect)
-            self.main_page.set_tool('box')
+        """Draw the detection rectangles. Owned by the Qt layer."""
+        self.main_page.rect_item_ctrl.load_box_coords(blk_list)
 
     def _sync_current_page_blocks(self):
         if not self.main_page.image_files or self.main_page.curr_img_idx >= len(self.main_page.image_files):
@@ -110,31 +80,34 @@ class BlockDetectionHandler:
                             
                             # Convert from page coordinates to scene coordinates
                             page_index = mapping['page_index']
-                            scene_pos_tl = self.main_page.image_viewer.page_to_scene_coordinates(
-                                page_index, QtCore.QPointF(x1, page_y1)
+                            scene_tl = self.main_page.image_viewer.page_to_scene_xy(
+                                page_index, x1, page_y1
                             )
-                            scene_pos_br = self.main_page.image_viewer.page_to_scene_coordinates(
-                                page_index, QtCore.QPointF(x2, page_y2)
+                            scene_br = self.main_page.image_viewer.page_to_scene_xy(
+                                page_index, x2, page_y2
                             )
-                            
+                            if scene_tl is None or scene_br is None:
+                                break
+
                             # Update the block coordinates
-                            blk.xyxy = [scene_pos_tl.x(), scene_pos_tl.y(), scene_pos_br.x(), scene_pos_br.y()]
+                            blk.xyxy = [scene_tl[0], scene_tl[1], scene_br[0], scene_br[1]]
                             
                             # Also update bubble_xyxy if present
                             if blk.bubble_xyxy is not None:
                                 bx1, by1, bx2, by2 = blk.bubble_xyxy
                                 bubble_page_y1 = by1 - mapping['combined_y_start'] + mapping['page_crop_top']
                                 bubble_page_y2 = by2 - mapping['combined_y_start'] + mapping['page_crop_top']
-                                bubble_scene_pos_tl = self.main_page.image_viewer.page_to_scene_coordinates(
-                                    page_index, QtCore.QPointF(bx1, bubble_page_y1)
+                                bubble_tl = self.main_page.image_viewer.page_to_scene_xy(
+                                    page_index, bx1, bubble_page_y1
                                 )
-                                bubble_scene_pos_br = self.main_page.image_viewer.page_to_scene_coordinates(
-                                    page_index, QtCore.QPointF(bx2, bubble_page_y2)
+                                bubble_br = self.main_page.image_viewer.page_to_scene_xy(
+                                    page_index, bx2, bubble_page_y2
                                 )
-                                blk.bubble_xyxy = [
-                                    bubble_scene_pos_tl.x(), bubble_scene_pos_tl.y(),
-                                    bubble_scene_pos_br.x(), bubble_scene_pos_br.y()
-                                ]
+                                if bubble_tl is not None and bubble_br is not None:
+                                    blk.bubble_xyxy = [
+                                        bubble_tl[0], bubble_tl[1],
+                                        bubble_br[0], bubble_br[1],
+                                    ]
                             break
                 
                 return blk_list, load_rects, page_mappings
@@ -189,14 +162,9 @@ class BlockDetectionHandler:
         self.main_page.blk_list = sort_blk_list(self.main_page.blk_list, rtl)
 
         if load_rects and not self.main_page.webtoon_mode:
-            stack = self.main_page.undo_group.activeStack()
-            if stack is not None:
-                command = ReplaceDetectedBlocksCommand(
-                    self.main_page,
-                    previous_blocks,
-                    self.main_page.blk_list,
-                )
-                stack.push(command)
+            if self.main_page.rect_item_ctrl.push_replace_detected_blocks(
+                previous_blocks, self.main_page.blk_list
+            ):
                 return
 
         if not self.main_page.webtoon_mode:

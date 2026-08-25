@@ -5,7 +5,11 @@ from typing import TYPE_CHECKING
 from PySide6.QtCore import QRectF, QPointF
 
 from app.ui.canvas.rectangle import MoveableRectItem
-from app.ui.commands.box import AddRectangleCommand, BoxesChangeCommand
+from app.ui.commands.box import (
+    AddRectangleCommand,
+    BoxesChangeCommand,
+    ReplaceDetectedBlocksCommand,
+)
 
 from modules.detection.utils.geometry import do_rectangles_overlap
 from modules.utils.textblock import TextBlock
@@ -125,3 +129,53 @@ class RectItemController:
             if do_rectangles_overlap(rect_coord, tblock.xyxy, iou_threshold):
                 return rect
         return None
+
+    def load_box_coords(self, blk_list: list[TextBlock]):
+        """Draw a rectangle over every detected block and select the first.
+
+        Moved here from `pipeline/block_detection.py`: it builds QRectF/QPointF,
+        drives the viewer and switches the active tool, none of which the
+        pipeline should need Qt to do.
+        """
+        viewer = self.main.image_viewer
+
+        # Clear rectangles appropriately based on mode
+        if self.main.webtoon_mode:
+            viewer.clear_rectangles_in_visible_area()
+        else:
+            viewer.clear_rectangles()
+
+        if not (viewer.hasPhoto() and blk_list):
+            return
+
+        for blk in blk_list:
+            x1, y1, x2, y2 = blk.xyxy
+            rect = QRectF(0, 0, x2 - x1, y2 - y1)
+            transform_origin = QPointF(*blk.tr_origin_point) if blk.tr_origin_point else None
+
+            rect_item = viewer.add_rectangle(
+                rect, QPointF(x1, y1), blk.angle, transform_origin
+            )
+            self.connect_rect_item_signals(rect_item)
+
+        # In webtoon mode, use first visible block instead of just first block
+        if self.main.webtoon_mode:
+            from pipeline.webtoon_utils import get_first_visible_block
+
+            first_block = get_first_visible_block(self.main.blk_list, viewer)
+            if first_block is None:
+                first_block = self.main.blk_list[0]
+        else:
+            first_block = self.main.blk_list[0]
+
+        rect = self.find_corresponding_rect(first_block, 0.5)
+        viewer.select_rectangle(rect)
+        self.main.set_tool('box')
+
+    def push_replace_detected_blocks(self, previous_blocks, new_blocks) -> bool:
+        """Push a re-detection onto the undo stack. False if there is no stack."""
+        stack = self.main.undo_group.activeStack()
+        if stack is None:
+            return False
+        stack.push(ReplaceDetectedBlocksCommand(self.main, previous_blocks, new_blocks))
+        return True
