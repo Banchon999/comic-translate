@@ -35,8 +35,14 @@ jobs:
           #
           # Linux does not have this problem, which is why it went unnoticed:
           # there skia-python links ICU statically into the single .so.
-          $icu = python -c "import pathlib, skia, sys; p = pathlib.Path(skia.__file__).parent; hits = list(p.rglob('icudtl.dat')); print(hits[0] if hits else '')"
+          # The wheel ships it as a .data entry —
+          # skia_python-*.data/data/Lib/site-packages/icudtl.dat — which pip
+          # installs beside skia.pyd in site-packages. Checked directly rather
+          # than by searching: a recursive scan of site-packages takes minutes
+          # once torch is installed, for a file whose location is known.
+          $icu = python -c "import pathlib, sysconfig, skia; cands = [pathlib.Path(skia.__file__).parent / 'icudtl.dat', pathlib.Path(sysconfig.get_paths()['purelib']) / 'icudtl.dat', pathlib.Path(sysconfig.get_paths()['data']) / 'Lib' / 'site-packages' / 'icudtl.dat']; hit = next((c for c in cands if c.is_file()), None); print(hit or '')"
           if (-not $icu) {
+            # Last resort, and worth the minutes if the layout ever moves.
             $site = python -c "import sysconfig; print(sysconfig.get_paths()['purelib'])"
             $found = Get-ChildItem -Path $site -Recurse -File -Filter 'icudtl.dat' -ErrorAction SilentlyContinue |
                      Select-Object -First 1
