@@ -121,6 +121,7 @@ class SettingsPage(QtWidgets.QWidget):
             ui.translated_text_checkbox, ui.inpainted_image_checkbox,
             ui.per_class_fonts_checkbox, ui.stitch_detection_checkbox,
             ui.text_segmentation_checkbox, ui.denoise_checkbox,
+            ui.skia_text_checkbox,
             ui.use_style_defaults_checkbox,
         ]
         for checkbox in checkboxes:
@@ -208,6 +209,20 @@ class SettingsPage(QtWidgets.QWidget):
 
     def get_denoise_cleaned_areas(self) -> bool:
         return self.ui.denoise_checkbox.isChecked()
+
+    def get_text_engine(self) -> str:
+        """Which engine lays out and draws translated text.
+
+        One answer for both, deliberately: see core/text_engine.py. Falls back
+        to Qt when skia-python is not installed rather than failing to start.
+        """
+        from core import text_engine
+
+        if not self.ui.skia_text_checkbox.isChecked():
+            return text_engine.QT
+        if text_engine.SKIA not in text_engine.available_engines():
+            return text_engine.QT
+        return text_engine.SKIA
 
     def get_ocr_padding(self) -> tuple[int, int]:
         """(percentage, minimum pixels) to expand a box by before OCR crops it."""
@@ -323,6 +338,10 @@ class SettingsPage(QtWidgets.QWidget):
                 'stitch_detection': self.ui.stitch_detection_checkbox.isChecked(),
                 'text_segmentation_model': self.get_use_text_segmentation_model(),
                 'denoise_cleaned_areas': self.get_denoise_cleaned_areas(),
+                # The checkbox, not the resolved engine: get_text_engine()
+                # answers Qt when skia-python is missing, and persisting
+                # that would silently turn the preference off for good.
+                'skia_text_engine': self.ui.skia_text_checkbox.isChecked(),
                 'hd_strategy': self.get_hd_strategy_settings()
             },
             'llm': self.get_llm_settings(),
@@ -502,6 +521,18 @@ class SettingsPage(QtWidgets.QWidget):
         )
         self.ui.denoise_checkbox.setChecked(
             settings.value('denoise_cleaned_areas', True, type=bool)
+        )
+        # Off unless skia-python is present: restoring a saved "on" on a
+        # machine without it would silently mean Qt anyway, and the checkbox
+        # would be lying about what is drawing the page.
+        from core import text_engine as _text_engine
+
+        self.ui.skia_text_checkbox.setChecked(
+            settings.value('skia_text_engine', False, type=bool)
+            and _text_engine.SKIA in _text_engine.available_engines()
+        )
+        self.ui.skia_text_checkbox.setEnabled(
+            _text_engine.SKIA in _text_engine.available_engines()
         )
 
         # Load HD strategy settings

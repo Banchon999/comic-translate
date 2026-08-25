@@ -10,6 +10,8 @@ from enum import Enum
 from . import handles
 from .text.vertical_layout import VerticalTextDocumentLayout
 from app.ui.qt_values import to_qt_color, to_qt_layout_direction
+from core import text_engine
+from app.ui.canvas import skia_paint
 # Re-exported: these moved to core so the pipeline can build them without
 # Qt. Same classes, so the project encoder and every existing holder of one
 # are unaffected, and `from .text_item import OutlineInfo` still works.
@@ -733,6 +735,17 @@ class TextBlockItem(QGraphicsTextItem):
 
         if self.curvature:
             self.paint_curved(painter)
+            if self.selected:
+                handles.paint_handles(
+                    painter, self.text_rect(), handles.item_view_scale(self, option, painter)
+                )
+            return
+
+        # Skia draws the whole item in one pass — fill, outlines and shadow —
+        # so it replaces everything below rather than layering with it. Curved
+        # text is handled above and stays on the Qt path: the arc is baked into
+        # a QPainterPath and has no Skia equivalent yet.
+        if text_engine.paints_with_skia() and skia_paint.paint_item(painter, self):
             if self.selected:
                 handles.paint_handles(
                     painter, self.text_rect(), handles.item_view_scale(self, option, painter)

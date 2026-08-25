@@ -11,6 +11,12 @@ These tests render the same state through both and compare pixels. PNG, WebP
 and the PSD merged-image section all come from `render_to_image`, so parity
 there is parity for every raster export; the PSD *text layers* are a separate
 concern covered by `test_psd_export.py`.
+
+Every case runs under **both text engines**. Parity has to hold whichever one
+is painting, and running Skia here is also what proves the Skia path is
+actually reachable from the canvas rather than silently falling back to Qt —
+`test_skia_engine_really_paints_differently` pins that separately, because a
+fallback would make every parity case pass for the wrong reason.
 """
 
 import numpy as np
@@ -20,7 +26,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 from app.ui.canvas.save_renderer import ImageSaveRenderer
 from app.ui.canvas.text.text_item_properties import TextItemProperties
-from app.ui.canvas.text_item import TextBlockItem
+from core import text_engine
 from core.text_style import build_text_item_state
 
 CANVAS_W, CANVAS_H = 320, 200
@@ -111,8 +117,15 @@ CASES = {
 }
 
 
+@pytest.fixture(params=text_engine.available_engines())
+def engine(request):
+    text_engine.set_engine(request.param)
+    yield request.param
+    text_engine.set_engine(text_engine.QT)
+
+
 @pytest.mark.parametrize("name", sorted(CASES))
-def test_preview_and_export_render_identically(qapp, name):
+def test_preview_and_export_render_identically(qapp, engine, name):
     state = _state(**CASES[name])
 
     export = _render_via_export(state)
@@ -121,8 +134,8 @@ def test_preview_and_export_render_identically(qapp, name):
     diff = _difference(preview, export)
     changed = int((diff.max(axis=2) > 0).sum())
     assert changed == 0, (
-        f"{name}: {changed} pixels differ between the canvas preview and the "
-        f"export (max channel delta {int(diff.max())})"
+        f"{name} [{engine}]: {changed} pixels differ between the canvas "
+        f"preview and the export (max channel delta {int(diff.max())})"
     )
 
 
@@ -138,3 +151,45 @@ def test_export_actually_drew_the_text(qapp):
     blank = ImageSaveRenderer(_blank_page()).render_to_image()
     drawn = _render_via_export(_state())
     assert int((_difference(blank, drawn).max(axis=2) > 0).sum()) > 100
+
+
+@pytest.mark.skipif(
+    text_engine.SKIA not in text_engine.available_engines(),
+    reason="skia-python unavailable",
+)
+def test_skia_engine_really_paints_differently(qapp):
+    """Proof the Skia path is reached, not silently falling back to Qt.
+
+    `paint_item` returns False on any failure so a bad block degrades instead
+    of taking the editor down — which also means a broken adapter looks exactly
+    like a working one from the outside. It did, once: an `int()` on a PySide6
+    enum raised on every item and every render quietly came from Qt.
+    """
+    state = _state()
+
+    text_engine.set_engine(text_engine.QT)
+    try:
+        qt_render = _render_via_export(state)
+        text_engine.set_engine(text_engine.SKIA)
+        skia_render = _render_via_export(state)
+    finally:
+        text_engine.set_engine(text_engine.QT)
+
+    changed = int((_difference(qt_render, skia_render).max(axis=2) > 0).sum())
+    assert changed > 0, "Skia produced pixel-identical output to Qt — it did not run"
+
+
+@pytest.mark.skipif(
+    text_engine.SKIA not in text_engine.available_engines(),
+    reason="skia-python unavailable",
+)
+def test_switching_engine_moves_the_measurer_too(qapp):
+    """Measuring with one engine and painting with another is the bug."""
+    from core.text_measure import get_measurer
+
+    text_engine.set_engine(text_engine.SKIA)
+    try:
+        assert get_measurer().name == "skia"
+    finally:
+        text_engine.set_engine(text_engine.QT)
+    assert get_measurer().name == "qt"

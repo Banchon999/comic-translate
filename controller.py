@@ -1,3 +1,4 @@
+import logging
 import os
 import requests
 import numpy as np
@@ -145,6 +146,10 @@ class ComicTranslate(ComicTranslateUI):
 
         self.project_ctrl.load_main_page_settings()
         self.settings_page.load_settings()
+        self.apply_text_engine()
+        self.settings_page.ui.skia_text_checkbox.stateChanged.connect(
+            lambda _state: self.apply_text_engine()
+        )
         self.project_ctrl.initialize_autosave()
 
         # Populate the home screen with any previously-saved recent projects
@@ -378,6 +383,26 @@ class ComicTranslate(ComicTranslateUI):
     def _on_home_clear_recent(self):
         """Persist clearing of the entire recent list."""
         self.project_ctrl.clear_recent_projects()
+
+    def apply_text_engine(self):
+        """Point measurement and drawing at the engine the settings ask for.
+
+        Both move together — see core/text_engine.py. A page already on the
+        canvas keeps the geometry it was laid out with until it is re-rendered;
+        this repaints so the drawing at least matches the new engine.
+        """
+        from core import text_engine
+
+        try:
+            text_engine.set_engine(self.settings_page.get_text_engine())
+        except (RuntimeError, ValueError):
+            logging.getLogger(__name__).exception(
+                "Could not switch text engine; staying on Qt"
+            )
+            text_engine.set_engine(text_engine.QT)
+
+        if self.image_viewer is not None and self.image_viewer.scene() is not None:
+            self.image_viewer.scene().update()
 
     def connect_rect_item_signals(self, rect_item, force_reconnect: bool = False): return self.rect_item_ctrl.connect_rect_item_signals(rect_item, force_reconnect=force_reconnect)
     def apply_inpaint_patches(self, patches): return self.image_ctrl.apply_inpaint_patches(patches)

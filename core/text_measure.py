@@ -34,10 +34,15 @@ class TextStyle:
     strings and only varies the size — `with_size` returns a copy rather than
     mutating one shared object out from under a cache.
 
-    Colour, outline and the text effects are deliberately absent: none of them
-    move a glyph, so none of them belong to measurement. The one exception is
-    the outline *width*, which the caller adds to the measured box itself
+    Colour, the outline and the drawn effects are deliberately absent: none of
+    them move a glyph, so none of them belong to measurement. The outline
+    *width* is the near miss — the caller adds it to the measured box itself,
     because it pads the drawn result without changing the layout.
+
+    Letter spacing is here precisely because it does move glyphs. Note that
+    `pyside_word_wrap` does not set it, so auto-fit ignores letter spacing
+    exactly as it always has; the renderer sets it, which is what stops
+    letter-spaced text being drawn into a surface too small for it.
     """
 
     font_family: str = ""
@@ -46,6 +51,7 @@ class TextStyle:
     italic: bool = False
     underline: bool = False
     line_spacing: float = 1.0
+    letter_spacing: float = 0.0
     alignment: Alignment = Alignment.Center
     direction: LayoutDirection = LayoutDirection.LeftToRight
     vertical: bool = False

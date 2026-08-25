@@ -43,6 +43,8 @@ class QtTextMeasurer(TextMeasurer):
         font.setBold(style.bold)
         font.setItalic(style.italic)
         font.setUnderline(style.underline)
+        if style.letter_spacing:
+            font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, style.letter_spacing)
         return font
 
     def measure(self, text: str, style: TextStyle) -> tuple[float, float]:

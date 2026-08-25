@@ -194,3 +194,94 @@ measurer switches with it.
 pytest **381 passed**, ruff clean, headless gate 87/87.
 
 **Next:** Phase 2 — Skia-backed canvas item, then switch the measurer with it.
+
+---
+
+## 2026-08-25 — PHASE 2: Skia canvas embedded in the PySide6 app
+
+Skia now lays out **and** draws translated text inside the existing desktop
+editor, selectable from `Settings > Tools > Draw text with Skia (experimental)`.
+Qt remains the default.
+
+### Pieces
+
+| File | Role |
+|---|---|
+| `core/skia_render.py` | Qt-free rasteriser: spec in, RGBA array out |
+| `core/text_engine.py` | The one switch — moves measurer **and** painter together |
+| `app/ui/canvas/skia_paint.py` | Adapts a `TextBlockItem` to the spec, blits the result |
+| `TextBlockItem.paint` | Takes the Skia path when the engine is Skia |
+
+The item stays an ordinary `QGraphicsTextItem`. Selection, handles, editing,
+undo, the layer panels and the project format are untouched — only the pixels
+change. That is what kept the blast radius small enough to do safely.
+
+### Features covered
+
+Multi-stroke outline layers, gradient fill, drop shadow, kerning/letter
+spacing, leading/line spacing, Thai diacritics, vertical CJK (columns
+right-to-left). **Curved text stays on the Qt path** — the arc is baked into a
+`QPainterPath` and has no Skia equivalent yet; `paint()` handles it before the
+Skia branch is reached.
+
+### Three bugs the visual check caught that the tests did not
+
+Pixel counts and green tests said all three were fine. Rendering a sheet and
+*looking at it* is what found them.
+
+1. **Every line re-wrapped.** "Hello world" came out as "Hello" / "world".
+   Laying a paragraph out at exactly its own measured width lets Skia's line
+   breaker round against `LongestLine` and break the last word.
+   `LAYOUT_SLACK_PX` fixes it.
+2. **Letter-spaced text was clipped.** The surface was sized from a measurement
+   that ignored letter spacing. Letter spacing moves glyphs, so it belongs in
+   `TextStyle` — added there, applied by both measurers. `pyside_word_wrap`
+   deliberately does *not* set it, so auto-fit behaves exactly as before.
+3. **Line spacing applied to measurement but not painting.** A two-line block
+   measured tall and drew tight at the top of its box. Horizontal text is now
+   painted one line at a time, advancing by the spaced line height, because
+   skia-python's `StrutStyle` cannot express a height multiplier.
+
+A fourth was hidden by the design: `paint_item` swallowed every exception so a
+bad block degrades instead of taking the editor down — which made a plain
+`TypeError` (`int()` on a PySide6 enum, which is not an IntEnum) look exactly
+like Skia working, while every render quietly came from Qt. It now logs once
+per distinct reason, and `test_skia_engine_really_paints_differently` asserts
+the two engines produce *different* pixels, so a silent fallback fails the
+suite.
+
+### Gates
+
+- **Preview/export parity holds under both engines** — 13 cases × 2 engines,
+  zero differing pixels.
+- **Verified in the real app**, not just in tests: launched under `xvfb`,
+  toggled the setting, and screenshotted a text block on an actual
+  `ImageViewer`. Skia's output matches Qt's in position, line breaks, size and
+  outline.
+- **Graceful degradation verified** on an interpreter genuinely without
+  skia-python: the engine list offers Qt only, the checkbox disables itself,
+  and `set_engine("skia")` refuses with a clear reason rather than silently
+  giving Qt.
+
+### Memory
+
+`MAX_SURFACE_PIXELS` (64 MP) refuses an oversized allocation rather than
+attempting it, so handing a full webtoon strip to one surface raises
+`SurfaceTooLarge` instead of an OOM kill. Text blocks are per-item surfaces and
+nowhere near the cap. Long-strip *page* rasterisation still goes through the
+existing chunked webtoon pipeline, unchanged.
+
+pytest **420 passed**, ruff clean, headless gate 87/87 (hook, real no-Qt venv,
+and `core/` on its own).
+
+### Left for later, deliberately
+
+- Curved text on the Qt path.
+- Italic differs ~3.6% between engines (different faces resolved for a family).
+- Vertical CJK metrics differ from Qt's by design; parity that matters
+  (preview vs export) holds.
+- Skia is opt-in. Making it the default is a decision for after it has seen
+  real pages.
+
+**Phase 3 (Flutter client) and Phase 4 (native hot spots) are out of scope and
+were not started.**

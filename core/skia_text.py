@@ -170,6 +170,8 @@ class SkiaTextMeasurer(TextMeasurer):
         text_style.setFontFamilies(self._families(style))
         text_style.setFontSize(self.points_to_pixels(style.font_size))
         text_style.setFontStyle(_font_style(style))
+        if style.letter_spacing:
+            text_style.setLetterSpacing(float(style.letter_spacing))
         text_style.setColor(skia.ColorBLACK)
         if style.underline:
             text_style.setDecoration(skia.textlayout.TextDecoration.kUnderline)
