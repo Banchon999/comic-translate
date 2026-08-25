@@ -285,3 +285,17 @@ and `core/` on its own).
 
 **Phase 3 (Flutter client) and Phase 4 (native hot spots) are out of scope and
 were not started.**
+
+### CI note on fonts
+
+The GitHub runner carries **no Thai or CJK face**. Thai and Japanese strings
+there fall back to a Latin one, so any script-specific assertion is trivially
+true on CI and the numbers in the Phase 1 table above were measured on a
+machine that does have those faces (Loma for Thai, WenQuanYi Zen Hei for CJK).
+
+`tests/test_skia_measurer.py` detects this through
+`FontMgr.matchFamilyStyleCharacter` and skips the affected test rather than
+asserting a property of the runner's font set — which is what one of them did,
+and it failed on CI while passing locally. The Qt/Skia agreement cases still
+run everywhere: both engines fall back identically, so comparing them stays
+meaningful even where the script does not render.

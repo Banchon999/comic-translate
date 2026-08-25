@@ -36,6 +36,32 @@ pytestmark = pytest.mark.skipif(
     reason=f"skia-python unavailable: {skia_text.unavailable_reason()}",
 )
 
+
+def _has_face_for(character: str) -> bool:
+    """Whether this machine can actually shape `character` in its own script.
+
+    CI runners are minimal and carry no Thai or CJK face, so a Thai string
+    there falls back to a Latin one and every script-specific property becomes
+    trivially true. Tests that depend on a real face skip rather than assert
+    something about the runner's font set.
+    """
+    if not skia_text.is_available():
+        return False
+    import skia
+
+    latin = skia.FontMgr().matchFamilyStyleCharacter("", skia.FontStyle(), [], ord("A"))
+    target = skia.FontMgr().matchFamilyStyleCharacter(
+        "", skia.FontStyle(), [], ord(character)
+    )
+    if target is None:
+        return False
+    if latin is None:
+        return True
+    return target.getFamilyName() != latin.getFamilyName()
+
+
+HAS_THAI_FACE = _has_face_for("ก")
+
 # Width agreement is exact except where noted; height carries Qt's integer
 # line rounding plus a small CJK line-box difference.
 WIDTH_TOLERANCE_PX = 1.5
@@ -123,6 +149,7 @@ def test_line_spacing_scales_height_not_width(skia_measurer):
     assert doubled[1] > single[1]
 
 
+@pytest.mark.skipif(not HAS_THAI_FACE, reason="no Thai face installed on this machine")
 def test_thai_has_a_taller_line_box_than_latin(skia_measurer):
     """Why the height is read rather than assumed.
 
