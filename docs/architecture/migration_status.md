@@ -546,3 +546,32 @@ one — passed it at zero differing pixels. What caught them was rendering the
 matrix and looking at it.
 
 **Status:** 449 tests passing, ruff clean, headless gate 87/87, parity 0 px.
+
+### Wave 5 — does it actually go faster?
+
+The migration was justified on the text-canvas bottleneck, and nothing had
+measured whether Skia delivers. It does, on the path that matters, and does
+not on the one that does not:
+
+| Path | Qt | Skia | |
+|---|---|---|---|
+| **Fit one block to its bubble** (`pyside_word_wrap`, runs per translated block) | 4.52 ms | **0.22 ms** | **20.8× faster** |
+| Raw uncached measurement | 0.108 ms | 0.059 ms | 1.8× faster |
+| Rasterise a finished page (40 blocks) | 211 ms | 237 ms | 0.89× — *slower* |
+
+For a 40-block page: fitting drops from 181 ms to 9 ms, rasterising rises from
+211 ms to 237 ms. Net **≈146 ms saved per page**, and the saving is in the
+part that scales with block count.
+
+The rasterising loss is expected and partly self-inflicted: the surface is now
+rendered at the export's 2× device scale, which is four times the pixels, and
+that is the fix for the soft-glyph defect above. Sharpness was worth 26 ms.
+
+**The speed is not bought with wrong answers.** Fitting six blocks — Latin
+short/medium/long, CJK, Thai and Arabic RTL — through both engines gives
+identical wrapped text in all six and an identical fitted point size in four.
+Thai and Arabic land one point larger under Skia, which measures those scripts
+slightly tighter; both still fit their box.
+
+**Status:** 449 tests passing, ruff clean, headless 87/87, parity 0 px, CI
+green on `ad5d75e` (test 3.12, test 3.14, headless).
