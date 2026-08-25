@@ -29,7 +29,7 @@ so the failure is a clear error and not an OOM kill.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Optional, Sequence
 
 import numpy as np
@@ -44,6 +44,7 @@ from core.skia_text import (
     _font_style,
     _vertical_clusters,
     apply_base_direction,
+    direction_isolates,
     is_available,
     skia,
     unavailable_reason,
@@ -78,8 +79,41 @@ class SurfaceTooLarge(ValueError):
 
 @dataclass(frozen=True)
 class OutlineLayer:
+    """One outlined range.
+
+    `start`/`end` are offsets into `TextRenderSpec.text`; `end=None` means "to
+    the end". They matter: the app lets a user outline a selection rather than
+    the whole block, and an outline that forgets its range strokes every word.
+    """
+
     width: float
     color: str
+    start: int = 0
+    end: Optional[int] = None
+
+    def covers(self, run_start: int, run_end: int) -> bool:
+        end = self.end if self.end is not None else run_end
+        return run_start < end and run_end > self.start
+
+
+@dataclass(frozen=True)
+class CharRun:
+    """A span of text sharing one character format.
+
+    Produced from the item's QTextDocument on the Qt side. Without these the
+    renderer flattens a block to a single style, so bolding or recolouring one
+    word — which the app supports through `update_text_format` — is lost the
+    moment Skia paints.
+    """
+
+    start: int
+    end: int
+    font_family: Optional[str] = None
+    font_size: Optional[float] = None
+    color: Optional[str] = None
+    bold: Optional[bool] = None
+    italic: Optional[bool] = None
+    underline: Optional[bool] = None
 
 
 @dataclass(frozen=True)
@@ -106,8 +140,51 @@ class TextRenderSpec:
     outlines: Sequence[OutlineLayer] = field(default_factory=tuple)
     shadow: Optional[ShadowSpec] = None
     gradient: Optional[GradientSpec] = None
+    #: Per-range character formats. Empty means the whole block shares
+    #: `style`/`fill_color`, which is what freshly rendered translations look
+    #: like; a user who restyled one word produces runs here.
+    char_runs: Sequence[CharRun] = field(default_factory=tuple)
     #: Box to lay out within. None measures the text and uses that.
     box: Optional[tuple[float, float]] = None
+
+    def runs_for(self, text: str) -> list[CharRun]:
+        """The spans to build the paragraph from, one pushStyle each.
+
+        Split at every character-format boundary **and** at every outline
+        boundary. The outline boundaries matter even when the text is uniformly
+        styled: a block with one run is entirely covered by any outline that
+        touches it, so an outline scoped to one word would stroke the whole
+        block. Splitting first gives the range something to land on.
+        """
+        length = len(text)
+        if length == 0:
+            return []
+
+        base = list(self.char_runs) or [CharRun(0, length)]
+
+        cuts = {0, length}
+        for run in base:
+            cuts.add(max(0, min(length, run.start)))
+            cuts.add(max(0, min(length, run.end)))
+        for outline in self.outlines:
+            cuts.add(max(0, min(length, outline.start)))
+            end = outline.end if outline.end is not None else length
+            cuts.add(max(0, min(length, end)))
+        edges = sorted(cuts)
+
+        def formatting_at(index: int) -> CharRun:
+            for run in base:
+                if run.start <= index < run.end:
+                    return run
+            return base[-1]
+
+        pieces: list[CharRun] = []
+        for start, end in zip(edges, edges[1:]):
+            if start >= end:
+                continue
+            source = formatting_at(start)
+            pieces.append(replace(source, start=start, end=end))
+        return pieces
 
 
 def _skia_color(value, default=(0, 0, 0, 255)):
@@ -227,47 +304,101 @@ class SkiaTextRenderer:
                 if outline.width <= 0:
                     continue
                 self._paint_pass(canvas, line_spec, x, y, layout_width,
-                                 self._outline_paint(outline), ink=outline.color)
+                                 self._outline_paint(outline), ink=outline.color,
+                                 outline=outline)
             self._paint_pass(canvas, line_spec, x, y, layout_width,
-                             self._fill_paint(spec), ink=spec.fill_color)
+                             self._fill_paint(spec), ink=spec.fill_color,
+                             run_colors=True)
 
             y += natural_height * spec.style.line_spacing
 
-    def _paint_pass(self, canvas, spec, x, y, layout_width, paint, ink=None):
-        paragraph = self._paragraph(spec, paint, layout_width, ink=ink)
+    def _paint_pass(self, canvas, spec, x, y, layout_width, paint, ink=None,
+                    outline=None, run_colors=False):
+        paragraph = self._paragraph(spec, paint, layout_width, ink=ink,
+                                    outline=outline, run_colors=run_colors)
         paragraph.paint(canvas, x, y)
 
-    def _paragraph(self, spec: TextRenderSpec, paint, layout_width: float, ink=None):
+    def _paragraph(self, spec: TextRenderSpec, paint, layout_width: float, ink=None,
+                   outline: Optional[OutlineLayer] = None, run_colors: bool = False):
+        """Lay `spec.text` out, one pushStyle/pop per character run.
+
+        `paint` is the pass's paint — shadow, one outline width, or the fill.
+        When `outline` is given, only the runs that outline actually covers get
+        it; everything else is drawn fully transparent. That mirrors what the Qt
+        path does (clone the document, hide it, then colour the covered range),
+        and it is what stops a selection-scoped outline stroking the whole
+        block.
+        """
         style = spec.style
+        text = spec.text
         paragraph_style = skia.textlayout.ParagraphStyle()
         paragraph_style.setTextAlign(_skia_align(style.alignment))
-
-        text_style = skia.textlayout.TextStyle()
-        text_style.setFontFamilies(self.measurer._families(style))
-        text_style.setFontSize(self.measurer.points_to_pixels(style.font_size))
-        text_style.setFontStyle(_font_style(style))
-        if style.letter_spacing:
-            text_style.setLetterSpacing(float(style.letter_spacing))
-        if style.underline:
-            text_style.setDecoration(skia.textlayout.TextDecoration.kUnderline)
-            # The decoration colour has to be set explicitly. Skia does not
-            # take it from the foreground paint the way it takes it from
-            # setColor, so a text style carrying a paint draws the glyphs and
-            # silently omits the underline — which is exactly what happened:
-            # switching to Skia lost the underline on every block that had one.
-            text_style.setDecorationColor(
-                _skia_color(ink) if ink is not None else skia.ColorBLACK
-            )
-        text_style.setForegroundPaint(paint)
-        paragraph_style.setTextStyle(text_style)
+        paragraph_style.setTextStyle(self._text_style(spec, None, paint, ink))
 
         builder = skia.textlayout.ParagraphBuilder.make(
             paragraph_style, _font_collection(), _unicode()
         )
-        builder.addText(apply_base_direction(spec.text, style))
+
+        # The directional isolate has to wrap the whole run sequence, not each
+        # run, or every run becomes its own bidi paragraph.
+        opening, closing = direction_isolates(style)
+        if opening:
+            builder.addText(opening)
+
+        for run in spec.runs_for(text):
+            fragment = text[run.start:run.end]
+            if not fragment:
+                continue
+            covered = outline is None or outline.covers(run.start, run.end)
+            run_paint = paint if covered else _transparent_paint()
+            run_ink = ink if covered else None
+            if run_colors and covered and run.color and spec.gradient is None:
+                # The fill pass honours each run's own colour. A gradient is
+                # item-wide by design and replaces per-range colours while on,
+                # which is what the Qt path does too.
+                run_paint = _solid_paint(run.color)
+                run_ink = run.color
+            builder.pushStyle(self._text_style(spec, run, run_paint, run_ink))
+            builder.addText(fragment)
+            builder.pop()
+
+        if closing:
+            builder.addText(closing)
+
         paragraph = builder.Build()
         paragraph.layout(layout_width)
         return paragraph
+
+    def _text_style(self, spec: TextRenderSpec, run: Optional[CharRun], paint, ink):
+        """A Skia TextStyle for one run, falling back to the block's own style."""
+        style = spec.style
+        pick = lambda attr, default: (
+            default if run is None or getattr(run, attr) is None
+            else getattr(run, attr)
+        )
+
+        family = pick("font_family", style.font_family) or style.font_family
+        bold = bool(pick("bold", style.bold))
+        italic = bool(pick("italic", style.italic))
+        underline = bool(pick("underline", style.underline))
+        size = float(pick("font_size", style.font_size))
+
+        text_style = skia.textlayout.TextStyle()
+        text_style.setFontFamilies(self.measurer._families(replace(style, font_family=family)))
+        text_style.setFontSize(self.measurer.points_to_pixels(size))
+        text_style.setFontStyle(_font_style(replace(style, bold=bold, italic=italic)))
+        if style.letter_spacing:
+            text_style.setLetterSpacing(float(style.letter_spacing))
+        if underline:
+            text_style.setDecoration(skia.textlayout.TextDecoration.kUnderline)
+            # Skia does not take the decoration colour from the foreground
+            # paint the way it takes it from setColor, so without this the
+            # underline is laid out and never drawn.
+            text_style.setDecorationColor(
+                _skia_color(ink) if ink is not None else skia.ColorBLACK
+            )
+        text_style.setForegroundPaint(paint)
+        return text_style
 
     # -- paints ------------------------------------------------------------
 
@@ -364,9 +495,11 @@ class SkiaTextRenderer:
                     if outline.width <= 0:
                         continue
                     self._paint_pass(canvas, cluster_spec, x, y, cluster_layout_w,
-                                     self._outline_paint(outline), ink=outline.color)
+                                     self._outline_paint(outline), ink=outline.color,
+                                     outline=outline)
                 self._paint_pass(canvas, cluster_spec, x, y, cluster_layout_w,
-                                 self._fill_paint(cluster_spec), ink=spec.fill_color)
+                                 self._fill_paint(cluster_spec), ink=spec.fill_color,
+                                 run_colors=True)
                 y += cluster_h
 
 
@@ -395,3 +528,18 @@ def _skia_align(alignment):
         return mapping[Alignment(int(alignment))]
     except (ValueError, KeyError, TypeError):
         return skia.textlayout.TextAlign.kCenter
+
+
+def _solid_paint(color):
+    paint = skia.Paint(AntiAlias=True)
+    paint.setStyle(skia.Paint.kFill_Style)
+    paint.setColor(_skia_color(color))
+    return paint
+
+
+def _transparent_paint():
+    """Draws nothing. Used to hide runs an outline does not cover."""
+    paint = skia.Paint(AntiAlias=True)
+    paint.setStyle(skia.Paint.kFill_Style)
+    paint.setColor(skia.Color4f(0, 0, 0, 0).toColor())
+    return paint

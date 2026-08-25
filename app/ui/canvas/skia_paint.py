@@ -18,10 +18,12 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
+from PySide6 import QtCore
 from PySide6.QtGui import QImage, QPainter
 
 from core.enums import Alignment, LayoutDirection
 from core.skia_render import (
+    CharRun,
     GradientSpec,
     OutlineLayer,
     ShadowSpec,
@@ -98,7 +100,12 @@ def spec_for_item(item) -> TextRenderSpec:
     )
 
     outlines = tuple(
-        OutlineLayer(width=float(o.width), color=_hex(o.color) or "#ffffff")
+        OutlineLayer(
+            width=float(o.width),
+            color=_hex(o.color) or "#ffffff",
+            start=int(getattr(o, "start", 0) or 0),
+            end=int(o.end) if getattr(o, "end", None) is not None else None,
+        )
         for o in getattr(item, "selection_outlines", []) or []
         if float(o.width) > 0
     )
@@ -120,8 +127,10 @@ def spec_for_item(item) -> TextRenderSpec:
         )
 
     rect = item.text_rect()
+    text = _plain_text(item)
     return TextRenderSpec(
-        text=item.toPlainText(),
+        text=text,
+        char_runs=_char_runs(item, text),
         style=style,
         fill_color=_hex(getattr(item, "text_color", None)) or "#000000",
         outlines=outlines,
@@ -185,4 +194,92 @@ def _report_once(key: str, exc: BaseException) -> None:
         "Skia text painting failed, falling back to Qt for this item: %s",
         exc,
         exc_info=True,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Per-range character formats
+# ---------------------------------------------------------------------------
+
+def _plain_text(item) -> str:
+    """The item's text with Qt's separators normalised to newlines.
+
+    `toPlainText()` uses U+2029 between paragraphs and U+2028 for a soft break;
+    every offset downstream is counted against this normalised form.
+    """
+    return (
+        item.toPlainText()
+        .replace("\u2028", "\n")
+        .replace("\u2029", "\n")
+        .replace("\r\n", "\n")
+        .replace("\r", "\n")
+    )
+
+
+def _char_runs(item, text: str) -> tuple[CharRun, ...]:
+    """Walk the item's document into spans that share a character format.
+
+    Returns an empty tuple when the block is uniform, when nothing can be read,
+    or when the walk does not line up with `text` — the renderer then styles
+    the whole block at once, which is what it did before runs existed. Runs
+    whose offsets are even slightly wrong would paint the right styles onto the
+    wrong words, so a mismatch degrades rather than guesses.
+    """
+    try:
+        document = item.document()
+    except Exception:
+        return ()
+    if document is None:
+        return ()
+
+    runs: list[CharRun] = []
+    position = 0
+    block = document.begin()
+    first_block = True
+
+    while block.isValid():
+        if not first_block:
+            position += 1  # the newline that joins two blocks
+        first_block = False
+
+        iterator = block.begin()
+        while not iterator.atEnd():
+            fragment = iterator.fragment()
+            if fragment.isValid():
+                fragment_text = fragment.text() or ""
+                if fragment_text:
+                    runs.append(
+                        _run_from_format(
+                            position, position + len(fragment_text),
+                            fragment.charFormat(),
+                        )
+                    )
+                    position += len(fragment_text)
+            iterator += 1
+        block = block.next()
+
+    if position != len(text):
+        # The walk and the plain text disagree; do not risk misplacing styles.
+        return ()
+    if len(runs) <= 1:
+        return ()
+    return tuple(runs)
+
+
+def _run_from_format(start: int, end: int, char_format) -> CharRun:
+    font = char_format.font()
+    brush = char_format.foreground()
+    color = None
+    if brush is not None and brush.style() != QtCore.Qt.BrushStyle.NoBrush:
+        color = _hex(brush.color())
+    size = font.pointSizeF()
+    return CharRun(
+        start=start,
+        end=end,
+        font_family=font.family() or None,
+        font_size=float(size) if size and size > 0 else None,
+        color=color,
+        bold=font.bold(),
+        italic=font.italic(),
+        underline=font.underline(),
     )

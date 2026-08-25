@@ -119,6 +119,20 @@ def _unicode():
 LRI, RLI, PDI = "\u2066", "\u2067", "\u2069"
 
 
+def direction_isolates(style: TextStyle) -> tuple[str, str]:
+    """The opening and closing isolate for this style's base direction.
+
+    Split out from `apply_base_direction` because the renderer builds a
+    paragraph run by run and has to wrap the whole sequence once — wrapping
+    each run separately would make every run its own bidi paragraph and defeat
+    the reordering the isolate exists to control.
+    """
+    rtl = int(getattr(style.direction, "value", style.direction)) == int(
+        LayoutDirection.RightToLeft
+    )
+    return (RLI if rtl else LRI), PDI
+
+
 def apply_base_direction(text: str, style: TextStyle) -> str:
     """Force `text` to lay out in the block's own direction.
 
@@ -138,10 +152,8 @@ def apply_base_direction(text: str, style: TextStyle) -> str:
     """
     if not text:
         return text
-    rtl = int(getattr(style.direction, "value", style.direction)) == int(
-        LayoutDirection.RightToLeft
-    )
-    return (RLI if rtl else LRI) + text + PDI
+    opening, closing = direction_isolates(style)
+    return opening + text + closing
 
 
 def _font_style(style: TextStyle):
