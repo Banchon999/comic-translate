@@ -113,3 +113,80 @@ def test_the_numpy_shim_pybind11_needs_is_importable():
     import sys
 
     assert "numpy.core.multiarray" in sys.modules
+
+
+# ---------------------------------------------------------------------------
+# The layers and the merged image both have to carry pixels.
+#
+# The tests above check the document size, the group names and order, that a
+# patch became a layer, and that the flattened preview is not black. None of
+# that would notice every *layer* being empty — the preview is written
+# separately by _write_flattened_preview, so a file can preview correctly over
+# transparent layers. A user reported exactly that shape: three groups listed
+# in Photopea, whole canvas transparent.
+#
+# The merged image matters as much as the layers and for the opposite reason:
+# Photoshop re-composites from layers, and almost nothing else does. A file
+# whose layers are fine still opens blank in Photopea, Krita, Preview and every
+# web viewer if that section is wrong.
+# ---------------------------------------------------------------------------
+
+
+def _layer_named(psd, name):
+    for layer in psd.descendants():
+        if layer.name == name:
+            return layer
+    raise AssertionError(f"no layer named {name!r}")
+
+
+def test_the_raw_image_layer_carries_the_page_pixels(exported):
+    """The base art must be *in the layer*, not only in the preview."""
+    psd, _ = exported
+    raw = _layer_named(psd, "Raw Image")
+
+    pixels = raw.numpy()
+    assert pixels is not None, "the Raw Image layer has no pixel data at all"
+    assert pixels.shape[:2] == (HEIGHT, WIDTH)
+    assert pixels.size and pixels.max() > 0, (
+        "the Raw Image layer is entirely zero — the page would open transparent "
+        "in anything that composites from layers"
+    )
+
+    if pixels.shape[2] == 4:
+        alpha = pixels[:, :, 3]
+        assert alpha.max() > 0, (
+            "the Raw Image layer is fully transparent — its alpha is zero "
+            "everywhere, so nothing it contains is ever visible"
+        )
+
+
+def test_the_patch_layer_carries_pixels_too(exported):
+    psd, _ = exported
+    patch = _layer_named(psd, "Patch 1")
+
+    pixels = patch.numpy()
+    assert pixels is not None and pixels.size, "the patch layer has no pixel data"
+    assert pixels.max() > 0, "the patch layer is entirely zero"
+
+
+def test_the_merged_image_is_what_a_non_photoshop_viewer_will_show(exported):
+    """Everything except Photoshop reads this section rather than the layers."""
+    psd, _ = exported
+    merged = psd.topil()
+
+    assert merged is not None, (
+        "the PSD has no merged image — every viewer but Photoshop shows nothing"
+    )
+    array = np.array(merged)
+    assert array.shape[:2] == (HEIGHT, WIDTH)
+
+    if array.ndim == 3 and array.shape[2] == 4:
+        assert array[:, :, 3].max() > 0, (
+            "the merged image is fully transparent — the file opens blank "
+            "everywhere except Photoshop"
+        )
+
+    rgb = array[:, :, :3] if array.ndim == 3 else array
+    assert rgb.max() > rgb.min(), (
+        "the merged image is a single flat colour, not the page"
+    )
