@@ -172,6 +172,7 @@ def _write_page_psd(page: PsdPageData, out_path: str) -> None:
 	doc.add_layer(base_layer)
 
 	_force_rle_compression(doc)
+	_force_full_fill_opacity(doc)
 
 	# Force Photoshop to re-render all text layers on open
 	invalidate = getattr(doc, "invalidate_text_cache", None)
@@ -1046,19 +1047,18 @@ def _force_rle_compression(doc: Any) -> None:
 	"""Make the document write its layer pixels with RLE, not ZipPrediction.
 
 	PhotoshopAPI defaults to ZipPrediction, the least widely implemented of
-	PSD's four compression methods -- Photoshop itself writes RLE. A reader
-	that only handles Raw and RLE recovers *nothing* from a ZipPrediction
-	channel, so the file opens at the right size with every group and layer
-	named correctly and not one pixel anywhere: the whole canvas comes up
-	transparent. Same class of bug as the black merged image section, and the
-	same reason it matters -- an export only Photoshop can open is not an
-	export.
+	PSD's four compression methods -- Photoshop itself writes RLE, and a reader
+	without Zip support recovers nothing from a ZipPrediction channel.
 
-	RLE costs file size on artwork that Zip packs well, and buys the file
-	being readable everywhere. `compression` is a write-only property on
-	LayeredFile and setting it is a no-op on the layer constructors, so it has
-	to be set here on the document. Guarded because an install whose enum
-	predates `rle` should still export, badly, rather than not at all.
+	This is a compatibility improvement, **not** the fix for the export that
+	opened as a blank canvas -- that was `_force_full_fill_opacity` below, and
+	the file was equally blank with RLE. Kept because RLE is what Photoshop
+	writes and it costs only file size on artwork that Zip packs well.
+
+	`compression` is a write-only property on LayeredFile and setting it is a
+	no-op on the layer constructors, so it has to be set here on the document.
+	Guarded because an install whose enum predates `rle` should still export,
+	badly, rather than not at all.
 	"""
 	rle = getattr(getattr(psapi, "enum", None), "Compression", None)
 	rle = getattr(rle, "rle", None)
@@ -1068,6 +1068,36 @@ def _force_rle_compression(doc: Any) -> None:
 		doc.compression = rle
 	except Exception:  # pragma: no cover - depends on the PhotoshopAPI build
 		logger.exception("Could not set the PSD layer compression; layers may not be readable outside Photoshop")
+
+
+def _force_full_fill_opacity(doc: Any) -> None:
+	"""Give every layer fill opacity 1.0. Without this the page opens blank.
+
+	PhotoshopAPI's `fill` defaults to **0.0**, and it writes that straight into
+	each layer's `iOpa` block as 0. A PSD whose layers all have zero fill
+	opacity is intact in every way a parser can see -- correct document size,
+	correct group and layer names, correct bounds, pixels present and
+	decodable, alpha fully opaque -- and draws nothing at all. Photopea shows
+	the right thumbnail beside each layer and an empty checkerboard canvas,
+	with "Fill: 0%" in the layers panel. That is exactly the export people
+	reported as "the PSD is transparent".
+
+	Layer opacity and fill opacity are different fields: `opacity` defaults to
+	1.0 and was always correct, which is why the layers panel reads
+	"Opacity: 100%" while nothing is visible.
+
+	Nothing that reads channel data notices -- psd-tools' `numpy()` returns the
+	pixels regardless -- so this can only be caught by a renderer or by reading
+	`iOpa` out of the bytes, which `tests/test_psd_export.py` now does.
+	"""
+	layers = getattr(doc, "flat_layers", None)
+	if not layers:
+		return
+	for layer in layers:
+		try:
+			layer.fill = 1.0
+		except Exception:  # pragma: no cover - depends on the PhotoshopAPI build
+			logger.exception("Could not set fill opacity on PSD layer %r; it may render as blank", getattr(layer, "name", "?"))
 
 
 def _to_psapi_image_data(rgb_image: np.ndarray) -> np.ndarray:

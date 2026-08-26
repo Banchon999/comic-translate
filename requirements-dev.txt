@@ -10,4 +10,14 @@ pytest>=8.0
 # to author an editable text layer, which is the whole point of the PSD export.
 psd-tools>=1.18
 
+# Drives Photopea in a headless Chromium so a test can check the exported PSD
+# actually *renders*, which no parsing library can tell you: the export that
+# opened as a blank canvas had correct sizes, names, bounds, pixels and alpha,
+# and every layer written with fill opacity 0. See scripts/check_psd_in_photopea.py.
+#
+# Never a CI dependency -- the check reaches a third-party website. Install the
+# package only; the browser is expected to be on the machine already:
+#     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 pip install playwright
+playwright>=1.40
+
 ruff>=0.6

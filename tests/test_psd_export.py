@@ -227,3 +227,87 @@ def test_layer_pixels_use_a_compression_every_reader_implements(exported):
         )
 
     assert checked >= 2, "expected the Raw Image and patch layers to have pixels"
+
+
+def _additional_layer_blocks(path, key):
+    """Every occurrence of one additional-layer-information block, as raw bytes.
+
+    psd-tools does not surface fill opacity at all, and neither does
+    PhotoshopAPI's own reader, so the only way to assert on it is to find the
+    block in the file.
+    """
+    import struct
+
+    data = open(path, "rb").read()
+    found = []
+    position = 0
+    needle = b"8BIM" + key
+    while True:
+        position = data.find(needle, position)
+        if position < 0:
+            return found
+        length = struct.unpack(">I", data[position + 8 : position + 12])[0]
+        found.append(data[position + 12 : position + 12 + length])
+        position += 12
+
+
+def test_layers_are_not_written_with_zero_fill_opacity(exported):
+    """The bug that made an exported page open as an empty canvas.
+
+    PhotoshopAPI's `fill` defaults to 0.0 and it writes that into each layer's
+    `iOpa` block. Every other thing a parser can check is correct — document
+    size, group and layer names, bounds, pixels, alpha — and the page draws
+    nothing at all. Photopea shows the right thumbnail next to each layer, an
+    empty checkerboard canvas, and "Fill: 0%".
+
+    Nothing that reads channel data notices, which is why every assertion
+    above stayed green while the export was unusable.
+
+    The two zeroes this tolerates are the hidden "</Layer group>" divider
+    records Photoshop uses to close a group. They have no content to fill.
+    """
+    _, path = exported
+
+    fills = [block[0] for block in _additional_layer_blocks(path, b"iOpa") if block]
+    assert fills, "no iOpa blocks at all — the file layout is not what we think"
+
+    content_fills = [value for value in fills if value != 0]
+    assert content_fills, (
+        f"every layer has fill opacity 0 ({fills}) — the page opens blank in "
+        f"any renderer, however correct its pixels are"
+    )
+    assert all(value == 255 for value in content_fills), (
+        f"a content layer is partly transparent by fill: {fills}"
+    )
+
+    # The dividers are the only layers allowed to be zero, and there is one per
+    # group, so a third zero means a real layer slipped through.
+    assert fills.count(0) <= 2, f"more zero-fill layers than group dividers: {fills}"
+
+
+def test_layer_bounds_match_what_was_exported(exported):
+    """A layer at the wrong rect renders in the wrong place, or nowhere."""
+    from psd_tools.psd import PSD
+
+    _, path = exported
+    with open(path, "rb") as handle:
+        raw = PSD.read(handle)
+
+    by_name = {
+        record.name: (record.left, record.top, record.right, record.bottom)
+        for record in raw.layer_and_mask_information.layer_info.layer_records
+    }
+
+    assert by_name["Raw Image"] == (0, 0, WIDTH, HEIGHT)
+    # a_page() puts the patch at (20, 40) and makes it 70x30.
+    assert by_name["Patch 1"] == (20, 40, 90, 70)
+
+
+def test_no_pixel_layer_is_fully_transparent(exported):
+    """Alpha zeroed everywhere is invisible however right the colour data is."""
+    psd, _ = exported
+    for layer in psd.descendants():
+        pixels = layer.numpy()
+        if pixels is None or pixels.size == 0 or pixels.shape[2] < 4:
+            continue
+        assert pixels[:, :, 3].max() > 0, f"{layer.name!r} is fully transparent"
