@@ -1,8 +1,9 @@
-from __future__ import annotations
+"""Backwards-compatible re-export.
 
-from app.projects.project_state import ensure_project_blob_materialized
-from modules.utils.file_handler import ensure_prepared_path_materialized
+The implementation moved to `core.path_materialization` so the pipeline can
+import it without reaching into `app`. Existing Qt-side callers keep this name.
+"""
 
+from core.path_materialization import ensure_path_materialized
 
-def ensure_path_materialized(path: str) -> bool:
-    return ensure_project_blob_materialized(path) or ensure_prepared_path_materialized(path)
+__all__ = ["ensure_path_materialized"]

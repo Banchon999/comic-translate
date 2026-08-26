@@ -14,7 +14,8 @@ from modules.utils.device import resolve_device
 from modules.utils.glossary import collect_source_text
 from modules.utils.language_utils import get_language_code, is_no_space_lang
 from modules.utils.language_utils import to_canonical_language_name
-from modules.utils.pipeline_config import validate_ocr, validate_translator
+from app.ui.messages import Messages
+from app.validation import validate_ocr, validate_translator
 from modules.utils.textblock import sort_blk_list
 from modules.utils.translator_utils import is_there_text, format_translations, set_upper_case
 from pipeline.webtoon_utils import get_visible_text_items, get_first_visible_block
@@ -616,6 +617,12 @@ class ManualWorkflowController:
                 self.main.default_error_handler,
                 self.main.on_manual_finished,
             )
+        else:
+            # Cleaning with nothing marked used to fall off the end of this
+            # branch and do nothing at all — no patch, no error, no message —
+            # which is indistinguishable from a broken button. Say what is
+            # missing instead.
+            Messages.show_nothing_to_clean(self.main)
 
     def blk_detect_segment(
         self, 

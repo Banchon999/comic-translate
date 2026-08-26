@@ -4,8 +4,6 @@ import logging
 import inspect
 import imkit as imk
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QImage, QPainter, QPen, QBrush
 
 from modules.inpainting.denoise import denoise_around_mask
 from modules.utils.device import resolve_device
@@ -83,65 +81,16 @@ class InpaintingHandler:
 
         return inpaint_input_img
 
-    def _qimage_to_np(self, qimg: QImage):
-        if qimg.width() <= 0 or qimg.height() <= 0:
-            return np.zeros((max(1, qimg.height()), max(1, qimg.width())), dtype=np.uint8)
-        ptr = qimg.constBits()
-        arr = np.array(ptr).reshape(qimg.height(), qimg.bytesPerLine())
-        return arr[:, :qimg.width()]
-
     def _generate_mask_from_saved_strokes(self, strokes: list[dict], image: np.ndarray):
-        if image is None or not strokes:
-            return None
-        height, width = image.shape[:2]
-        if width <= 0 or height <= 0:
-            return None
+        """Rasterise canvas strokes into a mask.
 
-        human_qimg = QImage(width, height, QImage.Format_Grayscale8)
-        gen_qimg = QImage(width, height, QImage.Format_Grayscale8)
-        human_qimg.fill(0)
-        gen_qimg.fill(0)
+        Imported here rather than at module scope: a saved stroke's 'path' is a
+        QPainterPath, so this path only ever runs with the Qt app driving it,
+        and the pipeline as a whole has to import without Qt.
+        """
+        from app.ui.canvas.stroke_mask import mask_from_saved_strokes
 
-        human_painter = QPainter(human_qimg)
-        gen_painter = QPainter(gen_qimg)
-
-        human_painter.setPen(QPen(QColor(255, 255, 255), 1, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
-        gen_painter.setPen(QPen(QColor(255, 255, 255), 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
-        human_painter.setBrush(QBrush(QColor(255, 255, 255)))
-        gen_painter.setBrush(QBrush(QColor(255, 255, 255)))
-
-        has_any = False
-        for stroke in strokes:
-            path = stroke.get('path')
-            if path is None:
-                continue
-            brush_hex = QColor(stroke.get('brush', '#00000000')).name(QColor.HexArgb)
-            if brush_hex == "#80ff0000":
-                gen_painter.drawPath(path)
-                has_any = True
-                continue
-
-            width_px = max(1, int(stroke.get('width', 25)))
-            human_pen = QPen(QColor(255, 255, 255), width_px, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
-            human_painter.setPen(human_pen)
-            human_painter.drawPath(path)
-            has_any = True
-
-        human_painter.end()
-        gen_painter.end()
-
-        if not has_any:
-            return None
-
-        human_mask = self._qimage_to_np(human_qimg)
-        gen_mask = self._qimage_to_np(gen_qimg)
-        kernel = np.ones((5, 5), np.uint8)
-        human_mask = imk.dilate(human_mask, kernel, iterations=2)
-        gen_mask = imk.dilate(gen_mask, kernel, iterations=3)
-        mask = np.where((human_mask > 0) | (gen_mask > 0), 255, 0).astype(np.uint8)
-        if np.count_nonzero(mask) == 0:
-            return None
-        return mask
+        return mask_from_saved_strokes(strokes, image)
 
     def _get_manual_fast_fill_blocks(self, mappings: list[dict] | None = None) -> list:
         blocks = getattr(self.main_page, "blk_list", None) or []

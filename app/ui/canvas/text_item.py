@@ -9,6 +9,13 @@ from dataclasses import dataclass
 from enum import Enum
 from . import handles
 from .text.vertical_layout import VerticalTextDocumentLayout
+from app.ui.qt_values import to_qt_color, to_qt_layout_direction
+from core import text_engine
+from app.ui.canvas import skia_paint
+# Re-exported: these moved to core so the pipeline can build them without
+# Qt. Same classes, so the project encoder and every existing holder of one
+# are unaffected, and `from .text_item import OutlineInfo` still works.
+from core.text_style import OutlineInfo, OutlineType  # noqa: F401
 from modules.rendering.text_effects import arc_bulge, arc_placements, gradient_line
 
 
@@ -31,17 +38,6 @@ class TextBlockState:
             transform_origin=item.transformOriginPoint()
         )
     
-class OutlineType(Enum):
-    Full_Document = 'full_document'
-    Selection = 'selection'
-    
-@dataclass
-class OutlineInfo:
-    start: int
-    end: int
-    color: QColor
-    width: float
-    type: OutlineType
 
 class TextBlockItem(QGraphicsTextItem):
     text_changed = Signal(str)
@@ -194,10 +190,11 @@ class TextBlockItem(QGraphicsTextItem):
 
     def _apply_text_direction(self):
         text_option = self.document().defaultTextOption()
-        text_option.setTextDirection(self.direction)
+        text_option.setTextDirection(to_qt_layout_direction(self.direction))
         self.document().setDefaultTextOption(text_option)
 
     def set_direction(self, direction):
+        direction = to_qt_layout_direction(direction)
         if self.direction != direction:
             self.direction = direction
             self._apply_text_direction()
@@ -315,7 +312,10 @@ class TextBlockItem(QGraphicsTextItem):
         self.apply_shadow()
 
     def apply_shadow(self):
-        if not self.shadow_enabled:
+        # Skia bakes the shadow into the raster it hands back, so attaching
+        # Qt's effect as well renders it twice — darker and double-offset.
+        # Re-applied on every engine switch (see controller.apply_text_engine).
+        if not self.shadow_enabled or text_engine.paints_with_skia():
             self.setGraphicsEffect(None)
             return
 
@@ -744,6 +744,27 @@ class TextBlockItem(QGraphicsTextItem):
                 )
             return
 
+        # Skia draws the whole item in one pass — fill, outlines and shadow —
+        # so it replaces everything below rather than layering with it. Curved
+        # text is handled above and stays on the Qt path: the arc is baked into
+        # a QPainterPath and has no Skia equivalent yet.
+        #
+        # Editing stays on the Qt path too. The caret and the drag-selection
+        # band are drawn by super().paint() through Qt's text control, and this
+        # branch returns before it — so painting an item being typed into with
+        # Skia leaves the user with no cursor and no visible selection. The
+        # block flips back to Skia the moment focus leaves it.
+        if (
+            not self.editing_mode
+            and text_engine.paints_with_skia()
+            and skia_paint.paint_item(painter, self)
+        ):
+            if self.selected:
+                handles.paint_handles(
+                    painter, self.text_rect(), handles.item_view_scale(self, option, painter)
+                )
+            return
+
         # Outline pass: draw the glyphs underneath, displaced around a circle, so
         # their union is the glyph dilated by the outline width. The fill is then
         # painted on top and stays intact.
@@ -804,7 +825,7 @@ class TextBlockItem(QGraphicsTextItem):
                 if outline_info.width != width:
                     continue
                 fmt = QTextCharFormat()
-                fmt.setForeground(outline_info.color)
+                fmt.setForeground(to_qt_color(outline_info.color))
                 cursor.setPosition(outline_info.start)
                 cursor.setPosition(outline_info.end, QTextCursor.KeepAnchor)
                 cursor.mergeCharFormat(fmt)
@@ -1227,7 +1248,7 @@ class TextBlockItem(QGraphicsTextItem):
             latest_outline = containing_outlines[-1]  # Get the last one from the list
             outline_properties = {
                 'outline': True,
-                'outline_color': latest_outline.color.name(),
+                'outline_color': to_qt_color(latest_outline.color).name(),
                 'outline_width': latest_outline.width
             }
         else:

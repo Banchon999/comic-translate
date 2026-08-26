@@ -51,6 +51,18 @@ jobs:
           fi
           echo "Smoke test passed (exit $rc)"
 
+      # skia-python installs as a single extension module, not a package
+      # directory. A missing skia is silent by design — core/skia_text.py
+      # guards the import and the app falls back to Qt — so without this the
+      # build ships green with the Skia text engine quietly unavailable.
+      - name: Verify the Skia text engine is bundled
+        run: |
+          if ! find dist -name 'skia*.so' -print -quit | grep -q .; then
+            echo "skia-python is not in the bundle - the Skia text engine would be unavailable" >&2
+            exit 1
+          fi
+          echo "Skia bundled: $(find dist -name 'skia*.so' -print -quit)"
+
       - name: Package tarball
         run: |
           cd dist

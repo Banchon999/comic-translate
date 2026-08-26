@@ -12,7 +12,7 @@ from .llm.deepseek import DeepseekTranslation
 from .llm.custom import CustomTranslation
 from .llm.openrouter import OpenRouterTranslation
 from .user import UserTranslator
-from app.account.auth.token_storage import get_token
+from core.credentials import get_token
 
 
 class TranslationFactory:

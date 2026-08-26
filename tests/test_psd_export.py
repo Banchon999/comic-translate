@@ -113,3 +113,201 @@ def test_the_numpy_shim_pybind11_needs_is_importable():
     import sys
 
     assert "numpy.core.multiarray" in sys.modules
+
+
+# ---------------------------------------------------------------------------
+# The layers and the merged image both have to carry pixels.
+#
+# The tests above check the document size, the group names and order, that a
+# patch became a layer, and that the flattened preview is not black. None of
+# that would notice every *layer* being empty — the preview is written
+# separately by _write_flattened_preview, so a file can preview correctly over
+# transparent layers. A user reported exactly that shape: three groups listed
+# in Photopea, whole canvas transparent.
+#
+# The merged image matters as much as the layers and for the opposite reason:
+# Photoshop re-composites from layers, and almost nothing else does. A file
+# whose layers are fine still opens blank in Photopea, Krita, Preview and every
+# web viewer if that section is wrong.
+# ---------------------------------------------------------------------------
+
+
+def _layer_named(psd, name):
+    for layer in psd.descendants():
+        if layer.name == name:
+            return layer
+    raise AssertionError(f"no layer named {name!r}")
+
+
+def test_the_raw_image_layer_carries_the_page_pixels(exported):
+    """The base art must be *in the layer*, not only in the preview."""
+    psd, _ = exported
+    raw = _layer_named(psd, "Raw Image")
+
+    pixels = raw.numpy()
+    assert pixels is not None, "the Raw Image layer has no pixel data at all"
+    assert pixels.shape[:2] == (HEIGHT, WIDTH)
+    assert pixels.size and pixels.max() > 0, (
+        "the Raw Image layer is entirely zero — the page would open transparent "
+        "in anything that composites from layers"
+    )
+
+    if pixels.shape[2] == 4:
+        alpha = pixels[:, :, 3]
+        assert alpha.max() > 0, (
+            "the Raw Image layer is fully transparent — its alpha is zero "
+            "everywhere, so nothing it contains is ever visible"
+        )
+
+
+def test_the_patch_layer_carries_pixels_too(exported):
+    psd, _ = exported
+    patch = _layer_named(psd, "Patch 1")
+
+    pixels = patch.numpy()
+    assert pixels is not None and pixels.size, "the patch layer has no pixel data"
+    assert pixels.max() > 0, "the patch layer is entirely zero"
+
+
+def test_the_merged_image_is_what_a_non_photoshop_viewer_will_show(exported):
+    """Everything except Photoshop reads this section rather than the layers."""
+    psd, _ = exported
+    merged = psd.topil()
+
+    assert merged is not None, (
+        "the PSD has no merged image — every viewer but Photoshop shows nothing"
+    )
+    array = np.array(merged)
+    assert array.shape[:2] == (HEIGHT, WIDTH)
+
+    if array.ndim == 3 and array.shape[2] == 4:
+        assert array[:, :, 3].max() > 0, (
+            "the merged image is fully transparent — the file opens blank "
+            "everywhere except Photoshop"
+        )
+
+    rgb = array[:, :, :3] if array.ndim == 3 else array
+    assert rgb.max() > rgb.min(), (
+        "the merged image is a single flat colour, not the page"
+    )
+
+
+def test_layer_pixels_use_a_compression_every_reader_implements(exported):
+    """PhotoshopAPI defaults to ZipPrediction; almost nothing but Photoshop reads it.
+
+    This is what made the export open as a blank canvas: the document size and
+    every group and layer name parse fine, because those live in the layer
+    *records*, and then each channel's pixels turn out to be Zip-compressed and
+    a reader without Zip support recovers nothing from them. Photoshop itself
+    writes RLE.
+
+    Read straight out of the bytes — psd-tools decodes Zip perfectly well, so
+    the assertions above stay green either way, which is exactly why they did
+    not catch this.
+    """
+    from psd_tools.psd import PSD
+    from psd_tools.constants import Compression
+
+    _, path = exported
+    with open(path, "rb") as handle:
+        raw = PSD.read(handle)
+
+    layer_info = raw.layer_and_mask_information.layer_info
+    readable = {Compression.RAW, Compression.RLE}
+
+    checked = 0
+    for record, channels in zip(layer_info.layer_records, layer_info.channel_image_data):
+        if record.right - record.left <= 0 or record.bottom - record.top <= 0:
+            continue  # a group divider or a text layer: no pixels to compress
+        checked += 1
+        used = {channel.compression for channel in channels}
+        assert used <= readable, (
+            f"layer {record.name!r} stores its pixels as {used} — a reader "
+            f"without Zip support decodes nothing and the layer appears empty"
+        )
+
+    assert checked >= 2, "expected the Raw Image and patch layers to have pixels"
+
+
+def _additional_layer_blocks(path, key):
+    """Every occurrence of one additional-layer-information block, as raw bytes.
+
+    psd-tools does not surface fill opacity at all, and neither does
+    PhotoshopAPI's own reader, so the only way to assert on it is to find the
+    block in the file.
+    """
+    import struct
+
+    data = open(path, "rb").read()
+    found = []
+    position = 0
+    needle = b"8BIM" + key
+    while True:
+        position = data.find(needle, position)
+        if position < 0:
+            return found
+        length = struct.unpack(">I", data[position + 8 : position + 12])[0]
+        found.append(data[position + 12 : position + 12 + length])
+        position += 12
+
+
+def test_layers_are_not_written_with_zero_fill_opacity(exported):
+    """The bug that made an exported page open as an empty canvas.
+
+    PhotoshopAPI's `fill` defaults to 0.0 and it writes that into each layer's
+    `iOpa` block. Every other thing a parser can check is correct — document
+    size, group and layer names, bounds, pixels, alpha — and the page draws
+    nothing at all. Photopea shows the right thumbnail next to each layer, an
+    empty checkerboard canvas, and "Fill: 0%".
+
+    Nothing that reads channel data notices, which is why every assertion
+    above stayed green while the export was unusable.
+
+    The two zeroes this tolerates are the hidden "</Layer group>" divider
+    records Photoshop uses to close a group. They have no content to fill.
+    """
+    _, path = exported
+
+    fills = [block[0] for block in _additional_layer_blocks(path, b"iOpa") if block]
+    assert fills, "no iOpa blocks at all — the file layout is not what we think"
+
+    content_fills = [value for value in fills if value != 0]
+    assert content_fills, (
+        f"every layer has fill opacity 0 ({fills}) — the page opens blank in "
+        f"any renderer, however correct its pixels are"
+    )
+    assert all(value == 255 for value in content_fills), (
+        f"a content layer is partly transparent by fill: {fills}"
+    )
+
+    # The dividers are the only layers allowed to be zero, and there is one per
+    # group, so a third zero means a real layer slipped through.
+    assert fills.count(0) <= 2, f"more zero-fill layers than group dividers: {fills}"
+
+
+def test_layer_bounds_match_what_was_exported(exported):
+    """A layer at the wrong rect renders in the wrong place, or nowhere."""
+    from psd_tools.psd import PSD
+
+    _, path = exported
+    with open(path, "rb") as handle:
+        raw = PSD.read(handle)
+
+    by_name = {
+        record.name: (record.left, record.top, record.right, record.bottom)
+        for record in raw.layer_and_mask_information.layer_info.layer_records
+    }
+
+    assert by_name["Raw Image"] == (0, 0, WIDTH, HEIGHT)
+    # a_page() puts the patch at (20, 40) and makes it 70x30.
+    assert by_name["Patch 1"] == (20, 40, 90, 70)
+
+
+def test_no_pixel_layer_is_fully_transparent(exported):
+    """Alpha zeroed everywhere is invisible however right the colour data is."""
+    psd, _ = exported
+    for layer in psd.descendants():
+        pixels = layer.numpy()
+        if pixels is None or pixels.size == 0 or pixels.shape[2] < 4:
+            continue
+        assert pixels[:, :, 3].max() > 0, f"{layer.name!r} is fully transparent"

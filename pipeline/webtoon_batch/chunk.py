@@ -6,9 +6,9 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 import imkit as imk
 import numpy as np
 import requests
-from PySide6.QtCore import QCoreApplication
 
-from app.ui.messages import Messages
+from core.i18n import translate
+from core.messages import server_error_text
 from modules.detection.processor import TextBlockDetector
 from modules.translation.processor import Translator
 from modules.utils.device import resolve_device
@@ -91,14 +91,14 @@ class ChunkMixin:
         self: WebtoonBatchProcessor, error: Exception, context: str
     ) -> str:
         if isinstance(error, requests.exceptions.ConnectionError):
-            return QCoreApplication.translate(
+            return translate(
                 "Messages",
                 "Unable to connect to the server.\nPlease check your internet connection.",
             )
         if isinstance(error, requests.exceptions.HTTPError):
             status_code = error.response.status_code if error.response is not None else 500
             if status_code >= 500:
-                return Messages.get_server_error_text(status_code, context=context)
+                return server_error_text(status_code, context=context)
             try:
                 err_json = error.response.json()
                 if "detail" in err_json and isinstance(err_json["detail"], dict):

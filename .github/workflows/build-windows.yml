@@ -23,12 +23,45 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      - name: Locate Skia's ICU data file
+        shell: pwsh
+        run: |
+          # skia-python needs icudtl.dat beside the executable on Windows, and
+          # PyInstaller does not collect it: it is a data file, not a Python
+          # import, so nothing in the dependency graph points at it. Without it
+          # skia.Unicode.ICU_Make() returns None and the first ParagraphBuilder
+          # dereferences a null pointer — a native access violation that kills
+          # the process with no traceback. That is what shipped.
+          #
+          # Linux does not have this problem, which is why it went unnoticed:
+          # there skia-python links ICU statically into the single .so.
+          # The wheel ships it as a .data entry —
+          # skia_python-*.data/data/Lib/site-packages/icudtl.dat — which pip
+          # installs beside skia.pyd in site-packages. Checked directly rather
+          # than by searching: a recursive scan of site-packages takes minutes
+          # once torch is installed, for a file whose location is known.
+          $icu = python -c "import pathlib, sysconfig, skia; cands = [pathlib.Path(skia.__file__).parent / 'icudtl.dat', pathlib.Path(sysconfig.get_paths()['purelib']) / 'icudtl.dat', pathlib.Path(sysconfig.get_paths()['data']) / 'Lib' / 'site-packages' / 'icudtl.dat']; hit = next((c for c in cands if c.is_file()), None); print(hit or '')"
+          if (-not $icu) {
+            # Last resort, and worth the minutes if the layout ever moves.
+            $site = python -c "import sysconfig; print(sysconfig.get_paths()['purelib'])"
+            $found = Get-ChildItem -Path $site -Recurse -File -Filter 'icudtl.dat' -ErrorAction SilentlyContinue |
+                     Select-Object -First 1
+            if ($found) { $icu = $found.FullName }
+          }
+          if (-not $icu) {
+            Write-Error "icudtl.dat not found - the Skia text engine cannot start without it"
+            exit 1
+          }
+          Write-Output "icudtl.dat: $icu"
+          "ICU_DATA_FILE=$icu" | Out-File -FilePath $env:GITHUB_ENV -Append
+
       - name: Build app with PyInstaller
         run: |
           pyinstaller --noconfirm --clean --windowed `
             --name ComicTranslate `
             --icon resources/icons/icon.ico `
             --add-data "resources;resources" `
+            --add-data "$env:ICU_DATA_FILE;." `
             comic.py
 
       - name: Smoke test bundle
@@ -42,6 +75,50 @@ jobs:
           }
           Stop-Process -Id $p.Id -Force
           Write-Output "Smoke test passed"
+
+      # skia-python installs as a single extension module, not a package
+      # directory, so the directory check used for the PyTorch stack would not
+      # find it. A missing skia is silent by design — core/skia_text.py guards
+      # the import and the app falls back to the Qt renderer — so without this
+      # the build ships green with the Skia text engine quietly unavailable.
+      - name: Verify the Skia text engine is bundled
+        shell: pwsh
+        run: |
+          $found = Get-ChildItem -Path dist -Recurse -File -Filter 'skia*.pyd' -ErrorAction SilentlyContinue
+          if (-not $found) {
+            Write-Error "skia-python is not in the bundle - the Skia text engine would be unavailable"
+            exit 1
+          }
+          Write-Output "Skia bundled: $($found[0].Name)"
+
+          # The file being present is not the same as the runtime working. A
+          # build shipped with skia*.pyd in place and still died the instant
+          # Render was pressed: `import skia` succeeded, so the engine was
+          # selected, and the fault came later inside the native library.
+          # Run the real probe in the built exe — it constructs a font manager,
+          # builds and lays out a paragraph and rasterises a surface, which is
+          # what the render path actually does.
+          $exe = Get-ChildItem -Path dist -Recurse -File -Filter 'ComicTranslate.exe' |
+                 Select-Object -First 1
+          if (-not $exe) { Write-Error "no ComicTranslate.exe in dist"; exit 1 }
+
+          # Start-Process -Wait, not the call operator. This is a --windowed
+          # build, so `& $exe` returns immediately without waiting and leaves
+          # $LASTEXITCODE empty -- which compares unequal to 0 and would fail
+          # this step even when the runtime is healthy. The probe's reason also
+          # has to be redirected, since a windowed exe has no console to
+          # inherit and its stderr would otherwise be lost.
+          $errFile = Join-Path $env:RUNNER_TEMP 'skia-self-test.err'
+          $proc = Start-Process -FilePath $exe.FullName `
+                                -ArgumentList '--skia-self-test' `
+                                -Wait -PassThru -NoNewWindow `
+                                -RedirectStandardError $errFile
+          $detail = if (Test-Path $errFile) { (Get-Content $errFile -Raw).Trim() } else { '' }
+          if ($proc.ExitCode -ne 0) {
+            Write-Error "the Skia runtime self-test failed in the bundle (exit $($proc.ExitCode)): $detail"
+            exit 1
+          }
+          Write-Output "Skia runtime self-test passed in the frozen bundle"
 
       - name: Package zip
         shell: pwsh

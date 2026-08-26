@@ -6,12 +6,9 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, List
 
 import imkit as imk
-from PySide6.QtGui import QColor
 
-from app.path_materialization import ensure_path_materialized
-from app.ui.canvas.save_renderer import ImageSaveRenderer
-from app.ui.canvas.text.text_item_properties import TextItemProperties
-from app.ui.canvas.text_item import OutlineInfo, OutlineType
+from core.path_materialization import ensure_path_materialized
+from core.text_style import build_text_item_state
 from modules.rendering.render import get_best_render_area, is_vertical_block, pyside_word_wrap, font_family_for_block
 from modules.utils.image_utils import get_smart_text_color
 from modules.utils.language_utils import get_language_code, is_no_space_lang
@@ -66,13 +63,13 @@ class RenderMixin:
 
         render_settings = self.main_page.render_settings()
         font = render_settings.font_family
-        base_font_color = QColor(render_settings.color)
+        base_font_color = render_settings.color
         max_font_size = render_settings.max_font_size
         min_font_size = render_settings.min_font_size
         line_spacing = float(render_settings.line_spacing)
         outline_width = float(render_settings.outline_width)
         outline = render_settings.outline
-        outline_color = QColor(render_settings.outline_color) if outline else None
+        outline_color = render_settings.outline_color if outline else None
         bold = render_settings.bold
         italic = render_settings.italic
         underline = render_settings.underline
@@ -148,7 +145,7 @@ class RenderMixin:
                     wrapped_translation, font_size, render_block, image_path
                 )
 
-            text_props = TextItemProperties(
+            viewer_state["text_items_state"].append(build_text_item_state(
                 text=wrapped_translation,
                 font_family=block_font,
                 font_size=font_size,
@@ -168,19 +165,8 @@ class RenderMixin:
                 height=rendered_height,
                 direction=direction,
                 vertical=vertical,
-                selection_outlines=[
-                    OutlineInfo(
-                        0,
-                        len(wrapped_translation),
-                        outline_color,
-                        outline_width,
-                        OutlineType.Full_Document,
-                    )
-                ]
-                if outline
-                else [],
-            )
-            viewer_state["text_items_state"].append(text_props.to_dict())
+                outline=outline,
+            ))
 
     def _save_final_rendered_page(
         self: WebtoonBatchProcessor, page_idx: int, image_path: str, timestamp: str
@@ -221,6 +207,8 @@ class RenderMixin:
         export_settings = settings_page.get_export_settings()
 
         if export_settings["export_inpainted_image"]:
+            from app.ui.canvas.save_renderer import ImageSaveRenderer
+
             renderer = ImageSaveRenderer(image)
             patches = self.final_patches_for_save.get(image_path, [])
             renderer.apply_patches(patches)

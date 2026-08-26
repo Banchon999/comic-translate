@@ -1,4 +1,4 @@
-from PySide6.QtCore import Qt
+from core.enums import LayoutDirection
 
 language_codes = {
     "Korean": "ko",
@@ -31,9 +31,9 @@ language_codes = {
     "Mongolian": "mn",
 }
 
-def get_layout_direction(language: str) -> Qt.LayoutDirection:
+def get_layout_direction(language: str) -> LayoutDirection:
     rtl_languages = {"Arabic", "Hebrew", "Persian"}
-    return Qt.LayoutDirection.RightToLeft if language in rtl_languages else Qt.LayoutDirection.LeftToRight
+    return LayoutDirection.RightToLeft if language in rtl_languages else LayoutDirection.LeftToRight
 
 def get_language_code(lng: str):
     lng_cd = language_codes.get(lng, None)

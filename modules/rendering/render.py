@@ -2,16 +2,14 @@ import numpy as np
 from typing import Tuple, List
 
 from PIL import Image, ImageFont, ImageDraw
-from PySide6.QtGui import QFont, QTextDocument,\
-      QTextCursor, QTextBlockFormat, QTextOption
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication
+
+from core.enums import Alignment, LayoutDirection
+from core.text_measure import TextStyle, get_measurer
 
 from .hyphen_textwrap import wrap as hyphen_wrap
 from modules.utils.textblock import TextBlock
 from modules.utils.textblock import adjust_blks_size
 from modules.detection.utils.geometry import shrink_bbox
-from app.ui.canvas.text.vertical_layout import VerticalTextDocumentLayout
 from modules.utils.language_utils import get_language_code, is_no_space_lang
 
 from dataclasses import dataclass
@@ -31,7 +29,7 @@ class TextRenderingSettings:
     italic: bool
     underline: bool
     line_spacing: str
-    direction: Qt.LayoutDirection
+    direction: LayoutDirection
     # Optional per-text-type fonts; empty string falls back to font_family
     bubble_font_family: str = ""
     free_font_family: str = ""
@@ -361,8 +359,8 @@ def pyside_word_wrap(
     bold: bool, 
     italic: bool, 
     underline: bool, 
-    alignment: Qt.AlignmentFlag,
-    direction: Qt.LayoutDirection, 
+    alignment: Alignment,
+    direction: LayoutDirection, 
     init_font_size: int, 
     min_font_size: int = 10, 
     vertical: bool = False,
@@ -371,16 +369,26 @@ def pyside_word_wrap(
 ) -> tuple:
     
     """Break long text to multiple lines, and find the largest point size
-        so that all wrapped text fits within the box."""
-    
-    def prepare_font(font_size):
-        effective_family = font_input.strip() if isinstance(font_input, str) and font_input.strip() else QApplication.font().family()
-        font = QFont(effective_family, font_size)
-        font.setBold(bold)
-        font.setItalic(italic)
-        font.setUnderline(underline)
+        so that all wrapped text fits within the box.
 
-        return font
+    Measurement goes through `core.text_measure`, so this module imports
+    without a text engine and Phase 1 can swap Qt for Skia underneath it. The
+    name is kept because it is called from a dozen places; it is no longer
+    PySide-specific.
+    """
+
+    measurer = get_measurer()
+    base_style = TextStyle(
+        font_family=font_input,
+        font_size=init_font_size,
+        bold=bold,
+        italic=italic,
+        underline=underline,
+        line_spacing=line_spacing,
+        alignment=alignment,
+        direction=direction,
+        vertical=vertical,
+    )
 
     def eval_metrics(
         txt: str,
@@ -388,45 +396,18 @@ def pyside_word_wrap(
         vertical: bool = False,
         include_outline: bool = True
     ) -> Tuple[float, float]:
-        """Quick helper function to calculate width/height of text using QTextDocument."""
-        
-        # Create a QTextDocument
-        doc = QTextDocument()
-        doc.setDefaultFont(prepare_font(font_sz))
-        doc.setPlainText(txt)
+        """Width/height of `txt`, with the outline padding the caller wants."""
+        width, height = measurer.measure(txt, base_style.with_size(font_sz))
 
-        # Set text direction
-        text_option = QTextOption()
-        text_option.setTextDirection(direction)
-        doc.setDefaultTextOption(text_option)
-
-        if vertical:
-            layout = VerticalTextDocumentLayout(
-                document=doc,
-                line_spacing=line_spacing
-            )
-
-            doc.setDocumentLayout(layout)
-            layout.update_layout()
-        else:
-            # Apply line spacing
-            cursor = QTextCursor(doc)
-            cursor.select(QTextCursor.SelectionType.Document)
-            block_format = QTextBlockFormat()
-            spacing = line_spacing * 100
-            block_format.setLineHeight(spacing, QTextBlockFormat.LineHeightTypes.ProportionalHeight.value)
-            block_format.setAlignment(alignment)
-            cursor.mergeBlockFormat(block_format)
-        
-        # Get the size of the document
-        size = doc.size()
-        width, height = size.width(), size.height()
-        
-        # Add outline width to the size
+        # The outline pads the drawn result without moving a glyph, so the
+        # engine does not know about it and it is added here. It is included
+        # while searching for a fit — text has to fit its box *with* the
+        # outline — and excluded from the metrics handed back for persistence,
+        # which describe the text box itself.
         if include_outline and outline_width > 0:
             width += 2 * outline_width
             height += 2 * outline_width
-        
+
         return width, height
 
     # Segmented once and reused across every font size the search below
@@ -481,51 +462,6 @@ def pyside_word_wrap(
 
     return best_text, best_size
 
-    # mutable_message = text
-    # font_size = init_font_size
-    # # font_size = max(roi_width, roi_height)
-
-    # while font_size > min_font_size:
-    #     width, height = eval_metrics(mutable_message, font_size)
-    #     if height > roi_height:
-    #         font_size -= 1  # Reduce pointsize
-    #         mutable_message = text  # Restore original text
-    #     elif width > roi_width:
-    #         columns = len(mutable_message)
-    #         while columns > 0:
-    #             columns -= 1
-    #             if columns == 0:
-    #                 break
-    #             mutable_message = '\n'.join(hyphen_wrap(text, columns, break_on_hyphens=False, break_long_words=False, hyphenate_broken_words=True)) 
-    #             wrapped_width, _ = eval_metrics(mutable_message, font_size)
-    #             if wrapped_width <= roi_width:
-    #                 break
-    #         if columns < 1:
-    #             font_size -= 1  # Reduce pointsize
-    #             mutable_message = text  # Restore original text
-    #     else:
-    #         break
-
-    # if font_size <= min_font_size:
-    #     font_size = min_font_size
-    #     mutable_message = text
-
-    #     # Wrap text to fit within as much as possible
-    #     # Minimize cost function: (width - roi_width)^2 + (height - roi_height)^2
-    #     min_cost = 1e9
-    #     min_text = text
-    #     for columns in range(1, len(text)):
-    #         wrapped_text = '\n'.join(hyphen_wrap(text, columns, break_on_hyphens=False, break_long_words=False, hyphenate_broken_words=True))
-    #         wrapped_width, wrapped_height = eval_metrics(wrapped_text, font_size)
-    #         cost = (wrapped_width - roi_width)**2 + (wrapped_height - roi_height)**2
-    #         if cost < min_cost:
-    #             min_cost = cost
-    #             min_text = wrapped_text
-
-    #     mutable_message = min_text
-
-    # return mutable_message, font_size
-
 def manual_wrap(
     main_page, 
     blk_list: List[TextBlock], 
@@ -536,8 +472,8 @@ def manual_wrap(
     bold: bool, 
     italic: bool, 
     underline: bool, 
-    alignment: Qt.AlignmentFlag, 
-    direction: Qt.LayoutDirection, 
+    alignment: Alignment, 
+    direction: LayoutDirection, 
     init_font_size: int = 40, 
     min_font_size: int = 10
 ):

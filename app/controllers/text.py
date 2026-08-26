@@ -16,7 +16,8 @@ from app.ui.canvas.text.text_item_properties import TextItemProperties
 
 from modules.utils.textblock import TextBlock
 from modules.rendering.render import TextRenderingSettings, manual_wrap, is_vertical_block, pyside_word_wrap, font_family_for_block
-from modules.utils.pipeline_config import font_selected
+from app.validation import font_selected
+from app.ui.qt_values import to_qt_layout_direction
 from modules.utils.language_utils import get_language_code, get_layout_direction, is_no_space_lang
 from modules.utils.language_utils import to_canonical_language_name
 from modules.utils.image_utils import get_smart_text_color
@@ -126,10 +127,9 @@ class TextController:
         render_settings = self.render_settings()
         font_family = font_family_for_block(render_settings, blk)
         text_color_str = render_settings.color
-        text_color = QColor(text_color_str)
 
         # Smart Color Override
-        text_color = get_smart_text_color(blk.font_color, text_color)
+        text_color = QColor(get_smart_text_color(blk.font_color, text_color_str))
 
         id = render_settings.alignment_id
         alignment = self.main.button_to_alignment[id]
@@ -366,7 +366,7 @@ class TextController:
         target_en = self.main.lang_mapping.get(target_lang, target_lang)
         t_direction = get_layout_direction(target_en)
         t_text_option = self.main.t_text_edit.document().defaultTextOption()
-        t_text_option.setTextDirection(t_direction)
+        t_text_option.setTextDirection(to_qt_layout_direction(t_direction))
         self.main.t_text_edit.document().setDefaultTextOption(t_text_option)
 
         if self.main.curr_img_idx >= 0:
@@ -938,7 +938,7 @@ class TextController:
             direction = render_settings.direction
             max_font_size = self.main.settings_page.get_max_font_size()
             min_font_size = self.main.settings_page.get_min_font_size()
-            setting_font_color = QColor(render_settings.color)
+            setting_font_color = render_settings.color
             outline_color = (
                 QColor(render_settings.outline_color)
                 if render_settings.outline
@@ -1002,7 +1002,7 @@ class TextController:
                             return_metrics=True,
                         )
 
-                        font_color = get_smart_text_color(blk.font_color, setting_font_color)
+                        font_color = QColor(get_smart_text_color(blk.font_color, setting_font_color))
                         text_props = TextItemProperties(
                             text=wrapped,
                             font_family=blk_font_family,

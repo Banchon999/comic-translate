@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import requests
 import numpy as np
 import logging
@@ -10,13 +12,17 @@ from ..utils.textblock import lists_to_blk_list
 from ..utils.textblock import adjust_text_line_coordinates
 from ..utils.language_utils import resolve_auto_source_language
 
-from app.account.auth.auth_client import AuthClient
-from app.account.auth.token_storage import get_token
-from app.ui.settings.settings_page import SettingsPage
+from typing import TYPE_CHECKING
+
+from core.credentials import get_token
 from app.account.config import WEB_API_OCR_URL
 from ..utils.exceptions import InsufficientCreditsException, ContentFlaggedException
 from ..utils.platform_utils import get_client_os
 
+
+if TYPE_CHECKING:
+    from app.account.auth.auth_client import AuthClient
+    from app.ui.settings.settings_page import SettingsPage
 
 logger = logging.getLogger(__name__)
 

@@ -598,6 +598,17 @@ class ImageViewer(QGraphicsView):
         if self.webtoon_mode:
             return self.webtoon_manager.layout_manager.page_to_scene_coordinates(page_index, local_pos)
 
+    def page_to_scene_xy(self, page_index: int, x: float, y: float) -> tuple[float, float] | None:
+        """page_to_scene_coordinates for callers that must not touch QPointF.
+
+        The pipeline converts webtoon detection boxes into scene space and has
+        to import without Qt, so it needs the plain-number form.
+        """
+        scene_pos = self.page_to_scene_coordinates(page_index, QPointF(x, y))
+        if scene_pos is None:
+            return None
+        return scene_pos.x(), scene_pos.y()
+
     def get_visible_area_image(self, paint_all=False, include_patches=True) -> Tuple[np.ndarray, list]:
         if self.webtoon_mode:
             return self.webtoon_manager.get_visible_area_image(paint_all, include_patches)

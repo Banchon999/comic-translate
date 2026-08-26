@@ -1,4 +1,5 @@
 from .dayu_widgets.message import MMessage
+from core.messages import content_flagged_text, server_error_text
 from PySide6.QtCore import QCoreApplication, Qt
 from PySide6 import QtWidgets
 
@@ -158,31 +159,12 @@ class Messages:
 
     @staticmethod
     def get_server_error_text(status_code: int = 500, context: str = None) -> str:
+        """Localised text for a 5xx. Thread-safe — touches no UI.
+
+        The implementation is in core.messages so the pipeline can build this
+        text without importing the widget layer.
         """
-        Return the localized error string for a given HTTP status code.
-        Thread-safe — does not touch the UI. Use this from worker threads,
-        then pass the result through a signal so the UI can display it.
-
-        Args:
-            status_code: HTTP status code (500, 501, 502, 503, 504)
-            context: optional context ('translation', 'ocr', or None for generic)
-        """
-        messages = {
-            500: QCoreApplication.translate("Messages", "We encountered an unexpected server error.\nPlease try again in a few moments."),
-            502: QCoreApplication.translate("Messages", "The external service provider is having trouble.\nPlease try again later."),
-            503: QCoreApplication.translate("Messages", "The server is currently busy or under maintenance.\nPlease try again shortly."),
-            504: QCoreApplication.translate("Messages", "The server took too long to respond.\nPlease check your connection or try again later."),
-        }
-
-        if status_code == 501:
-            if context == 'ocr':
-                return QCoreApplication.translate("Messages", "The selected text recognition tool is not supported.\nPlease select a different tool in Settings.")
-            elif context == 'translation':
-                return QCoreApplication.translate("Messages", "The selected translator is not supported.\nPlease select a different tool in Settings.")
-            else:
-                return QCoreApplication.translate("Messages", "The selected tool is not supported.\nPlease select a different tool in Settings.")
-
-        return messages.get(status_code, messages[500])
+        return server_error_text(status_code, context)
 
     @staticmethod
     def show_server_error(parent, status_code: int = 500, context: str = None):
@@ -219,26 +201,8 @@ class Messages:
 
     @staticmethod
     def get_content_flagged_text(details: str = None, context: str = "Operation") -> str:
-        """
-        Build the standardized content-flagged error text.
-        """
-        if context == "OCR":
-            msg = QCoreApplication.translate(
-                "Messages",
-                "Text Recognition blocked: The AI provider flagged this content.\nPlease try a different Text Recognition tool."
-            )
-        elif context in ("Translator", "Translation"):
-            msg = QCoreApplication.translate(
-                "Messages",
-                "Translation blocked: The AI provider flagged this content.\nPlease try a different translator."
-            )
-        else:
-            msg = QCoreApplication.translate(
-                "Messages",
-                "Operation blocked: The AI provider flagged this content.\nPlease try a different tool."
-            )
-        
-        return msg
+        """Build the standardized content-flagged error text."""
+        return content_flagged_text(details=details, context=context)
 
     @staticmethod
     def show_content_flagged_error(parent, details: str = None, context: str = "Operation", duration=None, closable=True):
@@ -251,6 +215,27 @@ class Messages:
             parent=parent,
             duration=duration,
             closable=closable
+        )
+
+    @staticmethod
+    def show_nothing_to_clean(parent):
+        """Clean was pressed with no area marked.
+
+        Cleaning reads brush strokes, lasso and wand regions, and boxes the user
+        has selected. With none of those the operation has nothing to do, and it
+        used to return silently — which reads as a broken button rather than as
+        a missing step.
+        """
+        return MMessage.info(
+            text=QCoreApplication.translate(
+                "Messages",
+                "Nothing is marked to clean.\n"
+                "Draw a box over the leftover text, or paint it with the brush, "
+                "lasso or magic wand, then press Clean."
+            ),
+            parent=parent,
+            duration=None,
+            closable=True
         )
 
     @staticmethod

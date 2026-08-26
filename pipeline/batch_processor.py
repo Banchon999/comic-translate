@@ -11,9 +11,10 @@ import numpy as np
 from typing import TYPE_CHECKING
 from datetime import datetime
 from typing import List
-from PySide6.QtCore import QCoreApplication
-from PySide6.QtGui import QColor
 
+from core.i18n import translate
+from core.text_style import build_text_item_state
+from core.messages import server_error_text
 from modules.detection.processor import TextBlockDetector
 from modules.translation.processor import Translator
 from modules.utils.textblock import sort_blk_list
@@ -26,10 +27,7 @@ from modules.rendering.render import get_best_render_area, pyside_word_wrap, is_
 from modules.utils.device import resolve_device
 from modules.utils.exceptions import InsufficientCreditsException
 from modules.utils.glossary import collect_source_text
-from app.path_materialization import ensure_path_materialized
-from app.ui.canvas.text_item import OutlineInfo, OutlineType
-from app.ui.canvas.text.text_item_properties import TextItemProperties
-from app.ui.messages import Messages
+from core.path_materialization import ensure_path_materialized
 from .cache_manager import CacheManager
 from .block_detection import BlockDetectionHandler
 from .inpainting import InpaintingHandler, call_inpaint_image
@@ -351,12 +349,12 @@ class BatchProcessor:
                 except Exception as e:
                     # if it's a connection/network error, give a short message
                     if isinstance(e, requests.exceptions.ConnectionError):
-                        err_msg = QCoreApplication.translate("Messages", "Unable to connect to the server.\nPlease check your internet connection.")
+                        err_msg = translate("Messages", "Unable to connect to the server.\nPlease check your internet connection.")
                     # if it's an HTTPError, try to pull the "error_description" field
                     elif isinstance(e, requests.exceptions.HTTPError):
                         status_code = e.response.status_code if e.response is not None else 500
                         if status_code >= 500:
-                            err_msg = Messages.get_server_error_text(status_code, context='ocr')
+                            err_msg = server_error_text(status_code, context='ocr')
                         else:
                             try:
                                 err_json = e.response.json()
@@ -405,12 +403,12 @@ class BatchProcessor:
             except Exception as e:
                 # if it's a connection/network error, give a short message
                 if isinstance(e, requests.exceptions.ConnectionError):
-                    err_msg = QCoreApplication.translate("Messages", "Unable to connect to the server.\nPlease check your internet connection.")
+                    err_msg = translate("Messages", "Unable to connect to the server.\nPlease check your internet connection.")
                 # if it's an HTTPError, try to pull the "error_description" field
                 elif isinstance(e, requests.exceptions.HTTPError):
                     status_code = e.response.status_code if e.response is not None else 500
                     if status_code >= 500:
-                        err_msg = Messages.get_server_error_text(status_code, context='translation')
+                        err_msg = server_error_text(status_code, context='translation')
                     else:
                         try:
                             err_json = e.response.json()
@@ -538,13 +536,13 @@ class BatchProcessor:
             get_best_render_area(blk_list, image, inpaint_input_img)
 
             font = render_settings.font_family
-            setting_font_color = QColor(render_settings.color)
+            setting_font_color = render_settings.color
 
             max_font_size = render_settings.max_font_size
             min_font_size = render_settings.min_font_size
             line_spacing = float(render_settings.line_spacing) 
             outline_width = float(render_settings.outline_width)
-            outline_color = QColor(render_settings.outline_color) if outline else None
+            outline_color = render_settings.outline_color if outline else None
             bold = render_settings.bold
             italic = render_settings.italic
             underline = render_settings.underline
@@ -590,8 +588,10 @@ class BatchProcessor:
                 # Smart Color Override
                 font_color = get_smart_text_color(blk.font_color, setting_font_color)
 
-                # Use TextItemProperties for consistent text item creation
-                text_props = TextItemProperties(
+                # A plain state dict, not a Qt object: TextItemProperties
+                # .from_dict rebuilds it on the canvas side and already accepts
+                # a colour as a string and a direction as an int.
+                text_items_state.append(build_text_item_state(
                     text=translation,
                     font_family=blk_font,
                     font_size=font_size,
@@ -611,14 +611,8 @@ class BatchProcessor:
                     height=rendered_height,
                     direction=direction,
                     vertical=vertical,
-                    selection_outlines=[
-                        OutlineInfo(0, len(translation), 
-                        outline_color, 
-                        outline_width, 
-                        OutlineType.Full_Document)
-                    ] if outline else [],
-                )
-                text_items_state.append(text_props.to_dict())
+                    outline=outline,
+                ))
 
             self.main_page.image_states[image_path]['viewer_state'].update({
                 'text_items_state': text_items_state

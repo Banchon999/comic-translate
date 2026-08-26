@@ -59,6 +59,19 @@ class ToolsPage(QtWidgets.QWidget):
             "Only pages with the same width are stitched."
         ))
 
+        self.skia_text_checkbox = MCheckBox(
+            self.tr("Draw text with Skia")
+        )
+        self.skia_text_checkbox.setChecked(True)
+        self.skia_text_checkbox.setToolTip(self.tr(
+            "Lays out and draws translated text with Skia instead of Qt.\n"
+            "On by default: it fits text to a bubble about twenty times faster,\n"
+            "and the editor preview and the exported page match exactly.\n"
+            "Measurement and drawing switch together — using one engine for each\n"
+            "would make the preview stop matching the export.\n"
+            "Turn it off to go back to Qt's renderer; curved text uses Qt either way."
+        ))
+
         inpainting_label = MLabel(self.tr("Image Cleaning")).h4()
 
         self.text_segmentation_checkbox = MCheckBox(
@@ -213,6 +226,7 @@ class ToolsPage(QtWidgets.QWidget):
         layout.addWidget(detector_widget)
         layout.addLayout(detector_conf_layout)
         layout.addWidget(self.stitch_detection_checkbox)
+        layout.addWidget(self.skia_text_checkbox)
         layout.addSpacing(10)
         layout.addWidget(ocr_widget)
         layout.addLayout(ocr_padding_layout)

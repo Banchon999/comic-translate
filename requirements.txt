@@ -20,3 +20,8 @@ six>=1.16.0
 PhotoshopAPI>=0.9.0
 send2trash>=2.1.0
 PyJWT>=2.8.0
+
+# Text layout and rasterisation for the canvas. Optional at import time —
+# core/skia_text.py degrades to the Qt measurer when it is missing — but the
+# desktop app is built expecting it. BSD-3-Clause; Skia m144.
+skia-python>=144.0

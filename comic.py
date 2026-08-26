@@ -134,12 +134,15 @@ class LoadingWorker(QObject):
 
 
 def main():
-    
-    # Configure logging
-    logging.basicConfig(
-        level=logging.INFO,
-    )
-    
+
+    # To a file, not stderr: a --windowed build has no console, so
+    # basicConfig's output goes nowhere and a crash leaves nothing to report.
+    # This also arms faulthandler, which is the only thing that records a
+    # native fault — no `except` can catch one.
+    from app import crash_log
+
+    crash_log.install(logging.INFO)
+
     if sys.platform == "win32":
         # Necessary Workaround to set Taskbar Icon on Windows
         import ctypes
@@ -455,5 +458,33 @@ def load_translation(app, language: str):
     # else:
     #     print(f"Failed to load translation for {language}")
 
+def _run_skia_self_test() -> int:
+    """Exercise the Skia runtime and report by exit code. No window, no app.
+
+    A frozen build re-invokes itself with this flag so the probe runs in its
+    own process: if Skia faults natively there is nothing to catch, and the
+    only safe way to find out is to let a *disposable* process discover it.
+    Exit 0 means healthy; anything else — including dying outright — means the
+    app should stay on the Qt text engine.
+    """
+    try:
+        from core import skia_text
+
+        reason = skia_text._run_self_test()
+    except Exception as exc:  # the probe itself failed to get going
+        print(f"{type(exc).__name__}: {exc}", file=sys.stderr)
+        return 2
+    if reason:
+        print(reason, file=sys.stderr)
+        return 1
+    return 0
+
+
 if __name__ == "__main__":
+    # Checked before anything else is imported or shown: this process exists
+    # only to answer the question and exit.
+    from core.skia_text import SELF_TEST_FLAG
+
+    if SELF_TEST_FLAG in sys.argv[1:]:
+        sys.exit(_run_skia_self_test())
     main()

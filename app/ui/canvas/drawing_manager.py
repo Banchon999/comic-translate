@@ -447,7 +447,25 @@ class DrawingManager:
             command = ClearBrushStrokesCommand(self.viewer)
             self.viewer.command_emitted.emit(command)
             
+    def selected_clean_rects(self):
+        """Boxes the user has marked for cleaning.
+
+        Only *selected* rectangles, deliberately. `viewer.rectangles` also holds
+        every box detection produced, and cleaning all of those on a Clean press
+        would wipe each detected region wholesale. Selection is the one signal
+        that separates "I drew this to clean it" from "the detector put this
+        here" — and a box drawn by hand is selected as it is created, while a
+        detected one never is.
+        """
+        try:
+            return [rect for rect in self.viewer.get_selected_rectangles()
+                    if rect.rect().width() > 0 and rect.rect().height() > 0]
+        except Exception:
+            return []
+
     def has_drawn_elements(self):
+        if self.selected_clean_rects():
+            return True
         for item in self._scene.items():
             if item is self.lasso_preview:
                 continue  # still being drawn; not a selection yet
@@ -533,7 +551,19 @@ class DrawingManager:
                 painter.translate(item_pos)
                 painter.drawPath(item.path())
                 painter.restore()
-        
+
+        # A selected box counts as a marked region, drawn into the same layer
+        # the lasso and magic wand use. Treating it as a region rather than
+        # running text detection inside it keeps one behaviour for "I marked
+        # this area, clean it", whichever tool marked it.
+        for rect_item in self.selected_clean_rects():
+            gen_painter.save()
+            # mapToScene carries the item's rotation and transform origin, which
+            # drawing the plain rect at its position would drop — a rotated box
+            # would clean an upright area somewhere else.
+            gen_painter.drawPolygon(rect_item.mapToScene(rect_item.rect()))
+            gen_painter.restore()
+
         human_painter.end()
         gen_painter.end()
         
