@@ -55,7 +55,7 @@ class SettingsPageUI(QtWidgets.QWidget):
 
         self.credential_widgets = {}
 
-        self.inpainters = ['LaMa', 'AOT', 'Smart Fill']
+        self.inpainters = ['LaMa', 'AOT', 'Smart Fill', 'Cloud Cleaner']
         self.detectors = ['RT-DETR-v2', 'RT-DETR-v2 + Bubble Seg']
         self.ocr_engines = [
             self.tr("Default"),
@@ -90,6 +90,10 @@ class SettingsPageUI(QtWidgets.QWidget):
         self.credential_services = [
             self.tr("Custom"),
             self.tr("OpenRouter"),
+            # Not a translator or an OCR engine: this one is the cloud cleaner's
+            # endpoint. It lives here because it is a key and a URL like the
+            # rest, and Credentials is where people look for those.
+            self.tr("Cloud Cleaner"),
         ]
 
         self.supported_translators = [
@@ -164,6 +168,7 @@ class SettingsPageUI(QtWidgets.QWidget):
             "LaMa": "LaMa",
             "AOT": "AOT",
             "Smart Fill": "Smart Fill",
+            "Cloud Cleaner": "Cloud Cleaner",
 
             # Detector mappings
             "RT-DETR-v2": "RT-DETR-v2",

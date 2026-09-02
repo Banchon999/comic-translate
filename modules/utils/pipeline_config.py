@@ -5,6 +5,7 @@ from modules.inpainting.lama import LaMa
 from modules.inpainting.mi_gan import MIGAN
 from modules.inpainting.aot import AOT
 from modules.inpainting.smart_fill import SmartFill
+from modules.inpainting.remote import RemoteInpainter
 from modules.inpainting.schema import Config
 
 if TYPE_CHECKING:
@@ -15,7 +16,15 @@ inpaint_map = {
     "MI-GAN": MIGAN,
     "AOT": AOT,
     "Smart Fill": SmartFill,
+    # Runs on a GPU you rent rather than this machine. Unlike the others it
+    # downloads nothing and needs an endpoint and key from the Credentials page.
+    "Cloud Cleaner": RemoteInpainter,
 }
+
+# Engines that reach a paid endpoint instead of a local model. The pipeline has
+# to hand these their credentials, and the UI has to warn that pages leave the
+# machine, so it is worth naming the set rather than string-matching a label.
+REMOTE_INPAINTERS = {"Cloud Cleaner"}
 
 
 def get_inpainter_backend(inpainter_key: str) -> str:

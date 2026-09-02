@@ -1,0 +1,60 @@
+# The cloud cleaner worker: LaMa on a rented GPU, billed by the second.
+#
+# This is a RunPod *serverless* image, not the desktop pod. It has no X server,
+# no VNC and no Qt — it answers one HTTP job at a time and exits between them.
+# That is what makes it pay-as-you-go: an idle endpoint costs nothing.
+#
+# Build:
+#   docker build -f runpod/Dockerfile.serverless -t <you>/comic-translate:cleaner .
+#   docker push <you>/comic-translate:cleaner
+#
+# Then create a serverless endpoint from the image and paste its URL and your
+# API key into Settings > Credentials > Cloud Cleaner. See runpod/README.md.
+
+FROM nvidia/cuda:12.6.3-cudnn-runtime-ubuntu24.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1
+
+# Deliberately smaller than runpod/Dockerfile: no Xvfb, no noVNC, no fonts, no
+# Qt libraries. Nothing here renders anything — it decodes an image, runs a
+# model and encodes an image. A serverless worker pays its image size in cold
+# start on every scale-up, so anything unused is a recurring cost.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      python3 python3-venv \
+      libgl1 libglib2.0-0t64 \
+      ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+ENV VIRTUAL_ENV=/opt/venv
+RUN python3 -m venv $VIRTUAL_ENV
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+
+WORKDIR /app
+
+# Only what the cleaning path needs. The app's requirements.txt pulls in PySide6,
+# every OCR engine and every translator — gigabytes this worker never executes.
+RUN pip install --no-cache-dir \
+      numpy \
+      pillow \
+      mahotas \
+      onnxruntime-gpu \
+      runpod
+
+# The build context is the repository root, not runpod/ — the handler imports
+# the app's own LaMa engine so the two halves cannot drift.
+COPY modules/ /app/modules/
+COPY imkit/ /app/imkit/
+COPY core/ /app/core/
+COPY runpod/serverless_handler.py /app/serverless_handler.py
+
+ENV PYTHONPATH=/app \
+    CLEANER_DEVICE=cuda \
+    CLEANER_BACKEND=onnx
+
+# The LaMa weights download lazily on the first job. A serverless worker that
+# scales to zero re-downloads them on every cold start, so point this at a
+# RunPod network volume mounted here to keep them between workers.
+ENV XDG_DATA_HOME=/runpod-volume/data
+
+CMD ["python", "-u", "/app/serverless_handler.py"]

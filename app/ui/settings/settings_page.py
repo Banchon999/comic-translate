@@ -315,6 +315,9 @@ class SettingsPage(QtWidgets.QWidget):
             elif normalized == "OpenRouter":
                 for field in ("api_key", "model", "ocr_model"):
                     creds[field] = _text_or_none(f"OpenRouter_{field}")
+            elif normalized == "Cloud Cleaner":
+                for field in ("api_key", "api_url"):
+                    creds[field] = _text_or_none(f"Cloud Cleaner_{field}")
 
             return creds
 
