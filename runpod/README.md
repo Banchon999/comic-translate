@@ -173,6 +173,23 @@ endpoint to be cleaned. The endpoint is yours and the bill is yours — there is
 no service of ours in between — but for unpublished work that is still a choice
 worth making deliberately.
 
+## Trying it without Docker or a GPU
+
+`runpod/local_server.py` runs the same handler on your own machine behind the
+same HTTP contract, so the whole path can be exercised before any of the above:
+
+```bash
+python runpod/local_server.py --port 8000 --api-key anything
+```
+
+Then put `http://127.0.0.1:8000` and that key into
+`Settings > Credentials > Cloud Cleaner`. LaMa runs locally, so it is CPU-slow —
+the point is that every byte crosses a socket exactly as it would in production.
+It is also the fastest way to tell a handler problem from a deployment problem
+when a real endpoint misbehaves.
+
+Development tool only: no TLS, binds to localhost.
+
 ## The contract
 
 `modules/inpainting/remote.py` is the only client, and
