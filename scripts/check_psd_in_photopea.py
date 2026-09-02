@@ -14,10 +14,16 @@ What it checks, per file:
 
 * the layer tree Photopea parses — names, nesting and order
 * each layer's bounds, visibility and kind
-* **whether each pixel layer renders anything on its own**, by hiding every
-  other layer and exporting that one. This is the check that matters: a PSD
-  whose merged image is perfect can still have nothing in any layer, and
-  looking at the composite alone cannot tell the two apart.
+* **whether each layer renders anything on its own**, by hiding every other
+  layer and exporting that one. This is the check that matters: a PSD whose
+  merged image is perfect can still have nothing in any layer, and looking at
+  the composite alone cannot tell the two apart.
+* **text layers are soloed too, not just pixel layers.** Skipping them is how
+  this script once passed a page whose translated text was invisible:
+  PhotoshopAPI writes a type layer with bounds (0,0,0,0) and no colour
+  channels, Photopea composites type layers from their cached raster, and so
+  it drew nothing while still reporting the layer as present and editable.
+  A layer Photopea sizes at nothing is now a failure in its own right.
 * whether a text layer is still *editable* — that Photopea reads its string
   back out, not merely that a layer with that name exists
 * alpha is not uniformly zero anywhere it should not be
@@ -294,10 +300,13 @@ def _png_stats(data: bytes) -> dict:
     }
 
 
-def _has_pixels(node: dict) -> bool:
-    """Whether this node is a layer we expect to carry raster pixels."""
-    if node.get("typename") == "LayerSet":
-        return False
+def _is_leaf(node: dict) -> bool:
+    """A layer rather than a group — something that should draw something."""
+    return node.get("typename") != "LayerSet"
+
+
+def _has_extent(node: dict) -> bool:
+    """Whether Photopea reports a non-empty box for this layer."""
     bounds = node.get("bounds")
     if not isinstance(bounds, list) or len(bounds) != 4:
         return False
@@ -330,10 +339,26 @@ def check_file(pp: Photopea, path: Path, out_dir: Path, compare: Path | None) ->
             repr(contents)[:80],
         )
 
-    pixel_layers = [(p, n) for p, n in nodes if _has_pixels(n)]
-    report.add(bool(pixel_layers), "there is at least one pixel layer", f"{len(pixel_layers)} found")
+    # Every leaf layer is soloed, text layers included. An earlier version
+    # skipped any layer Photopea reported with an empty box, which is exactly
+    # the shape of the bug this script exists to find: PhotoshopAPI writes type
+    # layers with bounds (0,0,0,0) and no colour channels, so Photopea draws
+    # nothing for them — and the check that would have caught it was the one
+    # the empty box excluded. It reported PASS on a page with invisible text.
+    leaves = [(p, n) for p, n in nodes if _is_leaf(n)]
+    report.add(bool(leaves), "there is at least one layer to render", f"{len(leaves)} found")
 
-    for path_indices, node in pixel_layers:
+    for path_indices, node in leaves:
+        if not _has_extent(node):
+            # Soloing a layer Photopea sizes at nothing can only export an
+            # empty page, so say why rather than exporting a blank and
+            # blaming the pixels.
+            report.add(
+                False,
+                f"layer has a non-empty box: {node['name']!r}",
+                f"Photopea reports bounds {node.get('bounds')}",
+            )
+            continue
         png = pp.export_png(SOLO_AND_EXPORT % json.dumps(list(path_indices)))
         pp.script(RESTORE)
         stats = _png_stats(png)

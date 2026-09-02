@@ -8,7 +8,12 @@ import imkit as imk
 from modules.inpainting.denoise import denoise_around_mask
 from modules.utils.device import resolve_device
 from modules.utils.image_utils import build_block_mask_data, build_bubble_clip_mask, clip_mask_to_bubble, clip_mask_components_to_bubble
-from modules.utils.pipeline_config import inpaint_map, get_config, get_inpainter_backend
+from modules.utils.pipeline_config import (
+    inpaint_map,
+    get_config,
+    get_inpainter_backend,
+    REMOTE_INPAINTERS,
+)
 from modules.utils.text_segmentation import segment_page
 from modules.utils.textblock import adjust_text_line_coordinates
 from pipeline.inpainting_boxes import merge_overlapping_padded_boxes
@@ -43,17 +48,39 @@ class InpaintingHandler:
         self.inpainter_cache = None
         self.cached_inpainter_key = None
 
+    def _remote_kwargs(self, settings_page, inpainter_key: str) -> dict:
+        """Endpoint and key for a cloud inpainter; empty for a local one.
+
+        Inpainters are constructed as `InpainterClass(device, backend=...)` and
+        are handed nothing else, so a remote engine cannot go and read the
+        settings itself without importing Qt — which would break the headless
+        gate. The credentials are fetched here, on the Qt side, and passed in.
+        Local engines ignore the extra kwargs.
+        """
+        if inpainter_key not in REMOTE_INPAINTERS:
+            return {}
+        creds = settings_page.get_credentials(inpainter_key) or {}
+        return {
+            "endpoint": creds.get("api_url"),
+            "api_key": creds.get("api_key"),
+        }
+
     def _ensure_inpainter(self):
         settings_page = self.main_page.settings_page
         inpainter_key = settings_page.get_tool_selection('inpainter')
-        if self.inpainter_cache is None or self.cached_inpainter_key != inpainter_key:
+        remote_kwargs = self._remote_kwargs(settings_page, inpainter_key)
+        # The endpoint is part of the identity of a cloud inpainter: pointing at
+        # a different one and reusing the cached engine would keep sending pages
+        # to the old endpoint, and keep billing it.
+        cache_key = (inpainter_key, remote_kwargs.get("endpoint"))
+        if self.inpainter_cache is None or self.cached_inpainter_key != cache_key:
             backend = get_inpainter_backend(inpainter_key)
             device = resolve_device(settings_page.is_gpu_enabled(), backend)
             InpainterClass = inpaint_map[inpainter_key]
             logger.info("pre-inpaint: initializing inpainter '%s' on device %s", inpainter_key, device)
             t0 = time.time()
-            self.inpainter_cache = InpainterClass(device, backend=backend)
-            self.cached_inpainter_key = inpainter_key
+            self.inpainter_cache = InpainterClass(device, backend=backend, **remote_kwargs)
+            self.cached_inpainter_key = cache_key
             logger.info("pre-inpaint: inpainter initialized in %.2fs", time.time() - t0)
         return self.inpainter_cache
 
