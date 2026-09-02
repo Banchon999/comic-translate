@@ -133,24 +133,60 @@ you pay for the seconds spent inpainting and nothing else. Cleaning is the
 slowest local step — it is why the pod above exists — and it is the only step
 worth renting a GPU for.
 
-## Build and deploy
+## Deploy
+
+Create a RunPod **Serverless** endpoint — not a Pod. There are two routes, and
+the first needs nothing installed.
+
+### From this GitHub repository (no Docker needed)
+
+*Create an endpoint* → *Custom code* → **Deploy from a GitHub repository**.
+RunPod clones the repo and builds the image itself, so this works from a
+machine with no Docker — a phone included.
+
+| Field | Value |
+|---|---|
+| Repository | your fork of this repo |
+| Branch | whichever branch carries the handler |
+| Dockerfile path | `runpod/Dockerfile.serverless` |
+| Build context | the repository root — **not** `runpod/` |
+
+The build context matters: the Dockerfile `COPY`s `modules/`, `imkit/` and
+`core/` from the root, because the handler imports the app's own LaMa engine
+rather than reimplementing it.
+
+### From a Docker image
 
 ```bash
 docker build -f runpod/Dockerfile.serverless -t <dockerhub-user>/comic-translate:cleaner .
 docker push <dockerhub-user>/comic-translate:cleaner
 ```
 
-Then create a RunPod **Serverless** endpoint (not a Pod) from that image.
+Then point the endpoint at `<dockerhub-user>/comic-translate:cleaner`.
+
+### Endpoint settings, either route
 
 | Setting | Value |
 |---|---|
-| Container image | `<dockerhub-user>/comic-translate:cleaner` |
+| Active (min) workers | **0** — this is what makes it pay-as-you-go |
+| Max workers | 1 is enough to start |
+| Idle timeout | short, so it stops billing quickly |
 | Container disk | 15 GB |
+| GPU | the cheapest 16 GB tier is ample; LaMa is a small model |
 | Network volume | recommended — see below |
 
 Attach a network volume mounted at `/runpod-volume`. The LaMa weights download
 on the first job, and a worker that scales to zero re-downloads them on every
 cold start without one. `XDG_DATA_HOME` already points there.
+
+### Check it is actually on the GPU
+
+The worker log should say `loading LaMa on cuda (onnx)`. A job that merely
+*succeeds* proves nothing here: onnxruntime falls back to
+`CPUExecutionProvider` without raising when the CUDA provider will not load, so
+a misconfigured endpoint cleans pages correctly at CPU speed while billing GPU
+rates. Compare against `local_server.py` on your own CPU — a real GPU should be
+several times faster, not comparable.
 
 ## Point the app at it
 
