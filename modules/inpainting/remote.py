@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import base64
 import logging
+import re
 import time
 from typing import Any, Optional
 
@@ -86,6 +87,10 @@ class RemoteInpainter(InpaintModel):
         # accepted because `_ensure_inpainter` constructs every engine the same
         # way, and refusing the argument would make this the odd one out.
         self.endpoint = _normalise_endpoint(kwargs.get("endpoint"))
+        # Only whether something was typed, never the text itself: a user who
+        # pasted the console's curl command has their API key in that string,
+        # and a bool cannot be accidentally logged or shown.
+        self._endpoint_was_given = bool((kwargs.get("endpoint") or "").strip())
         self.api_key = (kwargs.get("api_key") or "").strip()
         self.timeout = kwargs.get("timeout") or DEFAULT_TIMEOUT_SECONDS
 
@@ -120,6 +125,17 @@ class RemoteInpainter(InpaintModel):
         server is the right place to decide how to tile a large page.
         """
         if not self.endpoint:
+            if self._endpoint_was_given:
+                # Something was typed and it was not a URL. Saying "could not
+                # reach the endpoint" here sends people to check their network,
+                # which is the one place the fault is not.
+                raise RemoteInpaintError(
+                    "That does not look like an endpoint URL. Paste only the URL "
+                    "— https://api.runpod.ai/v2/<ENDPOINT_ID> — into "
+                    "Settings > Credentials > Cloud Cleaner, not the whole curl "
+                    "command from the RunPod console. The API key goes in its "
+                    "own box below."
+                )
             raise RemoteInpaintError(
                 "No cloud cleaner endpoint is configured. "
                 "Set it in Settings > Credentials > Cloud Cleaner."
@@ -204,6 +220,27 @@ class RemoteInpainter(InpaintModel):
             headers["Authorization"] = f"Bearer {self.api_key}"
         return headers
 
+    @staticmethod
+    def _unreachable(exc: Exception) -> "RemoteInpaintError":
+        """Turn a transport exception into something safe to put on screen.
+
+        `requests` embeds the full request URL in its exception messages, so
+        interpolating one republishes whatever is in that URL. That is not
+        hypothetical: a user pasted the RunPod console's whole curl snippet into
+        the endpoint box, and the Bearer token inside it came back out in an
+        error dialog and a traceback, which they then sent on. The URL is
+        therefore never included, and what is included is redacted anyway —
+        two separate things have to go wrong before a key escapes.
+
+        The exception class name survives because it is the part that helps:
+        `ConnectTimeout` and `SSLError` want different responses.
+        """
+        return RemoteInpaintError(
+            f"Could not reach the cloud cleaner ({type(exc).__name__}). "
+            "Check the endpoint URL in Settings > Credentials > Cloud Cleaner, "
+            "and your connection."
+        )
+
     def _post(self, url: str, payload: dict) -> dict:
         requests, session = self._requests()
         try:
@@ -211,7 +248,8 @@ class RemoteInpainter(InpaintModel):
                 url, json=payload, headers=self._headers(), timeout=self.timeout
             )
         except requests.exceptions.RequestException as exc:
-            raise RemoteInpaintError(f"Could not reach the cloud cleaner: {exc}") from exc
+            logger.debug("cloud cleaner POST failed: %s", _redact(exc))
+            raise self._unreachable(exc) from exc
         return _parse(response)
 
     def _get(self, url: str) -> dict:
@@ -219,7 +257,8 @@ class RemoteInpainter(InpaintModel):
         try:
             response = session.get(url, headers=self._headers(), timeout=self.timeout)
         except requests.exceptions.RequestException as exc:
-            raise RemoteInpaintError(f"Could not reach the cloud cleaner: {exc}") from exc
+            logger.debug("cloud cleaner GET failed: %s", _redact(exc))
+            raise self._unreachable(exc) from exc
         return _parse(response)
 
     def _cancel(self, job_id: Optional[str]) -> None:
@@ -245,14 +284,43 @@ class RemoteInpainter(InpaintModel):
 # ----------------------------------------------------------------------
 
 
+# A bare URL, stopping at whitespace, quotes or a shell line-continuation, so
+# one can be lifted out of a pasted curl command.
+_URL_RE = re.compile(r"https?://[^\s'\"<>\\]+")
+
+# `Bearer <token>` in any casing, and RunPod's own key shape, which is what
+# turns up when someone pastes a console snippet.
+_SECRET_RE = re.compile(r"(?i)\bbearer\s+\S+|\brpa_[A-Za-z0-9]+")
+
+
+def _redact(text: Any) -> str:
+    """Blank out anything credential-shaped before it is logged or shown."""
+    return _SECRET_RE.sub("<redacted>", str(text))
+
+
 def _normalise_endpoint(endpoint: Optional[str]) -> str:
-    """Trim a RunPod endpoint URL down to the base the operations hang off.
+    """Pull the endpoint's base URL out of whatever the user pasted.
 
     People paste whichever URL the console showed them, which is as often
     `.../runsync` as the bare endpoint. Appending `/runsync` to that produces a
-    404 that reads like a broken deployment, so the suffix is stripped here.
+    404 that reads like a broken deployment, so the suffix is stripped.
+
+    They also paste the console's **entire curl command**, headers and all —
+    there is a copy button for it, and it is the first thing on the page. That
+    used to sail through unchecked and fail much later as "could not reach the
+    cloud cleaner", which sends someone to look at their network rather than at
+    the box they filled in. So the URL is extracted rather than assumed, and
+    anything with no `http(s)` URL in it at all returns `""` for the caller to
+    report properly.
+
+    The API key sitting in that same pasted command is deliberately **not**
+    harvested. It would work, and quietly storing a credential somebody typed
+    into a *URL* field is worse than telling them which box it belongs in.
     """
-    url = (endpoint or "").strip().rstrip("/")
+    match = _URL_RE.search((endpoint or "").strip())
+    if match is None:
+        return ""
+    url = match.group(0).rstrip("/")
     for suffix in ("/runsync", "/run", "/health", "/status", "/cancel"):
         if url.endswith(suffix):
             url = url[: -len(suffix)]

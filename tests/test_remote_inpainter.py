@@ -165,6 +165,86 @@ def test_a_pasted_runsync_url_still_works():
     assert _normalise_endpoint(ENDPOINT) == ENDPOINT
 
 
+# A fake key, shaped like RunPod's. The real one this reproduces was pasted by
+# a user into the endpoint box and came back out of an error dialog.
+PASTED_KEY = "rpa_NOTAREALKEY0000000000000"
+
+PASTED_CURL = (
+    f"curl -X POST {ENDPOINT}/runsync \\\n"
+    "    -H 'Content-Type: application/json' \\\n"
+    f"    -H 'Authorization: Bearer {PASTED_KEY}' \\\n"
+    '    -d \'{"input":{"prompt":"Your prompt"}}\''
+)
+
+
+def test_the_consoles_whole_curl_command_still_finds_the_endpoint():
+    """RunPod's console offers the curl snippet with a copy button, so it gets
+    pasted into the URL box. Extracting the URL beats failing much later."""
+    assert _normalise_endpoint(PASTED_CURL) == ENDPOINT
+
+
+def test_the_key_inside_a_pasted_curl_is_not_adopted():
+    """It is right there and using it would work. Quietly storing a credential
+    somebody typed into a *URL* field is worse than telling them where it goes."""
+    engine = RemoteInpainter("cpu", endpoint=PASTED_CURL)
+
+    assert engine.api_key == ""
+
+
+def test_something_that_is_not_a_url_says_what_to_paste():
+    """The old behaviour let any string through and failed as "could not reach
+    the cloud cleaner", which sends people to check their network — the one
+    place the fault is not."""
+    assert _normalise_endpoint("not a url at all") == ""
+
+    engine = RemoteInpainter("cpu", endpoint="not a url at all", api_key="k")
+    with pytest.raises(RemoteInpaintError, match="does not look like an endpoint URL"):
+        engine(a_page(), a_mask(), Config())
+
+
+def test_an_empty_endpoint_still_says_it_is_unset():
+    """Distinct from the above: nothing typed is a different problem from
+    something typed wrong, and the message has to tell them apart."""
+    engine = RemoteInpainter("cpu", endpoint="", api_key="k")
+    with pytest.raises(RemoteInpaintError, match="No cloud cleaner endpoint"):
+        engine(a_page(), a_mask(), Config())
+
+
+def test_a_transport_failure_never_republishes_a_credential():
+    """The regression guard for a real leak.
+
+    `requests` puts the full request URL in its exception messages. A user
+    pasted the console's curl command — key included — into the endpoint box,
+    and the resulting `InvalidSchema` carried the live Bearer token into an
+    error dialog and a traceback, which was then sent on to someone else.
+
+    So the exception text must not reach the message. This drives the failure
+    with a secret in it deliberately: if anyone reinstates `f"...: {exc}"`,
+    this fails.
+    """
+    import requests
+
+    class Exploding:
+        def post(self, *args, **kwargs):
+            raise requests.exceptions.InvalidSchema(
+                f"No connection adapters were found for "
+                f"'curl ... -H 'Authorization: Bearer {PASTED_KEY}' ...'"
+            )
+
+    engine = RemoteInpainter("cpu", endpoint=ENDPOINT, api_key="k")
+    engine._requests = lambda: (requests, Exploding())
+
+    with pytest.raises(RemoteInpaintError) as caught:
+        engine._post(f"{ENDPOINT}/runsync", {"input": {}})
+
+    message = str(caught.value)
+    assert PASTED_KEY not in message
+    assert "Bearer" not in message
+    # The class name survives, because ConnectTimeout and SSLError want
+    # different responses from whoever is reading.
+    assert "InvalidSchema" in message
+
+
 # ---------------------------------------------------------------------------
 # The response
 # ---------------------------------------------------------------------------

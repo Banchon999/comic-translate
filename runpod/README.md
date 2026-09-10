@@ -193,9 +193,23 @@ several times faster, not comparable.
 `Settings > Credentials > Cloud Cleaner` takes the endpoint URL and your RunPod
 API key, then pick **Cloud Cleaner** in `Settings > Tools > Inpainter`.
 
-Paste whichever URL the RunPod console shows you — a trailing `/runsync` or
-`/run` is stripped, because appending another one produces a 404 that reads
-like a broken deployment.
+The two boxes take two different things:
+
+| Box | Value |
+|---|---|
+| Endpoint URL | `https://api.runpod.ai/v2/<ENDPOINT_ID>` |
+| API Key | your RunPod **account** key, from Settings → API Keys |
+
+Paste whichever URL the console shows you — a trailing `/runsync` or `/run` is
+stripped, because appending another one produces a 404 that reads like a broken
+deployment. The console's **curl snippet** works too: the URL is lifted out of
+it. Its `Authorization: Bearer …` line is deliberately ignored rather than used
+as your key, so put the key in its own box.
+
+**A key pasted into the URL box is a key you should rotate.** It ends up stored
+as a URL and can be shown back to you in messages meant to be harmless to
+share. The app no longer prints it, but the safe assumption once it has been in
+the wrong field is that it has been seen.
 
 ## What it costs, and what it sends
 

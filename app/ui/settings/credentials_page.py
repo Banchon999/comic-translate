@@ -129,6 +129,10 @@ class CredentialsPage(QtWidgets.QWidget):
 
                 endpoint_input = MLineEdit()
                 endpoint_input.setFixedWidth(400)
+                # The RunPod console puts a copy button on its whole curl
+                # snippet — key and all — and that is what got pasted in here.
+                # Showing the shape wanted is the cheapest place to stop it.
+                endpoint_input.setPlaceholderText("https://api.runpod.ai/v2/<ENDPOINT_ID>")
                 endpoint_prefix = MLabel(self.tr("Endpoint URL")).border()
                 set_label_width(endpoint_prefix)
                 endpoint_prefix.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
