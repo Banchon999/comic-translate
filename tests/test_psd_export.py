@@ -6,6 +6,8 @@ the two bugs this covers were both invisible that way: the merged image section
 came out black, and a frozen build died before writing anything at all.
 """
 
+import os
+
 import numpy as np
 import pytest
 
@@ -311,3 +313,72 @@ def test_no_pixel_layer_is_fully_transparent(exported):
         if pixels is None or pixels.size == 0 or pixels.shape[2] < 4:
             continue
         assert pixels[:, :, 3].max() > 0, f"{layer.name!r} is fully transparent"
+
+
+# Everything above exports a page with `text_items_state: []`, so until this
+# test nothing in CI had ever written a *text* layer to disk — and the text
+# path is the one that reaches PhotoshopAPI's type-layer code and Qt's font
+# metrics. Writing one is not a small extra: `_apply_editor_style` measures
+# line height with `QFontMetricsF`, which **aborts the process** rather than
+# raising if it is reached without a QApplication, so a fault in here does not
+# surface as a failing test but as a dead interpreter and a 0-byte file.
+def a_page_with_text():
+    art = np.full((HEIGHT, WIDTH, 3), 210, dtype=np.uint8)
+    return psd_exporter.PsdPageData(
+        file_path="002.png",
+        rgb_image=art,
+        viewer_state={
+            "text_items_state": [
+                {
+                    "text": "<p>HELLO WORLD</p>",
+                    "font_family": "Arial",
+                    "font_size": 20.0,
+                    "text_color": "#101010",
+                    "position": (20.0, 20.0),
+                    "width": 140.0,
+                    "height": 30.0,
+                    "alignment": 1,
+                    "line_spacing": 1.0,
+                    "outline_color": "#FFFFFF",
+                    "outline_width": 0.0,
+                    "bold": False,
+                    "italic": False,
+                    "underline": False,
+                    "rotation": 0.0,
+                    "scale": 1.0,
+                    "transform_origin": (0.0, 0.0),
+                    "selection_outlines": [],
+                    "direction": "ltr",
+                }
+            ]
+        },
+        patches=[],
+    )
+
+
+@pytest.fixture
+def exported_with_text(sandbox_dir, qapp):
+    path = psd_exporter.export_psd_pages(str(sandbox_dir), [a_page_with_text()], "text")
+    return psd_tools.PSDImage.open(path), path
+
+
+def test_a_page_with_text_survives_the_write(exported_with_text):
+    """The guard against the export dying partway through.
+
+    A native abort inside PhotoshopAPI or Qt leaves a file that exists and is
+    empty, which is what a user reports as "the app closed itself and the PSD
+    is 0 bytes". Reading the result back with a different library is the only
+    way to tell that apart from a successful write.
+    """
+    psd, path = exported_with_text
+    assert (psd.width, psd.height) == (WIDTH, HEIGHT)
+    assert os.path.getsize(path) > 0
+
+
+def test_the_text_layer_carries_the_string_it_was_given(exported_with_text):
+    psd, _ = exported_with_text
+    group = next(layer for layer in psd if layer.name == "Editable Text")
+    text_layers = [layer for layer in group if layer.kind == "type"]
+
+    assert len(text_layers) == 1
+    assert text_layers[0].text.strip() == "HELLO WORLD"

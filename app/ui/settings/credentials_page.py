@@ -116,6 +116,39 @@ class CredentialsPage(QtWidgets.QWidget):
                 service_layout.addWidget(model_input)
                 self.credential_widgets[f"{normalized}_model"] = model_input
 
+            elif normalized == "Cloud Cleaner":
+                api_key_input = MLineEdit()
+                api_key_input.setEchoMode(QtWidgets.QLineEdit.Password)
+                api_key_input.setFixedWidth(400)
+                api_key_prefix = MLabel(self.tr("API Key")).border()
+                set_label_width(api_key_prefix)
+                api_key_prefix.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+                api_key_input.set_prefix_widget(api_key_prefix)
+                service_layout.addWidget(api_key_input)
+                self.credential_widgets[f"{normalized}_api_key"] = api_key_input
+
+                endpoint_input = MLineEdit()
+                endpoint_input.setFixedWidth(400)
+                endpoint_prefix = MLabel(self.tr("Endpoint URL")).border()
+                set_label_width(endpoint_prefix)
+                endpoint_prefix.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+                endpoint_input.set_prefix_widget(endpoint_prefix)
+                service_layout.addWidget(endpoint_input)
+                self.credential_widgets[f"{normalized}_api_url"] = endpoint_input
+
+                # Pages leave this machine when the cloud cleaner runs, and
+                # unpublished comics are exactly the kind of thing people would
+                # rather not upload without being told. Saying so next to the
+                # field is the only place it is certain to be read.
+                notice = MLabel(
+                    self.tr(
+                        "Pages and their masks are uploaded to this endpoint to be cleaned. "
+                        "Your provider bills you directly for the time each job runs."
+                    )
+                )
+                notice.setWordWrap(True)
+                service_layout.addWidget(notice)
+
             elif normalized == "OpenRouter":
                 api_key_input = MLineEdit()
                 api_key_input.setEchoMode(QtWidgets.QLineEdit.Password)

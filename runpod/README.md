@@ -119,3 +119,129 @@ container filesystem, so stopping and starting the pod loses nothing.
   `2560x1440` or `3840x2160` if that is what you are working on. Remote
   resizing is not available: it needs the server to negotiate a new mode, and
   Xvfb only advertises the one it started with.
+
+---
+
+# The cloud cleaner (serverless)
+
+Separate from everything above. The pod described so far runs the *whole app* on
+a GPU you rent by the hour. This runs only the **cleaning step** on a GPU you
+rent by the **second**, and the app stays on your own machine.
+
+That difference is the point: a serverless endpoint costs nothing while idle, so
+you pay for the seconds spent inpainting and nothing else. Cleaning is the
+slowest local step — it is why the pod above exists — and it is the only step
+worth renting a GPU for.
+
+## Deploy
+
+Create a RunPod **Serverless** endpoint — not a Pod. There are two routes, and
+the first needs nothing installed.
+
+### From this GitHub repository (no Docker needed)
+
+*Create an endpoint* → *Custom code* → **Deploy from a GitHub repository**.
+RunPod clones the repo and builds the image itself, so this works from a
+machine with no Docker — a phone included.
+
+| Field | Value |
+|---|---|
+| Repository | your fork of this repo |
+| Branch | whichever branch carries the handler |
+| Dockerfile path | `runpod/Dockerfile.serverless` |
+| Build context | the repository root — **not** `runpod/` |
+
+The build context matters: the Dockerfile `COPY`s `modules/`, `imkit/` and
+`core/` from the root, because the handler imports the app's own LaMa engine
+rather than reimplementing it.
+
+### From a Docker image
+
+```bash
+docker build -f runpod/Dockerfile.serverless -t <dockerhub-user>/comic-translate:cleaner .
+docker push <dockerhub-user>/comic-translate:cleaner
+```
+
+Then point the endpoint at `<dockerhub-user>/comic-translate:cleaner`.
+
+### Endpoint settings, either route
+
+| Setting | Value |
+|---|---|
+| Active (min) workers | **0** — this is what makes it pay-as-you-go |
+| Max workers | 1 is enough to start |
+| Idle timeout | short, so it stops billing quickly |
+| Container disk | 15 GB |
+| GPU | the cheapest 16 GB tier is ample; LaMa is a small model |
+| Network volume | recommended — see below |
+
+Attach a network volume mounted at `/runpod-volume`. The LaMa weights download
+on the first job, and a worker that scales to zero re-downloads them on every
+cold start without one. `XDG_DATA_HOME` already points there.
+
+### Check it is actually on the GPU
+
+The worker log should say `loading LaMa on cuda (onnx)`. A job that merely
+*succeeds* proves nothing here: onnxruntime falls back to
+`CPUExecutionProvider` without raising when the CUDA provider will not load, so
+a misconfigured endpoint cleans pages correctly at CPU speed while billing GPU
+rates. Compare against `local_server.py` on your own CPU — a real GPU should be
+several times faster, not comparable.
+
+## Point the app at it
+
+`Settings > Credentials > Cloud Cleaner` takes the endpoint URL and your RunPod
+API key, then pick **Cloud Cleaner** in `Settings > Tools > Inpainter`.
+
+Paste whichever URL the RunPod console shows you — a trailing `/runsync` or
+`/run` is stripped, because appending another one produces a 404 that reads
+like a broken deployment.
+
+## What it costs, and what it sends
+
+RunPod bills queue time plus execution **per job**, and each job pays its own
+cold start. The client sends **one request per whole page** rather than one per
+text region for exactly that reason: a typical page merges into around eight
+regions, which would be eight billed jobs for the same pixels.
+
+**Your pages leave your machine.** The page and its mask are uploaded to the
+endpoint to be cleaned. The endpoint is yours and the bill is yours — there is
+no service of ours in between — but for unpublished work that is still a choice
+worth making deliberately.
+
+## Trying it without Docker or a GPU
+
+`runpod/local_server.py` runs the same handler on your own machine behind the
+same HTTP contract, so the whole path can be exercised before any of the above:
+
+```bash
+python runpod/local_server.py --port 8000 --api-key anything
+```
+
+Then put `http://127.0.0.1:8000` and that key into
+`Settings > Credentials > Cloud Cleaner`. LaMa runs locally, so it is CPU-slow —
+the point is that every byte crosses a socket exactly as it would in production.
+It is also the fastest way to tell a handler problem from a deployment problem
+when a real endpoint misbehaves.
+
+Development tool only: no TLS, binds to localhost.
+
+## The contract
+
+`modules/inpainting/remote.py` is the only client, and
+`runpod/serverless_handler.py` the only server:
+
+```
+input:  {"image": <base64 JPEG>, "mask": <base64 PNG>, "hd_strategy": str}
+output: {"image": <base64 PNG>}   or   {"error": str}
+```
+
+The mask is PNG and the reply is PNG on purpose. A JPEG mask picks up ringing at
+every hard edge, which the server would read as "partly clean this" and smear
+the boundary of every region; a JPEG reply would put a lossy generation in the
+middle of a page that gets re-encoded again on export.
+
+The handler imports the app's own `modules/inpainting/lama.py` rather than
+reimplementing it, so the two halves cannot drift on padding, mask polarity or
+channel order. `tests/test_cloud_cleaner_contract.py` runs both against each
+other with the model faked.
