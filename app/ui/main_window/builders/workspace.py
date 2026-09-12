@@ -221,6 +221,23 @@ class WorkspaceMixin:
 
         self.font_dropdown = MFontComboBox().small()
         self.font_dropdown.setToolTip(self.tr("Font"))
+
+        # Favourite fonts: a star that adds/removes the current font, and a
+        # dropdown that jumps straight to one — so the handful you use are not
+        # buried in the full system list every time.
+        self.font_favourite_toggle = QtWidgets.QToolButton()
+        self.font_favourite_toggle.setCheckable(True)
+        self.font_favourite_toggle.setText("☆")  # ☆, becomes ★ when on
+        self.font_favourite_toggle.setToolTip(self.tr("Add this font to favourites"))
+        self.font_favourite_toggle.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+        self.font_favourites_button = QtWidgets.QToolButton()
+        self.font_favourites_button.setText("★▾")  # ★▾
+        self.font_favourites_button.setToolTip(self.tr("Pick a favourite font"))
+        self.font_favourites_button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+        self.font_favourites_button.setPopupMode(QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.font_favourites_menu = QtWidgets.QMenu(self.font_favourites_button)
+        self.font_favourites_button.setMenu(self.font_favourites_menu)
+
         self.font_size_dropdown = MComboBox().small()
         self.font_size_dropdown.setToolTip(self.tr("Font Size"))
         self.font_size_dropdown.addItems(
@@ -243,6 +260,8 @@ class WorkspaceMixin:
         self.letter_spacing_dropdown.set_editable(True)
 
         font_settings_layout.addWidget(self.font_dropdown)
+        font_settings_layout.addWidget(self.font_favourite_toggle)
+        font_settings_layout.addWidget(self.font_favourites_button)
         font_settings_layout.addWidget(self.font_size_dropdown)
         font_settings_layout.addWidget(self.line_spacing_dropdown)
         font_settings_layout.addWidget(self.letter_spacing_dropdown)
