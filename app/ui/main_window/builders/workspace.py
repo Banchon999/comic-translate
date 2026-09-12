@@ -423,6 +423,13 @@ class WorkspaceMixin:
         self.box_button.clicked.connect(self.toggle_box_tool)
         self.tool_buttons["box"] = self.box_button
 
+        self.type_text_button = self.create_tool_button(svg="type-text.svg", checkable=True)
+        self.type_text_button.setToolTip(
+            self.tr("Type your own text: click on the page to place a text box and start typing")
+        )
+        self.type_text_button.clicked.connect(self.toggle_type_text_tool)
+        self.tool_buttons["type"] = self.type_text_button
+
         self.delete_button = self.create_tool_button(svg="trash_line.svg", checkable=False)
         self.delete_button.setToolTip(self.tr("Delete Selected Box"))
 
@@ -438,6 +445,7 @@ class WorkspaceMixin:
         )
 
         box_tools_lay.addWidget(self.box_button)
+        box_tools_lay.addWidget(self.type_text_button)
         box_tools_lay.addWidget(self.delete_button)
         box_tools_lay.addWidget(self.clear_rectangles_button)
         box_tools_lay.addWidget(self.draw_blklist_blks)

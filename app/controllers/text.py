@@ -181,6 +181,63 @@ class TextController:
         command = AddTextItemCommand(self.main, text_item)
         self.main.push_command(command)
 
+    def add_typed_text(self, scene_pos):
+        """Place an empty, editable text box where the user clicked (the 'type' tool).
+
+        It uses the current toolbar/style text settings, is added through the
+        same undoable command the render path uses, and enters editing so the
+        user can type straight away. No `TextBlock` is needed: save/load and PSD
+        export both read text items straight from the scene, not from
+        `blk_list`.
+        """
+        viewer = self.main.image_viewer
+        if not viewer.hasPhoto():
+            return
+
+        rs = self.render_settings()
+        try:
+            font_size = int(self.main.font_size_dropdown.currentText())
+        except (TypeError, ValueError):
+            font_size = 40
+        alignment = self.main.button_to_alignment[rs.alignment_id]
+        outline_color = QColor(rs.outline_color) if rs.outline else None
+
+        properties = TextItemProperties(
+            text="",
+            font_family=rs.font_family,
+            font_size=font_size,
+            text_color=QColor(rs.color),
+            alignment=alignment,
+            line_spacing=float(rs.line_spacing),
+            outline_color=outline_color,
+            outline_width=float(rs.outline_width),
+            bold=rs.bold,
+            italic=rs.italic,
+            underline=rs.underline,
+            direction=rs.direction,
+            position=(scene_pos.x(), scene_pos.y()),
+            rotation=0,
+            width=200,
+        )
+
+        text_item = viewer.add_text_item(properties)
+        # A fixed wrap width keeps the box's geometry stable as the user types.
+        # Without it an empty plain-text item auto-sizes, and AddTextItemCommand
+        # (which identifies the item by geometry, width included) would fail to
+        # match it for undo once text is added. The render path avoids this by
+        # feeding HTML, which set_text already pins a width on.
+        text_item.setTextWidth(200)
+
+        # Snapshot for undo is taken now, after the width is pinned.
+        self.main.push_command(AddTextItemCommand(self.main, text_item))
+
+        # Select it and drop straight into editing so typing just works.
+        viewer.deselect_all()
+        text_item.selected = True
+        text_item.setSelected(True)
+        text_item.item_selected.emit(text_item)
+        text_item.enter_editing_mode()
+
     def on_text_item_selected(self, text_item: TextBlockItem):
         self._commit_pending_text_command()
         self.main.curr_tblock_item = text_item

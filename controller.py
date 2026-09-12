@@ -256,6 +256,7 @@ class ComicTranslate(ComicTranslateUI):
         self.image_viewer.command_emitted.connect(self.push_command)
         self.image_viewer.connect_rect_item.connect(self.rect_item_ctrl.connect_rect_item_signals)
         self.image_viewer.connect_text_item.connect(self.text_ctrl.connect_text_item_signals)
+        self.image_viewer.add_text_requested.connect(self.text_ctrl.add_typed_text)
         self.image_viewer.page_changed.connect(self.webtoon_ctrl.on_page_changed)
         self.image_viewer.clear_text_edits.connect(self.text_ctrl.clear_text_edits)
 
