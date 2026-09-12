@@ -27,7 +27,7 @@ import pytest
         ),
         (
             "app.ui.canvas.image_viewer",
-            ["layer_state", "TextBlockItem", "MoveableRectItem"],
+            ["TextBlockItem", "MoveableRectItem"],
         ),
     ],
 )
@@ -47,8 +47,6 @@ def test_module_resolves_the_names_it_uses(qapp, module_path, names):
         "modules.utils.paths",
         "modules.utils.workspaces",
         "app.ui.canvas.handles",
-        "app.ui.canvas.layer_state",
-        "app.ui.canvas.document_layers",
         "app.ui.canvas.drawing_manager",
         "app.ui.canvas.image_viewer",
         "app.ui.settings.glossary_page",
