@@ -17,6 +17,7 @@ from app.ui.dayu_widgets.message import MMessage
 
 from app.ui.canvas.text_item import TextBlockItem
 from app.ui.commands.box import DeleteBoxesCommand
+from app.ui.font_favourites import favourites as font_favourites
 
 from modules.utils.textblock import TextBlock
 from modules.utils.file_handler import FileHandler
@@ -250,6 +251,11 @@ class ComicTranslate(ComicTranslateUI):
 
         # Rendering
         self.font_dropdown.currentTextChanged.connect(self.text_ctrl.on_font_dropdown_change)
+        self.font_dropdown.currentTextChanged.connect(self._sync_font_favourite_star)
+        self.font_favourite_toggle.clicked.connect(self._on_font_favourite_toggled)
+        self.font_favourites_menu.aboutToShow.connect(self._rebuild_font_favourites_menu)
+        font_favourites().changed.connect(self._sync_font_favourite_star)
+        self._sync_font_favourite_star(self.font_dropdown.currentText())
         self.font_size_dropdown.currentTextChanged.connect(self.text_ctrl.on_font_size_change)
         self.line_spacing_dropdown.currentTextChanged.connect(self.text_ctrl.on_line_spacing_change)
         self.block_font_color_button.clicked.connect(self.text_ctrl.on_font_color_change)
@@ -579,6 +585,37 @@ class ComicTranslate(ComicTranslateUI):
         if glossary_page is not None:
             workspace.glossary_profile = glossary_page.manager.active_profile
         panel.workspaces.save(workspace)
+
+    # Font favourites
+    def _sync_font_favourite_star(self, family: str = None):
+        """Reflect whether the current font is a favourite in the star button."""
+        if family is None:
+            family = self.font_dropdown.currentText()
+        is_fav = font_favourites().is_favourite(family)
+        self.font_favourite_toggle.setChecked(is_fav)
+        self.font_favourite_toggle.setText("★" if is_fav else "☆")
+        self.font_favourite_toggle.setToolTip(
+            self.tr("Remove this font from favourites") if is_fav
+            else self.tr("Add this font to favourites")
+        )
+        self.font_favourites_button.setEnabled(bool(font_favourites().families()))
+
+    def _on_font_favourite_toggled(self, _checked: bool = False):
+        family = self.font_dropdown.currentText()
+        if family:
+            font_favourites().toggle(family)  # emits changed -> star re-syncs
+
+    def _rebuild_font_favourites_menu(self):
+        menu = self.font_favourites_menu
+        menu.clear()
+        families = font_favourites().families()
+        if not families:
+            action = menu.addAction(self.tr("No favourite fonts yet"))
+            action.setEnabled(False)
+            return
+        for family in families:
+            action = menu.addAction(family)
+            action.triggered.connect(lambda _checked=False, f=family: self.set_font(f))
 
     def push_command(self, command):
         if self.undo_group.activeStack():
