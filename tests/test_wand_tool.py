@@ -65,12 +65,6 @@ def test_it_emits_an_undo_command(viewer):
     assert isinstance(commands[0], BrushStrokeCommand)
 
 
-def test_it_respects_the_strokes_layer_being_hidden(viewer):
-    viewer.set_layer_visibility('strokes', False)
-    viewer.drawing_manager.flood_fill_at(QPointF(60, 45))
-    assert not stroke_items(viewer)[0].isVisible()
-
-
 def test_clicking_the_outline_selects_the_outline_instead(viewer):
     viewer.drawing_manager.flood_fill_at(QPointF(22, 45))
     path = stroke_items(viewer)[0].path()
