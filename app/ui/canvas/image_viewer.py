@@ -23,6 +23,9 @@ class ImageViewer(QGraphicsView):
     command_emitted = Signal(QtGui.QUndoCommand)
     connect_rect_item = Signal(MoveableRectItem)
     connect_text_item =  Signal(TextBlockItem)
+    # The 'type' tool asks for a new, empty text box at the clicked scene point;
+    # the controller builds it with the current font settings and enters editing.
+    add_text_requested = Signal(QPointF)
     page_changed = Signal(int)
     clear_text_edits = Signal()
 
@@ -167,6 +170,10 @@ class ImageViewer(QGraphicsView):
             # cursor: that pixel's colour is what the whole selection grows from.
             self.setDragMode(QGraphicsView.NoDrag)
             self.setCursor(QtGui.QCursor(Qt.CursorShape.CrossCursor))
+        elif tool == 'type':
+            # An I-beam: the click drops a text caret to start typing into.
+            self.setDragMode(QGraphicsView.NoDrag)
+            self.setCursor(QtGui.QCursor(Qt.CursorShape.IBeamCursor))
         elif tool in ['brush', 'eraser']:
             self.setDragMode(QGraphicsView.NoDrag)
             if tool == 'brush':

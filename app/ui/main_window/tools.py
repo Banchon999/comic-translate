@@ -19,6 +19,12 @@ class ToolStateMixin:
         else:
             self.set_tool(None)
 
+    def toggle_type_text_tool(self):
+        if self.type_text_button.isChecked():
+            self.set_tool("type")
+        else:
+            self.set_tool(None)
+
     def toggle_brush_tool(self):
         if self.brush_button.isChecked():
             self.set_tool("brush")

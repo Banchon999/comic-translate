@@ -86,6 +86,13 @@ class EventHandler:
                     self._press_handle_new_box(scene_pos)
                     return # Stop further processing
 
+            if self.viewer.current_tool == 'type' and not isinstance(clicked_item, (TextBlockItem, MoveableRectItem)):
+                if self._is_on_image(scene_pos):
+                    # The controller owns the font settings and the undo command,
+                    # so it builds the box; the viewer only reports where.
+                    self.viewer.add_text_requested.emit(scene_pos)
+                    return
+
             # If we're interacting with a text item in editing mode, let Qt handle text selection/caret
             if isinstance(clicked_item, TextBlockItem) and clicked_item.editing_mode:
                 QtWidgets.QGraphicsView.mousePressEvent(self.viewer, event)
