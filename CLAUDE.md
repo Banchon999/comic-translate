@@ -155,11 +155,9 @@ Two things govern how text reaches the model, and both exist for the same reason
 
 Reopening a saved project materializes each page into its own `<temp>/unique_images/<id>/` directory, so a page's working path says nothing about the series layout. Both project loaders populate `main.path_originals` (working path → original path) and the tree groups and labels by that, while every path it emits stays the working one.
 
-### Editor canvas & layers
+### Editor canvas
 
-`app/ui/canvas/image_viewer.py`'s `ImageViewer` (a `QGraphicsView`) is the editing surface. Scene items are typed by role — `ImageViewer._layer_of(item)` is the one place that classifies them: `self.photo` (the artwork), `MoveableRectItem` (detection boxes), `TextBlockItem` (rendered translation text), `QGraphicsPathItem` (segmentation/brush strokes), and `QGraphicsPixmapItem` with `.setData(0, hash)` (inpaint patches, added via `app/ui/commands/base.py`'s `PatchCommandBase`). All of them are added to the scene as **top-level items with no parent**; nothing is a child of `self.photo`, which is what lets the artwork be hidden without taking the boxes and text down with it.
-
-The five layers split into `OUTPUT_LAYERS = ('text', 'patches', 'image')` — the three that make up the finished page, in stacking order, matching the three groups `app/controllers/psd_exporter.py` writes ("Editable Text" / "Inpaint Patches" / "Raw Image") — and `WORKING_LAYERS = ('boxes', 'strokes')`, which only exist while editing and never leave the canvas. `layer_visibility` covers all five; `layer_opacity` only the output three. `set_layer_visibility()` / `set_layer_opacity()` / `apply_layer_visibility()` drive them, and `app/ui/canvas/document_layers.py`'s `DocumentLayersPanel` is the UI, in a `Qt.Popup` frame hung off the Layers button in the editor header (built in `builders/workspace.py`, wired in `controller.py`'s `toggle_layers_popup`). Every code path that creates one of these item types must apply the current visibility state (see call sites in `image_viewer.py`, `app/ui/commands/base.py`, `app/ui/commands/brush.py`, `app/ui/canvas/drawing_manager.py`).
+`app/ui/canvas/image_viewer.py`'s `ImageViewer` (a `QGraphicsView`) is the editing surface. Scene items are typed by role: `self.photo` (the artwork), `MoveableRectItem` (detection boxes), `TextBlockItem` (rendered translation text), `QGraphicsPathItem` (segmentation/brush strokes), and `QGraphicsPixmapItem` with `.setData(0, hash)` (inpaint patches, added via `app/ui/commands/base.py`'s `PatchCommandBase`). All of them are added to the scene as **top-level items with no parent**; nothing is a child of `self.photo`. The finished page is the "Editable Text" / "Inpaint Patches" / "Raw Image" stack, matching the three groups `app/controllers/psd_exporter.py` writes; there is **no** canvas layer-visibility system (a `DocumentLayersPanel` / per-item `LayerPanel` / `_layer_of` / `layer_visibility` scheme was removed — scene items are always shown, and PSD export builds its groups from `viewer_state`/`patches` directly, not from any canvas toggle).
 
 ### Canvas tools
 
@@ -167,7 +165,7 @@ The five layers split into `OUTPUT_LAYERS = ('text', 'patches', 'image')` — th
 
 Both selection tools end at `drawing_manager.add_region_stroke(path)`, which is why neither needed changes anywhere downstream.
 
-The magic wand (`modules/utils/flood_select.py`, kept Qt-free so it can be tested as array maths) grows a region from the clicked pixel and hands back a mask. `drawing_manager.flood_fill_at` turns that into **an ordinary filled `QGraphicsPathItem` with a `BrushStrokeCommand`** — deliberately the same thing the brush produces, so mask generation, undo, both layer panels and project saving needed no changes at all.
+The magic wand (`modules/utils/flood_select.py`, kept Qt-free so it can be tested as array maths) grows a region from the clicked pixel and hands back a mask. `drawing_manager.flood_fill_at` turns that into **an ordinary filled `QGraphicsPathItem` with a `BrushStrokeCommand`** — deliberately the same thing the brush produces, so mask generation, undo and project saving needed no changes at all.
 
 Two decisions there are load-bearing and non-obvious:
 
@@ -176,9 +174,7 @@ Two decisions there are load-bearing and non-obvious:
 
 The lasso is one tool told apart by what the mouse does: drag past `LASSO_DRAG_THRESHOLD` traces a loop freehand and commits on release, while clicks below it accumulate polygon vertices closed by double-click, Enter, or abandoned with Escape. The in-progress outline is a real scene item, so `has_drawn_elements` and `generate_mask_from_strokes` both skip `lasso_preview` explicitly — without that, an outline the user never finished still gets inpainted. `set_tool` cancels an unfinished outline when the user reaches for something else, and the viewer takes focus while the lasso is active so Enter and Escape reach `keyPressEvent` at all.
 
-`app/ui/canvas/layer_panel.py`'s `LayerPanel` goes one level down, listing individual scene items with per-item show/lock/opacity (rebuilt from the scene on a debounced `QGraphicsScene.changed`, never mirrored into a second model). Both panels end up driving `setVisible`/`setOpacity` on the same items, so neither writes to Qt directly: an item's *own* state lives on the item under the data roles in `app/ui/canvas/layer_state.py`, and `apply_layer_visibility()` combines the two (visible only if both agree, opacity multiplied). Writing `item.setOpacity(...)` from a panel instead would be silently undone the next time any layer toggle moved.
-
-All of this is purely a display concern — `get_image_array(include_patches=True)` always composes patches for OCR/translation/inpainting regardless of what's toggled on screen.
+`get_image_array(include_patches=True)` always composes patches for OCR/translation/inpainting regardless of display state.
 
 Undo/redo for canvas edits goes through `QUndoCommand` subclasses in `app/ui/commands/` pushed onto `controller.py`'s `QUndoStack`.
 

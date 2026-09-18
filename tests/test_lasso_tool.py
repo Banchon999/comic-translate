@@ -171,12 +171,6 @@ class TestGuards:
         viewer.drawing_manager.lasso_close()
         assert len(commands) == 1
 
-    def test_it_respects_the_strokes_layer_being_hidden(self, viewer):
-        viewer.set_layer_visibility('strokes', False)
-        click_polygon(viewer.drawing_manager, SQUARE)
-        viewer.drawing_manager.lasso_close()
-        assert not committed(viewer)[0].isVisible()
-
     def test_double_click_closes_it(self, viewer):
         click_polygon(viewer.drawing_manager, SQUARE)
         assert viewer.event_handler.handle_mouse_double_click(None) is True

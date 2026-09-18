@@ -259,7 +259,6 @@ class PatchCommandBase:
             item.setZValue(0.5)
         item.setData(PatchCommandBase.HASH_KEY, properties['hash'])
         viewer._scene.addItem(item)
-        item.setVisible(getattr(viewer, 'layer_visibility', {}).get('patches', True))
         viewer._scene.update()
         return item
 

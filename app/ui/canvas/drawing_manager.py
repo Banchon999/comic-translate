@@ -119,7 +119,6 @@ class DrawingManager:
             QBrush(QColor(255, 0, 0, 128)),
         )
         item.setZValue(0.9)
-        item.setVisible(self.viewer.layer_visibility.get('strokes', True))
         self.viewer.command_emitted.emit(BrushStrokeCommand(self.viewer, item))
         return item
 
@@ -421,7 +420,6 @@ class DrawingManager:
 
     def load_brush_strokes(self, strokes: List[Dict]):
         self.clear_brush_strokes(page_switch=True)
-        strokes_visible = self.viewer.layer_visibility.get('strokes', True)
         for stroke in reversed(strokes):
             pen = QPen()
             pen.setColor(QColor(stroke['pen']))
@@ -434,7 +432,6 @@ class DrawingManager:
                 path_item = self._scene.addPath(stroke['path'], pen, brush)
             else:
                 path_item = self._scene.addPath(stroke['path'], pen)
-            path_item.setVisible(strokes_visible)
                 
     def clear_brush_strokes(self, page_switch=False):
         if page_switch:      

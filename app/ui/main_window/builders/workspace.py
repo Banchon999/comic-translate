@@ -17,8 +17,6 @@ from app.ui.dayu_widgets.radio_button import MRadioButton
 from app.ui.dayu_widgets.slider import MSlider
 from app.ui.dayu_widgets.text_edit import MTextEdit
 from app.ui.dayu_widgets.tool_button import MToolButton
-from app.ui.canvas.document_layers import DocumentLayersPanel
-from app.ui.canvas.layer_panel import LayerPanel
 from app.ui.file_tree_panel import FileTreePanel
 from app.ui.search_replace_panel import SearchReplacePanel
 from app.ui.main_window.constants import supported_source_languages, supported_target_languages
@@ -86,26 +84,6 @@ class WorkspaceMixin:
         self.batch_report_button.setEnabled(False)
         self.batch_report_button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
 
-        # The page's layer stack lives in a popup rather than as loose
-        # checkboxes: five toggles and three sliders do not belong in a toolbar,
-        # and out there they had no order and no grouping.
-        self.layers_button = MToolButton().svg("layers.svg").icon_only()
-        self.layers_button.setCheckable(True)
-        self.layers_button.setToolTip(self.tr("Layers of this page"))
-        self.layers_button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
-
-        self.document_layers_panel = DocumentLayersPanel()
-        self.layers_popup = QtWidgets.QFrame(self, QtCore.Qt.WindowType.Popup)
-        self.layers_popup.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
-        popup_layout = QtWidgets.QVBoxLayout(self.layers_popup)
-        popup_layout.setContentsMargins(0, 0, 0, 0)
-        popup_layout.addWidget(self.document_layers_panel)
-
-        self.layer_panel_button = MToolButton().svg("list_view.svg").icon_only()
-        self.layer_panel_button.setCheckable(True)
-        self.layer_panel_button.setToolTip(self.tr("Show the layer list for individual items"))
-        self.layer_panel_button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
-
         self.file_tree_button = MToolButton().svg("folder-open.svg").icon_only()
         self.file_tree_button.setCheckable(True)
         self.file_tree_button.setToolTip(self.tr("Group the pages by the folder they came from"))
@@ -114,8 +92,6 @@ class WorkspaceMixin:
         header_layout.addWidget(self.hbutton_group)
         header_layout.addWidget(self.loading)
         header_layout.addSpacing(15)
-        header_layout.addWidget(self.layers_button)
-        header_layout.addWidget(self.layer_panel_button)
         header_layout.addWidget(self.file_tree_button)
         header_layout.addStretch()
         header_layout.addWidget(self.webtoon_toggle)
@@ -136,21 +112,16 @@ class WorkspaceMixin:
 
         self.page_list.setLayout(self.image_card_layout)
 
-        self.layer_panel = LayerPanel()
-        self.layer_panel.setVisible(False)
-
         self.file_tree_panel = FileTreePanel()
         self.file_tree_panel.setVisible(False)
 
-        # Pages, the folder tree and layers share the column; a splitter lets
-        # whichever the user is working in take the space.
+        # Pages and the folder tree share the column; a splitter lets whichever
+        # the user is working in take the space.
         left_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
         left_splitter.addWidget(self.file_tree_panel)
         left_splitter.addWidget(self.page_list)
-        left_splitter.addWidget(self.layer_panel)
         left_splitter.setStretchFactor(0, 2)
         left_splitter.setStretchFactor(1, 2)
-        left_splitter.setStretchFactor(2, 1)
 
         left_layout.addWidget(left_splitter)
         left_layout.addWidget(self.search_panel)
