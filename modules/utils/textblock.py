@@ -6,6 +6,7 @@ from collections import defaultdict, deque
 from ..detection.utils.text_lines import group_items_into_lines
 from modules.detection.utils.geometry import does_rectangle_fit, is_mostly_contained
 from modules.utils.language_utils import is_no_space_lang
+from modules.utils.common_utils import new_object_id
 
 class TextBlock(object):
     """
@@ -31,8 +32,16 @@ class TextBlock(object):
                  max_font_size: int = 0,
                  font_color: str|tuple = (),
                  direction: str = "",
+                 object_id: str = "",
                  **kwargs) -> None:
-        
+
+        # Stable logical identity (see modules/utils/common_utils.new_object_id).
+        # Generated here so every freshly-detected block is born with one; a
+        # block deserialized from a project overwrites it via __dict__.update,
+        # and one loaded from an older project (no id in the data) keeps this
+        # freshly-minted id, which is then persisted on the next save.
+        self.object_id = object_id or new_object_id()
+
         self.xyxy = text_bbox
         self.segm_pts = text_segm_points
         self.bubble_xyxy = bubble_bbox
@@ -84,7 +93,10 @@ class TextBlock(object):
         """
         # Create a new TextBlock with copied numpy arrays and other data
         new_block = TextBlock()
-        
+        # A deep copy is the same logical block (history snapshots, page moves),
+        # so it keeps the identity rather than the fresh one __init__ minted.
+        new_block.object_id = self.object_id
+
         # Copy numpy arrays properly
         new_block.xyxy = self.xyxy.copy() if isinstance(self.xyxy, np.ndarray) else copy.deepcopy(self.xyxy)
         new_block.segm_pts = self.segm_pts.copy() if isinstance(self.segm_pts, np.ndarray) else copy.deepcopy(self.segm_pts)

@@ -7,6 +7,7 @@ Handles rectangle management with state storage for webtoon mode.
 from typing import List, Dict
 from app.ui.canvas.rectangle import MoveableRectItem
 from PySide6.QtCore import QPointF, QRectF
+from modules.utils.common_utils import new_object_id
 
 
 class RectangleManager:
@@ -42,9 +43,10 @@ class RectangleManager:
             
             rect_item = self.viewer.add_rectangle(
                 rect=rect,
-                position=scene_pos, 
+                position=scene_pos,
                 rotation=rect_data['rotation'],
-                origin=origin
+                origin=origin,
+                object_id=rect_data.get('object_id')
             )
             
             # Connect signals - the viewer's add_rectangle should handle this
@@ -74,10 +76,11 @@ class RectangleManager:
                     page_local_pos = self.coordinate_converter.scene_to_page_local_position(scene_pos, page_idx)
                     
                     rect_data = {
-                        'rect': (page_local_pos.x(), page_local_pos.y(), 
+                        'object_id': getattr(rect_item, 'object_id', '') or new_object_id(),
+                        'rect': (page_local_pos.x(), page_local_pos.y(),
                                 rect_item.boundingRect().width(), rect_item.boundingRect().height()),
                         'rotation': rect_item.rotation(),
-                        'transform_origin': (rect_item.transformOriginPoint().x(), 
+                        'transform_origin': (rect_item.transformOriginPoint().x(),
                                         rect_item.transformOriginPoint().y())
                     }
                     rectangles_data.append(rect_data)
@@ -115,9 +118,10 @@ class RectangleManager:
                         clipped_rect = self.coordinate_converter.clip_rectangle_to_page(rect_item, page_idx)
                         if clipped_rect and clipped_rect[2] > 0 and clipped_rect[3] > 0:
                             rect_data = {
+                                'object_id': getattr(rect_item, 'object_id', '') or new_object_id(),
                                 'rect': clipped_rect,
                                 'rotation': rect_item.rotation(),
-                                'transform_origin': (rect_item.transformOriginPoint().x(), 
+                                'transform_origin': (rect_item.transformOriginPoint().x(),
                                                 rect_item.transformOriginPoint().y())
                             }
                             scene_items_by_page[page_idx]['rectangles'].append(rect_data)
@@ -177,6 +181,7 @@ class RectangleManager:
                     clipped_rect = self.coordinate_converter.clip_rectangle_to_page(mock_rect, page_idx)
                     if clipped_rect and clipped_rect[2] > 0 and clipped_rect[3] > 0:
                         clipped_rect_data = {
+                            'object_id': rect_data.get('object_id') or new_object_id(),
                             'rect': clipped_rect,
                             'rotation': rect_data.get('rotation', 0.0),
                             'transform_origin': rect_data.get('transform_origin', (0, 0))

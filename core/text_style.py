@@ -87,8 +87,14 @@ class TextItemState:
 
     selection_outlines: list = field(default_factory=list)
 
+    # Stable identity, matching TextItemProperties.object_id. A batch-rendered
+    # block passes its own id here so the rendered text item shares the block's
+    # logical identity rather than being minted as an unrelated object.
+    object_id: str = ""
+
     def as_dict(self) -> dict:
         return {
+            'object_id': self.object_id,
             'text': self.text,
             'font_family': self.font_family,
             'font_size': self.font_size,
@@ -164,6 +170,7 @@ def build_text_item_state(
     gradient_color: Any = None,
     gradient_angle: float = 90.0,
     curvature: float = 0.0,
+    object_id: str = "",
 ) -> dict:
     """State dict for one rendered block, as the batch renderers produce it.
 
@@ -171,6 +178,7 @@ def build_text_item_state(
     between `width`/`height` or `bold`/`italic` would be silent.
     """
     return TextItemState(
+        object_id=object_id,
         text=text,
         font_family=font_family,
         font_size=font_size,

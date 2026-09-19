@@ -13,10 +13,16 @@ from ..canvas.text.text_item_properties import TextItemProperties
 from modules.utils.textblock import TextBlock
 from ..canvas.rectangle import MoveableRectItem
 from ..canvas.text_item import TextBlockItem
-from modules.utils.common_utils import is_close
+from modules.utils.common_utils import is_close, new_object_id
 
 if TYPE_CHECKING:
     from app.ui.canvas.image_viewer import ImageViewer
+
+# QGraphicsItem.data() key holding an object's stable identity, for scene items
+# that are not our own subclasses (brush-stroke path items, inpaint patch
+# pixmaps) and so cannot carry it as a plain attribute reliably. Patch pixmaps
+# keep their content hash at PatchCommandBase.HASH_KEY (0); this is separate.
+OBJECT_ID_KEY = 1
 
 class PenSettings(TypedDict):
     color: QColor
@@ -37,8 +43,18 @@ class PathCommandBase:
     
     @staticmethod
     def save_path_properties(path_item) -> PathProperties:
-        """Save properties of a path item"""
+        """Save properties of a path item.
+
+        Stamps a stable id onto the live item when it has none (strokes are
+        created as bare QGraphicsPathItems), so the item and every snapshot of
+        it share one identity across undo/redo and save/load.
+        """
+        object_id = path_item.data(OBJECT_ID_KEY)
+        if not object_id:
+            object_id = new_object_id()
+            path_item.setData(OBJECT_ID_KEY, object_id)
         return {
+            'object_id': object_id,
             'path': path_item.path(),
             'pen': path_item.pen().color().name(QColor.HexArgb),
             'brush': path_item.brush().color().name(QColor.HexArgb),
@@ -66,16 +82,27 @@ class PathCommandBase:
         path_item = QGraphicsPathItem()
         path_item.setPath(properties['path'])
         path_item.setPen(pen)
-        
+        path_item.setData(OBJECT_ID_KEY, properties.get('object_id') or new_object_id())
+
         if properties['brush'] == "#80ff0000":
             brush_color = QColor(properties['brush'])
             path_item.setBrush(QBrush(brush_color))
-            
+
         return path_item
 
     @staticmethod
     def find_matching_item(scene, properties):
-        """Find an item in the scene matching the given properties"""
+        """Find an item in the scene matching the given properties.
+
+        Identity first: a stroke keeps its object_id across undo/redo, so match
+        on it when present. Geometry (path + pen/brush/width) stays the fallback
+        for snapshots taken before identity existed.
+        """
+        want_id = properties.get('object_id')
+        if want_id:
+            for item in scene.items():
+                if isinstance(item, QGraphicsPathItem) and item.data(OBJECT_ID_KEY) == want_id:
+                    return item
         for item in scene.items():
             if isinstance(item, QGraphicsPathItem):
                 if (item.path() == properties['path'] and
@@ -92,11 +119,12 @@ class RectCommandBase:
     def save_rect_properties(item):
         """Save properties of a path item"""
         return {
+            'object_id': getattr(item, 'object_id', '') or new_object_id(),
             'pos':(item.pos().x(), item.pos().y()),
             'rotation': item.rotation(),
             'width': item.boundingRect().width(),
             'height': item.boundingRect().height(),
-            'transform_origin': (item.transformOriginPoint().x(), 
+            'transform_origin': (item.transformOriginPoint().x(),
                                      item.transformOriginPoint().y()),
         }
 
@@ -107,15 +135,25 @@ class RectCommandBase:
         transform_origin = QPointF(*properties['transform_origin'])
         position = QPointF(*properties['pos'])
         rotation = properties['rotation']
-        
+
         # Use the viewer's add_rectangle method for consistent handling
-        rect_item = viewer.add_rectangle(rect, position, rotation, transform_origin)
+        rect_item = viewer.add_rectangle(rect, position, rotation, transform_origin,
+                                         object_id=properties.get('object_id'))
         return rect_item
 
 
     @staticmethod
     def find_matching_rect(scene, properties):
-        """Find an item in the scene matching the given properties"""
+        """Find an item in the scene matching the given properties.
+
+        Identity first (survives move/resize/undo/redo); geometry is the
+        fallback for snapshots that predate object_id.
+        """
+        want_id = properties.get('object_id')
+        if want_id:
+            for item in scene.items():
+                if isinstance(item, MoveableRectItem) and getattr(item, 'object_id', '') == want_id:
+                    return item
         for item in scene.items():
             if isinstance(item, MoveableRectItem):
                 if (is_close(item.pos().x(), properties['pos'][0]) and
@@ -135,6 +173,15 @@ class RectCommandBase:
     
     @staticmethod
     def find_matching_blk(blk_list, properties):
+        # Identity first: the same logical block keeps its object_id, so a single
+        # comparison beats matching every field (and is robust to a field the
+        # command is about to change). Full-field match stays the fallback for
+        # blocks snapshotted before object_id existed.
+        want_id = properties.get('object_id') if isinstance(properties, dict) else getattr(properties, 'object_id', None)
+        if want_id:
+            for blk in blk_list:
+                if getattr(blk, 'object_id', None) == want_id:
+                    return blk
         for blk in blk_list:
             # Get current block's properties
             current_props = blk.__dict__.copy()
@@ -199,7 +246,17 @@ class RectCommandBase:
     
     @staticmethod
     def find_matching_txt_item(scene, properties):
-        """Find a TextBlockItem in the scene matching the given properties"""
+        """Find a TextBlockItem in the scene matching the given properties.
+
+        Identity first (survives edit/move/style change/undo/redo); the
+        property-and-geometry match is the fallback for items snapshotted
+        before object_id existed.
+        """
+        want_id = getattr(properties, 'object_id', '')
+        if want_id:
+            for item in scene.items():
+                if isinstance(item, TextBlockItem) and getattr(item, 'object_id', '') == want_id:
+                    return item
         for item in scene.items():
             if isinstance(item, TextBlockItem):
                 # Compare all relevant properties with is_close for numerical values
@@ -230,7 +287,22 @@ class PatchProperties(TypedDict):
     hash: str             # hash of the patch image + bbox
 
 class PatchCommandBase:
-    """Shared helpers for pixmap patch commands"""
+    """Shared helpers for pixmap patch commands.
+
+    TECH DEBT (document/layer migration) — two distinct notions of identity:
+      * ``hash`` (HASH_KEY) is *content* identity: a deterministic digest of the
+        patch image + bbox, used for match and de-duplication. It is what a
+        patch is keyed by everywhere today (image_states, the inpaint commands),
+        and it is already persisted and collision-safe.
+      * ``object_id`` (OBJECT_ID_KEY) is *logical editable-object* identity —
+        the Slice 0 concept the other scene items carry.
+    Patches deliberately keep only ``hash`` for Slice 0: a patch is tied to a
+    cleaned region and is never moved, so content identity is sufficient and a
+    second id would be redundant churn. When patches become document-owned,
+    movable LayerItems, give them a real ``object_id`` (this class already
+    matches id-first when one is supplied) and keep ``hash`` alongside it purely
+    for content/dedup — the two must not be conflated.
+    """
 
     HASH_KEY = 0
 
@@ -258,6 +330,7 @@ class PatchCommandBase:
             item.setPos(x, y)
             item.setZValue(0.5)
         item.setData(PatchCommandBase.HASH_KEY, properties['hash'])
+        item.setData(OBJECT_ID_KEY, properties.get('object_id') or new_object_id())
         viewer._scene.addItem(item)
         viewer._scene.update()
         return item
@@ -266,7 +339,16 @@ class PatchCommandBase:
     def find_matching_item(scene, properties):
         x, y, w, h = properties['bbox']
         want_hash = properties['hash']
-        
+
+        # Identity first when the snapshot carries one; the hash+size+position
+        # match below stays the primary path for older snapshots (a patch's
+        # content hash has always served as its identity).
+        want_id = properties.get('object_id')
+        if want_id:
+            for itm in scene.items():
+                if isinstance(itm, QtWidgets.QGraphicsPixmapItem) and itm.data(OBJECT_ID_KEY) == want_id:
+                    return itm
+
         # Check if we have scene position (webtoon mode)
         if 'scene_pos' in properties:
             scene_x, scene_y = properties['scene_pos']

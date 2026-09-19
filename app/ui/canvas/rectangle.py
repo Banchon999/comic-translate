@@ -34,6 +34,8 @@ class MoveableRectItem(QGraphicsRectItem):
         # Signals must be per-item; sharing one QObject across all rectangles
         # causes every context-menu action to fire handlers for every rectangle.
         self.signals = RectSignals()
+        # Stable logical identity; assigned by the viewer's add_rectangle.
+        self.object_id = ""
         self.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         self.setFlag(QGraphicsRectItem.GraphicsItemFlag.ItemIsMovable, True)
         self.setAcceptHoverEvents(True)

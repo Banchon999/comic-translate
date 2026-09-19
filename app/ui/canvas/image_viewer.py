@@ -8,6 +8,7 @@ from PySide6.QtCore import Signal, Qt, QRectF, QPointF
 from .text_item import TextBlockItem
 from .text.text_item_properties import TextItemProperties
 from .rectangle import MoveableRectItem
+from modules.utils.common_utils import new_object_id
 from .rotate_cursor import RotateHandleCursors
 from .drawing_manager import DrawingManager
 from .webtoons.webtoon_manager import LazyWebtoonManager
@@ -392,12 +393,15 @@ class ImageViewer(QGraphicsView):
         self._scene.addItem(rect_item)
         return rect_item
 
-    def add_rectangle(self, rect: QRectF, position: QPointF, rotation: float = 0, origin: QPointF = None) -> MoveableRectItem:
+    def add_rectangle(self, rect: QRectF, position: QPointF, rotation: float = 0, origin: QPointF = None, object_id: str = None) -> MoveableRectItem:
         rect_item = self.create_rect_item(rect)
         rect_item.setPos(position)
         rect_item.setRotation(rotation)
         if origin:
             rect_item.setTransformOriginPoint(origin)
+        # Stable identity: keep the one passed in (load, undo/redo, page reload),
+        # otherwise mint one for a brand-new box.
+        rect_item.object_id = object_id or new_object_id()
         self.connect_rect_item.emit(rect_item)
         self.rectangles.append(rect_item)
         return rect_item
@@ -471,6 +475,10 @@ class ImageViewer(QGraphicsView):
             properties.gradient_angle,
         )
         item.set_curvature(properties.curvature)
+
+        # Stable identity: keep the properties' id (load, undo/redo, page
+        # reload, webtoon merge), otherwise mint one for a brand-new item.
+        item.object_id = getattr(properties, 'object_id', '') or new_object_id()
 
         # Update the item
         item.update()
@@ -561,6 +569,7 @@ class ImageViewer(QGraphicsView):
         for item in self._scene.items():
             if isinstance(item, MoveableRectItem):
                 rectangles_state.append({
+                    'object_id': getattr(item, 'object_id', '') or new_object_id(),
                     'rect': (item.pos().x(), item.pos().y(), item.boundingRect().width(), item.boundingRect().height()),
                     'rotation': item.rotation(),
                     'transform_origin': (item.transformOriginPoint().x(), item.transformOriginPoint().y())
@@ -600,7 +609,8 @@ class ImageViewer(QGraphicsView):
         for data in state['rectangles']:
             x, y, w, h = data['rect']
             origin = QPointF(*data.get('transform_origin', (0,0))) if 'transform_origin' in data else None
-            self.add_rectangle(QRectF(0,0,w,h), QPointF(x,y), data.get('rotation', 0), origin)
+            self.add_rectangle(QRectF(0,0,w,h), QPointF(x,y), data.get('rotation', 0), origin,
+                               object_id=data.get('object_id'))
 
         for data in state.get('text_items_state', []):
             # Use the new add_text_item function for consistency

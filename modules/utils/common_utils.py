@@ -1,5 +1,19 @@
 import os
 import sys
+import uuid
+
+
+def new_object_id() -> str:
+    """A stable, collision-safe identity for one editable logical object.
+
+    Used as ``object_id`` on text items, text blocks, rectangles, brush strokes
+    and inpaint patches so a logical object keeps the same identity across
+    edit/move/undo/redo/save/load and webtoon page clipping — independent of its
+    geometry, position, text or list index. UUID4 hex: no coordination needed
+    between the pipeline, the canvas and the project file, all of which mint ids.
+    """
+    return uuid.uuid4().hex
+
 
 def restart_application():
     """
