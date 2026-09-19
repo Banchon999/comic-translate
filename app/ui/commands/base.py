@@ -287,7 +287,22 @@ class PatchProperties(TypedDict):
     hash: str             # hash of the patch image + bbox
 
 class PatchCommandBase:
-    """Shared helpers for pixmap patch commands"""
+    """Shared helpers for pixmap patch commands.
+
+    TECH DEBT (document/layer migration) — two distinct notions of identity:
+      * ``hash`` (HASH_KEY) is *content* identity: a deterministic digest of the
+        patch image + bbox, used for match and de-duplication. It is what a
+        patch is keyed by everywhere today (image_states, the inpaint commands),
+        and it is already persisted and collision-safe.
+      * ``object_id`` (OBJECT_ID_KEY) is *logical editable-object* identity —
+        the Slice 0 concept the other scene items carry.
+    Patches deliberately keep only ``hash`` for Slice 0: a patch is tied to a
+    cleaned region and is never moved, so content identity is sufficient and a
+    second id would be redundant churn. When patches become document-owned,
+    movable LayerItems, give them a real ``object_id`` (this class already
+    matches id-first when one is supplied) and keep ``hash`` alongside it purely
+    for content/dedup — the two must not be conflated.
+    """
 
     HASH_KEY = 0
 

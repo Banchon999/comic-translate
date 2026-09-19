@@ -305,3 +305,72 @@ def test_webtoon_rectangle_redistribute_keeps_one_identity(viewer):
     fragments = [f for page in buckets.values() for f in page["rectangles"]]
     assert len(fragments) >= 2, "the box should have been clipped onto both pages"
     assert {f["object_id"] for f in fragments} == {"RECT-1"}
+
+
+def test_webtoon_text_item_split_keeps_one_identity(viewer):
+    from app.ui.canvas.webtoons.scene_items.text_item_manager import TextItemManager
+    from app.ui.canvas.webtoons.coordinate_converter import CoordinateConverter
+
+    layout, loader = _FakeLayout(), _FakeLoader()
+    mgr = TextItemManager(viewer, layout, CoordinateConverter(layout, loader), loader)
+
+    # A text item on page 0 whose height runs it down into page 1.
+    text_item = {
+        "object_id": "TXT-1", "position": (150, 60), "width": 40,
+        "font_size": 60, "line_spacing": 1.2, "text": "<p>HELLO</p>",
+        "font_family": "Arial", "bold": False, "italic": False,
+        "text_color": "#101010", "outline_color": "#ffffff",
+    }
+    buckets = defaultdict(lambda: {"text_items": []})
+    mgr.redistribute_existing_text_items({0: [text_item]}, buckets)
+
+    fragments = [f for page in buckets.values() for f in page["text_items"]]
+    assert len(fragments) >= 2, "the text should have been clipped onto both pages"
+    assert {f["object_id"] for f in fragments} == {"TXT-1"}
+
+
+def test_webtoon_text_item_merge_restores_one_identity(viewer):
+    """The other half of the round-trip: fragments merged back into one item
+    keep the single logical identity they were split from."""
+    from app.ui.canvas.webtoons.scene_items.text_item_manager import TextItemManager
+    from app.ui.canvas.webtoons.coordinate_converter import CoordinateConverter
+
+    layout, loader = _FakeLayout(), _FakeLoader()
+    mgr = TextItemManager(viewer, layout, CoordinateConverter(layout, loader), loader)
+
+    style = {"object_id": "TXT-1", "width": 40, "height": 40, "text": "<p>HELLO</p>",
+             "font_family": "Arial", "font_size": 20, "bold": False, "italic": False,
+             "text_color": "#101010", "outline_color": "#ffffff"}
+    frag_top = {**style, "position": (150, 60)}     # page 0, scene y 60..100
+    frag_bottom = {**style, "position": (150, 0)}    # page 1, scene y 100..140 (adjacent)
+    image_states = {
+        "p0": {"viewer_state": {"text_items_state": [frag_top]}},
+        "p1": {"viewer_state": {"text_items_state": [frag_bottom]}},
+    }
+    mgr.main_controller = type("M", (), {"image_states": image_states})()
+
+    mgr.merge_clipped_text_items()
+
+    merged = [ti for st in image_states.values()
+              for ti in st["viewer_state"]["text_items_state"]]
+    assert len(merged) == 1, "the two fragments should have merged into one item"
+    assert merged[0]["object_id"] == "TXT-1"
+
+
+def test_webtoon_textblock_split_keeps_one_identity(viewer):
+    from app.ui.canvas.webtoons.scene_items.text_block_manager import TextBlockManager
+    from app.ui.canvas.webtoons.coordinate_converter import CoordinateConverter
+
+    layout, loader = _FakeLayout(), _FakeLoader()
+    mgr = TextBlockManager(viewer, layout, CoordinateConverter(layout, loader), loader)
+
+    blk = TextBlock(text="hi")
+    blk.xyxy = [150, 60, 190, 140]  # page-local on page 0, runs into page 1
+    oid = blk.object_id
+
+    buckets = defaultdict(lambda: {"text_blocks": []})
+    mgr.redistribute_existing_text_blocks([(blk, 0)], buckets)
+
+    fragments = [f for page in buckets.values() for f in page["text_blocks"]]
+    assert len(fragments) >= 2, "the block should have been clipped onto both pages"
+    assert {f.object_id for f in fragments} == {oid}
