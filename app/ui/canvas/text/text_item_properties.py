@@ -3,10 +3,12 @@ from typing import Optional, List, Any
 from PySide6.QtGui import QColor
 from PySide6.QtCore import Qt
 from app.ui.canvas.text_item import OutlineType
+from modules.utils.common_utils import new_object_id
 
 @dataclass
 class TextItemProperties:
     """Dataclass for TextBlockItem properties to reduce duplication in construction"""
+    object_id: str = ""
     text: str = ""
     font_family: str = ""
     font_size: float = 20
@@ -50,7 +52,11 @@ class TextItemProperties:
     def from_dict(cls, data: dict) -> 'TextItemProperties':
         """Create TextItemProperties from dictionary state"""
         props = cls()
-        
+
+        # Stable identity. Empty for text saved before this existed; the viewer
+        # mints one on load and it is persisted on the next save.
+        props.object_id = data.get('object_id', '')
+
         # Basic text properties
         props.text = data.get('text', '')
         props.font_family = data.get('font_family', '')
@@ -139,7 +145,11 @@ class TextItemProperties:
     def from_text_item(cls, item) -> 'TextItemProperties':
         """Create TextItemProperties from an existing TextBlockItem"""
         props = cls()
-        
+
+        # Carry the item's identity; mint one if this item predates identity
+        # (e.g. built before object_id was assigned) so a save never loses it.
+        props.object_id = getattr(item, 'object_id', '') or new_object_id()
+
         # Basic text properties
         props.text = item.toHtml()
         props.font_family = item.font_family
@@ -190,6 +200,7 @@ class TextItemProperties:
     def to_dict(self) -> dict:
         """Convert TextItemProperties to dictionary"""
         return {
+            'object_id': self.object_id,
             'text': self.text,
             'font_family': self.font_family,
             'font_size': self.font_size,

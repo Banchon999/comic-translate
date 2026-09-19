@@ -592,6 +592,7 @@ class BatchProcessor:
                 # .from_dict rebuilds it on the canvas side and already accepts
                 # a colour as a string and a direction as an int.
                 text_items_state.append(build_text_item_state(
+                    object_id=getattr(blk, 'object_id', '') or '',
                     text=translation,
                     font_family=blk_font,
                     font_size=font_size,

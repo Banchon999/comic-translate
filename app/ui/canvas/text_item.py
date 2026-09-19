@@ -61,6 +61,9 @@ class TextBlockItem(QGraphicsTextItem):
              direction=Qt.LayoutDirection.LeftToRight):
 
         super().__init__(text)
+        # Stable logical identity; assigned by the viewer's add_text_item from
+        # the item's properties (or freshly minted for a brand-new item).
+        self.object_id = ""
         self.text_color = render_color
         self.outline = True if outline_color else False
         self.outline_color = outline_color

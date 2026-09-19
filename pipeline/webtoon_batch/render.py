@@ -146,6 +146,7 @@ class RenderMixin:
                 )
 
             viewer_state["text_items_state"].append(build_text_item_state(
+                object_id=getattr(block, 'object_id', '') or '',
                 text=wrapped_translation,
                 font_family=block_font,
                 font_size=font_size,
