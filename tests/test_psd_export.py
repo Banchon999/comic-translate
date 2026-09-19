@@ -7,6 +7,7 @@ came out black, and a frozen build died before writing anything at all.
 """
 
 import os
+import struct
 
 import numpy as np
 import pytest
@@ -103,6 +104,147 @@ def test_several_pages_land_in_the_output_folder(sandbox_dir):
 def test_exporting_nothing_is_an_error(sandbox_dir):
     with pytest.raises(ValueError):
         psd_exporter.export_psd_pages(str(sandbox_dir), [], "bundle")
+
+
+# --- oversized pages must be written as PSB, not an invalid version-1 PSD ----
+#
+# A webtoon long-strip is easily taller than 30,000 px. The PSD format stores
+# its dimensions in fields that cannot express that, so PhotoshopAPI writes an
+# out-of-spec version-1 file that older Photoshop refuses with "not compatible
+# with this version". The fix is to write PSB (header version 2) instead. A
+# tall, thin strip keeps the test's memory footprint small while still crossing
+# the limit.
+
+def _read_psd_version(path: str) -> int:
+    with open(path, "rb") as handle:
+        header = handle.read(6)
+    assert header[:4] == b"8BPS", "not a PSD/PSB file"
+    return struct.unpack(">H", header[4:6])[0]
+
+
+def _a_tall_page(height: int, width: int = 100):
+    art = np.full((height, width, 3), 210, dtype=np.uint8)
+    # A dark band somewhere in the middle so the preview is provably not black.
+    art[height // 2: height // 2 + 40, 10:90] = 0
+    return psd_exporter.PsdPageData(
+        file_path="strip.png",
+        rgb_image=art,
+        viewer_state={"text_items_state": []},
+        patches=[],
+    )
+
+
+def test_a_normal_page_stays_a_version_1_psd(sandbox_dir):
+    path = psd_exporter.export_psd_pages(str(sandbox_dir), [a_page()], "bundle")
+    assert path.endswith(".psd")
+    assert _read_psd_version(path) == 1
+
+
+def test_an_oversized_page_is_written_as_a_version_2_psb(sandbox_dir):
+    page = _a_tall_page(30001)
+    path = psd_exporter.export_psd_pages(str(sandbox_dir), [page], "bundle")
+
+    assert path.endswith(".psb")
+    assert _read_psd_version(path) == 2
+    # Parse it back with the independent reader: a valid PSB, right size, and
+    # the three groups still present.
+    psd = psd_tools.PSDImage.open(path)
+    assert (psd.width, psd.height) == (100, 30001)
+    assert [layer.name for layer in psd] == ["Raw Image", "Inpaint Patches", "Editable Text"]
+
+
+def _packbits_decode(data: bytes, expected_len: int) -> tuple[bytes, int]:
+    """Decode one PackBits row; return the bytes and how many were consumed.
+
+    A deliberately independent implementation — the exporter's own encoder is
+    not imported here, so this cannot agree with a bug by sharing its code.
+    """
+    out = bytearray()
+    i = 0
+    while len(out) < expected_len:
+        n = data[i]
+        i += 1
+        if n < 128:
+            count = n + 1
+            out += data[i:i + count]
+            i += count
+        elif n > 128:
+            count = 257 - n
+            out += bytes([data[i]]) * count
+            i += 1
+        # n == 128 is a no-op
+    return bytes(out), i
+
+
+def _read_merged_preview(path: str) -> np.ndarray:
+    """Walk a PSD/PSB to its merged-image section using the spec's section-length
+    widths (8 bytes for PSB's layer-and-mask section) and decode the composite.
+
+    psd-tools refuses to composite an image past its own 30,000 px cap, so it
+    cannot verify an oversized PSB's preview. This reads it directly. If the
+    exporter had walked the sections with PSD-width lengths on a PSB, the
+    composite would sit at a different offset and this correctly-walked read
+    would instead land on PhotoshopAPI's untouched (black) merged section.
+    """
+    with open(path, "rb") as handle:
+        blob = handle.read()
+    assert blob[:4] == b"8BPS"
+    version = struct.unpack(">H", blob[4:6])[0]
+    channels, height, width, _depth, _mode = struct.unpack(">H I I H H", blob[12:26])
+
+    layer_fmt, layer_size = (">Q", 8) if version == 2 else (">I", 4)
+    offset = 26
+    for fmt, size in [(">I", 4), (">I", 4), (layer_fmt, layer_size)]:
+        section_length = struct.unpack(fmt, blob[offset:offset + size])[0]
+        offset += size + section_length
+
+    compression = struct.unpack(">H", blob[offset:offset + 2])[0]
+    offset += 2
+    assert compression == 1, f"expected an RLE merged image, got compression {compression}"
+
+    count_char = "I" if version == 2 else "H"
+    count_size = 4 if version == 2 else 2
+    n_counts = channels * height
+    counts = struct.unpack(f">{n_counts}{count_char}", blob[offset:offset + n_counts * count_size])
+    offset += n_counts * count_size
+
+    planes = []
+    for c in range(channels):
+        plane = bytearray()
+        for r in range(height):
+            row_len = counts[c * height + r]
+            row, _ = _packbits_decode(blob[offset:offset + row_len], width)
+            plane += row
+            offset += row_len
+        planes.append(np.frombuffer(bytes(plane), dtype=np.uint8).reshape(height, width))
+    return np.stack(planes[:3], axis=-1)
+
+
+def test_the_psb_flattened_preview_is_not_a_black_rectangle(sandbox_dir):
+    """The merged-image section is written after a version-aware walk over the
+    file's sections — PSB's layer-and-mask length is 8 bytes, not 4. Get that
+    wrong and the composite lands in the wrong place and reads back black."""
+    page = _a_tall_page(30001)
+    path = psd_exporter.export_psd_pages(str(sandbox_dir), [page], "bundle")
+    preview = _read_merged_preview(path)
+    assert preview.shape == (30001, 100, 3)
+    assert preview.mean() > 32, "PSB preview is (nearly) black — merged image misplaced"
+    # The dark band drawn across the middle of the strip must be present.
+    band = preview[15020:15040, 10:90].mean()
+    assert band < 64, "the page content is missing from the PSB preview"
+
+
+def test_a_user_chosen_psd_name_is_switched_to_psb_when_oversized(sandbox_dir):
+    """The single-file save path lets the user name the file. An oversized page
+    overrides the .psd they picked, and the real .psb path is reported back so
+    the caller can tell the user where it landed."""
+    chosen = str(sandbox_dir / "my_export.psd")
+    path = psd_exporter.export_psd_pages(
+        str(sandbox_dir), [_a_tall_page(30001)], "bundle", single_file_path=chosen
+    )
+    assert path == str(sandbox_dir / "my_export.psb")
+    assert os.path.isfile(path)
+    assert not os.path.isfile(chosen)
 
 
 def test_the_numpy_shim_pybind11_needs_is_importable():

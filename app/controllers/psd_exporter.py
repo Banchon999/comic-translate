@@ -112,8 +112,9 @@ def export_psd_pages(
 	if len(pages) == 1:
 		page = pages[0]
 		out_path = single_file_path or os.path.join(output_folder, f"{_safe_stem(page.file_path)}.psd")
-		_write_page_psd(page, out_path)
-		return out_path
+		# The real written path can differ from out_path: an oversized page is
+		# forced to .psb (see _write_page_psd), so return what was written.
+		return _write_page_psd(page, out_path)
 
 	for page in pages:
 		out_path = os.path.join(output_folder, f"{_safe_stem(page.file_path)}.psd")
@@ -121,10 +122,31 @@ def export_psd_pages(
 	return output_folder
 
 
-def _write_page_psd(page: PsdPageData, out_path: str) -> None:
+# The PSD format caps each axis at this many pixels; beyond it, only PSB (the
+# "Large Document" format, header version 2) is valid. Writing an oversized page
+# as .psd yields an out-of-spec version-1 file that older Photoshop refuses to
+# open ("not compatible with this version"). PhotoshopAPI's doc.write() picks the
+# format purely from the file extension, so switching the extension is the fix.
+_PSD_MAX_DIMENSION = 30000
+
+
+def _psd_path_for_size(out_path: str, width: int, height: int) -> str:
+	"""Return out_path with a .psb extension when the page is too big for PSD.
+
+	A page within PSD limits keeps whatever extension it was given (normally
+	.psd), for the broadest reader compatibility.
+	"""
+	if width > _PSD_MAX_DIMENSION or height > _PSD_MAX_DIMENSION:
+		root, _ = os.path.splitext(out_path)
+		return f"{root}.psb"
+	return out_path
+
+
+def _write_page_psd(page: PsdPageData, out_path: str) -> str:
 	_require_psapi()
 	image = _ensure_rgb_uint8(page.rgb_image)
 	height, width, _ = image.shape
+	out_path = _psd_path_for_size(out_path, width, height)
 	doc = psapi.LayeredFile_8bit(psapi.enum.ColorMode.rgb, width, height)
 	doc.dpi = 300.0
 
@@ -204,6 +226,8 @@ def _write_page_psd(page: PsdPageData, out_path: str) -> None:
 		_strip_layer_name_terminators(out_path)
 	except Exception:
 		logger.exception("Could not clean up layer names in %s", out_path)
+
+	return out_path
 
 
 def _strip_layer_name_terminators(path: str) -> None:
@@ -333,11 +357,16 @@ def _write_flattened_preview(path: str, image: np.ndarray) -> None:
 			raise ValueError("Preview does not match the document size")
 
 		# Walk past colour mode data, image resources, and layer and mask info.
+		# Colour mode data and image resources carry a 4-byte length in both
+		# formats; the layer-and-mask section's length is 8 bytes in PSB, so
+		# reading it as 4 would land the composite in the wrong place.
+		layer_len_fmt, layer_len_size = (">Q", 8) if version == 2 else (">I", 4)
+		section_lengths = [(">I", 4), (">I", 4), (layer_len_fmt, layer_len_size)]
 		offset = 26
-		for _ in range(3):
+		for fmt, size in section_lengths:
 			handle.seek(offset)
-			section_length = struct.unpack(">I", handle.read(4))[0]
-			offset += 4 + section_length
+			section_length = struct.unpack(fmt, handle.read(size))[0]
+			offset += size + section_length
 
 		# PSB stores the per-row byte counts as 32-bit values.
 		count_format = ">I" if version == 2 else ">H"
