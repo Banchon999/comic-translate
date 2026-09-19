@@ -9,6 +9,9 @@ from PySide6.QtWidgets import QGraphicsPathItem
 from PySide6.QtCore import QPointF, QRectF
 from PySide6.QtGui import QPen, QBrush, QColor, QPainterPath, Qt
 
+from app.ui.commands.base import OBJECT_ID_KEY
+from modules.utils.common_utils import new_object_id
+
 
 class BrushStrokeManager:
     """Manages brush strokes for webtoon mode with lazy loading."""
@@ -45,9 +48,11 @@ class BrushStrokeManager:
                 
                 brush = QBrush(QColor(stroke_data['brush']))
                 if brush.color() == QColor("#80ff0000"):
-                    self._scene.addPath(scene_path, pen, brush)
+                    path_item = self._scene.addPath(scene_path, pen, brush)
                 else:
-                    self._scene.addPath(scene_path, pen)
+                    path_item = self._scene.addPath(scene_path, pen)
+                # Preserve identity across the webtoon load/unload recreate cycle.
+                path_item.setData(OBJECT_ID_KEY, stroke_data.get('object_id') or new_object_id())
     
     def unload_brush_strokes(self, page_idx: int, page_y: float, page_bottom: float, file_path: str):
         """Unload brush strokes for a specific page."""
@@ -69,6 +74,11 @@ class BrushStrokeManager:
                     # Convert stroke to page-local coordinates
                     page_local_stroke = self.coordinate_converter.convert_stroke_to_page_local(item, page_idx)
                     if page_local_stroke:
+                        # A stroke spanning several pages is clipped into one
+                        # fragment per page; every fragment keeps the source
+                        # stroke's identity so it is never split into unrelated
+                        # logical objects.
+                        page_local_stroke['object_id'] = item.data(OBJECT_ID_KEY) or new_object_id()
                         brush_strokes_data.append(page_local_stroke)
                         brush_strokes_to_remove.append(item)
         
@@ -87,6 +97,7 @@ class BrushStrokeManager:
                 
                 # Process this brush stroke using coordinate converter
                 stroke_data = {
+                    'object_id': item.data(OBJECT_ID_KEY) or new_object_id(),
                     'path': item.path(),
                     'pen': item.pen().color().name(QColor.HexArgb) if hasattr(item, 'pen') else '#80ff0000',
                     'brush': item.brush().color().name(QColor.HexArgb) if hasattr(item, 'brush') else '#00000000',
@@ -102,6 +113,7 @@ class BrushStrokeManager:
         pen_color = stroke['pen']
         brush_color = stroke['brush']
         width = stroke['width']
+        object_id = stroke.get('object_id') or new_object_id()
         
         # Get all points in the path to determine which pages this stroke touches
         pages_touched = set()
@@ -126,6 +138,7 @@ class BrushStrokeManager:
             # Only add the stroke if it has valid elements on this page
             if page_path and not page_path.isEmpty():
                 page_stroke = {
+                    'object_id': object_id,
                     'path': page_path,
                     'pen': pen_color,
                     'brush': brush_color,
