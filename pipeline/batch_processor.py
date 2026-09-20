@@ -209,7 +209,7 @@ class BatchProcessor:
         for index, image_path in enumerate(image_list):
             if self._is_cancelled():
                 return
-            state = self.main_page.image_states.get(image_path, {})
+            state = self.main_page.image_states.get_page_state(image_path, {})
             if state.get('skip', False):
                 continue
             source_lang = state.get('source_lang', '')
@@ -291,8 +291,7 @@ class BatchProcessor:
             self.emit_progress(index, total_images, 0, 10, True)
 
             settings_page = self.main_page.settings_page
-            source_lang = self.main_page.image_states[image_path]['source_lang']
-            target_lang = self.main_page.image_states[image_path]['target_lang']
+            source_lang, target_lang = self.main_page.image_states.languages(image_path)
 
             trg_lng_cd = get_language_code(target_lang)
             
@@ -314,7 +313,7 @@ class BatchProcessor:
             image = imk.read_image(image_path)
 
             # skip UI-skipped images
-            state = self.main_page.image_states.get(image_path, {})
+            state = self.main_page.image_states.get_page_state(image_path, {})
             if state.get('skip', False):
                 self.skip_save(directory, timestamp, base_name, extension, archive_bname, image)
                 self.log_skipped_image(directory, timestamp, image_path, "User-skipped")
@@ -615,11 +614,11 @@ class BatchProcessor:
                     outline=outline,
                 ))
 
-            self.main_page.image_states[image_path]['viewer_state'].update({
+            self.main_page.image_states.ensure_viewer_state(image_path).update({
                 'text_items_state': text_items_state
                 })
-            
-            self.main_page.image_states[image_path]['viewer_state'].update({
+
+            self.main_page.image_states.ensure_viewer_state(image_path).update({
                 'push_to_stack': True
                 })
             
@@ -628,8 +627,8 @@ class BatchProcessor:
                 return
 
             # Saving blocks with texts to history
-            self.main_page.image_states[image_path].update({
-                'blk_list': blk_list                   
+            self.main_page.image_states.ensure_page(image_path).update({
+                'blk_list': blk_list
             })
 
             # Notify UI that this page's render state is finalized.

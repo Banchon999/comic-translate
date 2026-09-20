@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 import msgpack
 
 from .parsers import ProjectDecoder, ProjectEncoder, ensure_string_keys
+from .page_state_store import PageStateStore
 from modules.utils.file_handler import ensure_prepared_path_materialized
 
 if TYPE_CHECKING:
@@ -376,7 +377,7 @@ def save_state_to_proj_file_v2(comic_translate: "ComicTranslate", file_name: str
     page_rows: dict[str, bytes] = {}
     for page_path in page_paths:
         row_payload = {
-            "image_state": comic_translate.image_states.get(page_path, {}),
+            "image_state": comic_translate.image_states.get_page_state(page_path, {}),
             "image_file_ref": image_files_references.get(page_path),
             "image_data_ref": image_data_references.get(page_path),
             "image_history_refs": image_history_references.get(page_path, []),
@@ -567,10 +568,10 @@ def _materialize_from_manifest_and_pages(
         temp: original for original, temp in original_to_temp.items()
     }
 
-    comic_translate.image_states = {
+    comic_translate.image_states = PageStateStore({
         original_to_temp.get(page, page): (row.get("image_state", {}) or {})
         for page, row in page_rows.items()
-    }
+    })
 
     current_history_index = manifest.get("current_history_index", {})
     comic_translate.current_history_index = {

@@ -118,14 +118,14 @@ class ToggleSkipImagesCommand(QUndoCommand):
         self.file_paths = file_paths
         self.new_status = skip_status
         self.old_status = {
-            path: main.image_states.get(path, {}).get('skip', False)
+            path: main.image_states.is_skipped(path)
             for path in file_paths
         }
 
     def _apply_status(self, file_path: str, skip_status: bool):
-        if file_path not in self.main.image_states:
+        if not self.main.image_states.has_page(file_path):
             return
-        self.main.image_states[file_path]['skip'] = skip_status
+        self.main.image_states.set_skip(file_path, skip_status)
 
         try:
             idx = self.main.image_files.index(file_path)

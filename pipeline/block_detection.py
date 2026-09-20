@@ -26,7 +26,7 @@ class BlockDetectionHandler:
             return
 
         file_path = self.main_page.image_files[self.main_page.curr_img_idx]
-        state = self.main_page.image_states.get(file_path)
+        state = self.main_page.image_states.get_page_state(file_path)
         if state is None:
             return
 

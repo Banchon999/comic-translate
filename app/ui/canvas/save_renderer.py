@@ -109,7 +109,7 @@ class ImageSaveRenderer:
             if other_page_idx == page_idx:
                 continue
 
-            if other_image_path not in main_page.image_states:
+            if not main_page.image_states.has_page(other_image_path):
                 continue
 
             page_gap = page_idx - other_page_idx
@@ -127,7 +127,7 @@ class ImageSaveRenderer:
                 continue
                 
             other_page_height = other_image.shape[0]
-            other_viewer_state = main_page.image_states[other_image_path].get('viewer_state', {})
+            other_viewer_state = main_page.image_states.viewer_state(other_image_path, {})
             other_text_items = other_viewer_state.get('text_items_state', [])
 
             if not other_text_items:

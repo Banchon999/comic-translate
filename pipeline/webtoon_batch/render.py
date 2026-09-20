@@ -28,7 +28,7 @@ class RenderMixin:
         blocks: List[TextBlock],
         has_patches: bool,
     ) -> List[TextBlock]:
-        page_state = self.main_page.image_states[image_path]
+        page_state = self.main_page.image_states.ensure_page(image_path)
         if not blocks:
             page_state["blk_list"] = []
             page_state["skip_render"] = not has_patches
@@ -53,7 +53,7 @@ class RenderMixin:
         blocks: List[TextBlock],
         image_shape: tuple,
     ) -> None:
-        page_state = self.main_page.image_states[image_path]
+        page_state = self.main_page.image_states.ensure_page(image_path)
         viewer_state = page_state.setdefault("viewer_state", {})
         viewer_state["text_items_state"] = []
         viewer_state["push_to_stack"] = True
@@ -197,7 +197,7 @@ class RenderMixin:
                 archive_bname = os.path.splitext(os.path.basename(archive_path))[0].strip()
                 break
 
-        if self.main_page.image_states[image_path].get("skip_render"):
+        if self.main_page.image_states.get_page_state(image_path, {}).get("skip_render"):
             logger.info("Skipping final render for page %s, copying original.", page_idx)
             reason = "No text blocks detected or processed successfully."
             self.skip_save(directory, timestamp, base_name, extension, archive_bname, image)
@@ -226,7 +226,7 @@ class RenderMixin:
                 os.path.join(path, f"{base_name}_cleaned{extension}"), cleaned_image_rgb
             )
 
-        blk_list = self.main_page.image_states[image_path].get("blk_list", [])
+        blk_list = self.main_page.image_states.blk_list(image_path)
 
         if export_settings["export_raw_text"] and blk_list:
             path = os.path.join(

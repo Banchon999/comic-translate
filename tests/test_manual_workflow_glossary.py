@@ -56,9 +56,13 @@ def stub_heavy_dependencies(monkeypatch):
 
 
 def make_main(settings_page, image_states, selected_paths):
+    from app.projects.page_state_store import PageStateStore
+
     main = types.SimpleNamespace()
     main.settings_page = settings_page
-    main.image_states = image_states
+    # The real controller's image_states is a PageStateStore; mirror that so the
+    # workflow's semantic accessors (get_page_state/blk_list/...) are present.
+    main.image_states = PageStateStore(image_states)
     main.image_data = {path: np.zeros((10, 10, 3), dtype=np.uint8) for path in image_states}
     main.image_files = list(image_states.keys())
     main.curr_img_idx = 0

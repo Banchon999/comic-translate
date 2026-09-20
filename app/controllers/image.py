@@ -16,6 +16,7 @@ from app.ui.list_view_image_loader import ListViewImageLoader
 from app.thread_worker import GenericWorker
 from app.path_materialization import ensure_path_materialized
 from app.controllers.psd_importer import ImportedPsdPage, import_psd_files, prepare_psd_font_catalog
+from app.projects.page_state_store import PageStateStore
 from modules.utils.language_utils import to_canonical_language_name, to_ui_language_label
 
 if TYPE_CHECKING:
@@ -70,25 +71,29 @@ class ImageStateController:
         skip_status: bool,
         existing_state: dict | None = None,
     ) -> dict:
-        state = dict(existing_state or self.main.image_states.get(file_path, {}) or {})
-        state.update({
-            "viewer_state": viewer_state,
-            "source_lang": to_canonical_language_name(
+        # The store owns the canonical shape/defaults; this method gathers the
+        # UI-derived values (language combos, export group name) and delegates
+        # the assembly so page-state creation lives in one place.
+        existing = existing_state if existing_state is not None else self.main.image_states.get_page_state(file_path)
+        existing = existing or {}
+        return PageStateStore.build_page_state(
+            viewer_state=viewer_state,
+            source_lang=to_canonical_language_name(
                 self.main.s_combo.currentText(),
                 self.main.lang_mapping,
             ),
-            "target_lang": to_canonical_language_name(
+            target_lang=to_canonical_language_name(
                 self.main.t_combo.currentText(),
                 self.main.lang_mapping,
             ),
-            "brush_strokes": brush_strokes,
-            "blk_list": blk_list,
-            "skip": skip_status,
-            "export_group_name": str(
-                state.get("export_group_name") or self._default_export_group_name(file_path)
+            brush_strokes=brush_strokes,
+            blk_list=blk_list,
+            skip=skip_status,
+            export_group_name=str(
+                existing.get("export_group_name") or self._default_export_group_name(file_path)
             ),
-        })
-        return state
+            existing=existing,
+        )
 
     def _is_content_flagged_error(self, error: str) -> bool:
         lowered = (error or "").lower()
@@ -395,13 +400,13 @@ class ImageStateController:
             self.main.image_history[file_path] = [file_path]
             self.main.in_memory_history[file_path] = [rgb_image.copy()]
             self.main.current_history_index[file_path] = 0
-            self.main.image_states[file_path] = self._build_image_state(
+            self.main.image_states.set_page_state(file_path, self._build_image_state(
                 file_path,
                 page.viewer_state,
                 [],
                 [],
                 False,
-            )
+            ))
 
             stack = QtGui.QUndoStack(self.main)
             stack.cleanChanged.connect(self.main._update_window_modified)
@@ -449,13 +454,13 @@ class ImageStateController:
                     
                     # Initialize empty image state for new files
                     skip_status = False
-                    self.main.image_states[file_path] = self._build_image_state(
+                    self.main.image_states.set_page_state(file_path, self._build_image_state(
                         file_path,
                         {},
                         [],
                         [],
                         skip_status,
-                    )
+                    ))
                     
                     # Create undo stack for new file
                     stack = QtGui.QUndoStack(self.main)
@@ -546,7 +551,7 @@ class ImageStateController:
                 file_name = os.path.basename(file_path)
                 list_item = QtWidgets.QListWidgetItem(file_name)
                 list_item.setData(QtCore.Qt.ItemDataRole.UserRole, file_path)
-                if self.main.image_states.get(file_path, {}).get('skip'):
+                if self.main.image_states.is_skipped(file_path):
                     font = list_item.font()
                     font.setStrikeOut(True)
                     list_item.setFont(font)
@@ -699,14 +704,14 @@ class ImageStateController:
                 self.main.image_viewer.scroll_to_page(index)
                 
                 # Load minimal page state without interfering with the webtoon view
-                if file_path in self.main.image_states:
-                    state = self.main.image_states[file_path]
+                if self.main.image_states.has_page(file_path):
                     # Only load language settings in webtoon mode
+                    source_lang, target_lang = self.main.image_states.languages(file_path)
                     # Block signals to prevent triggering save when loading state
                     self.main.s_combo.blockSignals(True)
                     self.main.t_combo.blockSignals(True)
-                    self.main.s_combo.setCurrentText(state.get('source_lang', ''))
-                    self.main.t_combo.setCurrentText(state.get('target_lang', ''))
+                    self.main.s_combo.setCurrentText(source_lang or '')
+                    self.main.t_combo.setCurrentText(target_lang or '')
                     self.main.s_combo.blockSignals(False)
                     self.main.t_combo.blockSignals(False)
                     
@@ -889,7 +894,7 @@ class ImageStateController:
                 self.main.image_history.pop(file_path, None)
                 self.main.in_memory_history.pop(file_path, None)
                 self.main.current_history_index.pop(file_path, None)
-                self.main.image_states.pop(file_path, None)  
+                self.main.image_states.remove_page(file_path)
                 self.main.image_patches.pop(file_path, None)  
                 self.main.in_memory_patches.pop(file_path, None)  
 
@@ -981,7 +986,7 @@ class ImageStateController:
 
         changed = False
         for path in file_paths:
-            if self.main.image_states.get(path, {}).get('skip', False) != skip_status:
+            if self.main.image_states.is_skipped(path) != skip_status:
                 changed = True
                 break
         if not changed:
@@ -1066,14 +1071,14 @@ class ImageStateController:
 
     def save_image_state(self, file: str):
         # For regular mode only
-        skip_status = self.main.image_states.get(file, {}).get('skip', False)
-        self.main.image_states[file] = self._build_image_state(
+        skip_status = self.main.image_states.is_skipped(file)
+        self.main.image_states.set_page_state(file, self._build_image_state(
             file,
             self.main.image_viewer.save_state(),
             self.main.image_viewer.save_brush_strokes(),
             self.main.blk_list.copy(),
             skip_status,
-        )
+        ))
 
     def save_current_image_state(self):
         if self.main.curr_img_idx >= 0:
@@ -1098,8 +1103,8 @@ class ImageStateController:
             # fitInView after this method returns.
             viewer.display_image_array(rgb_image, fit=False)
 
-            if file_path in self.main.image_states:
-                state = self.main.image_states[file_path]
+            state = self.main.image_states.get_page_state(file_path)
+            if state is not None:
                 state["source_lang"] = to_canonical_language_name(
                     state.get("source_lang", self.main.s_combo.currentText()),
                     self.main.lang_mapping,
@@ -1254,7 +1259,7 @@ class ImageStateController:
         if current_file != file_path:
             return
 
-        viewer_state = self.main.image_states.get(file_path, {}).get('viewer_state', {})
+        viewer_state = self.main.image_states.viewer_state(file_path, {})
         if not viewer_state or not viewer_state.get('text_items_state'):
             return
 
@@ -1273,7 +1278,7 @@ class ImageStateController:
 
             # Reload blk_list so that clicking a text item can find the
             # corresponding TextBlock (with OCR text) for s_text_edit.
-            stored_blk_list = self.main.image_states.get(file_path, {}).get('blk_list', [])
+            stored_blk_list = self.main.image_states.blk_list(file_path)
             self.main.blk_list = stored_blk_list.copy() if stored_blk_list else []
 
             for data in viewer_state.get('text_items_state', []):

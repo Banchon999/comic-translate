@@ -334,7 +334,7 @@ class FlowMixin:
         image_path = page_info["path"]
         selected_index = int(page_info["selected_index"])
         global_index = int(page_info["global_index"])
-        page_state = self.main_page.image_states.setdefault(image_path, {})
+        page_state = self.main_page.image_states.ensure_page(image_path)
         page_state.setdefault("viewer_state", {})
 
         if page_info.get("skip", False):
@@ -422,7 +422,7 @@ class FlowMixin:
 
             for selected_index, image_path in enumerate(image_list):
                 global_index = int(global_index_by_path.get(image_path, selected_index))
-                page_state = self.main_page.image_states.get(image_path, {})
+                page_state = self.main_page.image_states.get_page_state(image_path, {})
                 skip_page = bool(page_state.get("skip", False))
 
                 if skip_page:
@@ -569,7 +569,7 @@ class FlowMixin:
                 ]
 
                 self._emit_progress(current_record["selected_index"], total_images, 2, False)
-                page_state = self.main_page.image_states.get(current_record["path"], {})
+                page_state = self.main_page.image_states.get_page_state(current_record["path"], {})
                 source_lang = page_state.get(
                     "source_lang",
                     to_canonical_language_name(

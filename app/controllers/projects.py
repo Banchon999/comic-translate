@@ -592,7 +592,7 @@ class ProjectController:
     def _persist_export_group_names(self, chapter_names_by_path: dict[str, str]) -> None:
         changed = False
         for file_path, group_name in chapter_names_by_path.items():
-            state = self.main.image_states.setdefault(file_path, {})
+            state = self.main.image_states.ensure_page(file_path)
             if state.get("export_group_name") != group_name:
                 state["export_group_name"] = group_name
                 changed = True
@@ -690,7 +690,7 @@ class ProjectController:
 
         pages = []
         for image_path in self.main.image_files:
-            state = self.main.image_states.get(image_path, {})
+            state = self.main.image_states.get_page_state(image_path, {})
             blocks = state.get('blk_list') or []
             entries = [
                 {
@@ -864,7 +864,7 @@ class ProjectController:
         return sanitized.strip("._-") or "chapter"
 
     def _default_export_group_name(self, file_path: str) -> str:
-        state = self.main.image_states.get(file_path, {})
+        state = self.main.image_states.get_page_state(file_path, {})
         group_name = str(state.get("export_group_name", "")).strip()
         if group_name:
             return group_name
@@ -1089,12 +1089,12 @@ class ProjectController:
                 if page_idx in loaded_pages:
                     viewer_state = self._create_text_items_state_from_scene(page_idx)
                 else:
-                    viewer_state = self.main.image_states.get(file_path, {}).get('viewer_state', {}).copy()
+                    viewer_state = self.main.image_states.viewer_state(file_path, {}).copy()
                 all_pages_current_state[file_path] = {'viewer_state': viewer_state}
             return all_pages_current_state
 
         for file_path in self.main.image_files:
-            viewer_state = self.main.image_states.get(file_path, {}).get('viewer_state', {}).copy()
+            viewer_state = self.main.image_states.viewer_state(file_path, {}).copy()
             all_pages_current_state[file_path] = {'viewer_state': viewer_state}
 
         return all_pages_current_state

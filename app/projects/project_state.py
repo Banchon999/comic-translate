@@ -12,6 +12,7 @@ import imkit as imk
 
 from modules.utils.archives import close_pdf_cache
 from .parsers import ProjectEncoder, ProjectDecoder, ensure_string_keys
+from .page_state_store import PageStateStore
 from .project_state_v2 import (
     close_cached_connection as close_state_v2_cached_connection,
     ensure_lazy_blob_materialized,
@@ -194,9 +195,9 @@ def load_state_from_proj_file(comic_translate: ComicTranslate, file_name: str):
     }
 
     image_states = state.get('image_states', {})
-    comic_translate.image_states = {
+    comic_translate.image_states = PageStateStore({
         original_to_temp.get(file, file): img_state for file, img_state in image_states.items()
-    }
+    })
 
     current_history_index = state.get('current_history_index', {})
     comic_translate.current_history_index = {

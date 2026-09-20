@@ -166,7 +166,7 @@ class ManualWorkflowController:
                     if image is None:
                         continue
                     blk_list = detector.detect(image)
-                    state = self.main.image_states.get(file_path, {})
+                    state = self.main.image_states.get_page_state(file_path, {})
                     source_lang = state.get("source_lang", source_lang_fallback)
                     if blk_list:
                         get_best_render_area(blk_list, image)
@@ -179,7 +179,7 @@ class ManualWorkflowController:
                 current_file = context["current_file"]
                 current_blocks: list[TextBlock] | None = None
                 for file_path, blk_list in (results or {}).items():
-                    state = self.main.image_states.get(file_path)
+                    state = self.main.image_states.get_page_state(file_path)
                     if state is None:
                         continue
                     state["blk_list"] = blk_list
@@ -257,7 +257,7 @@ class ManualWorkflowController:
                 device = resolve_device(self.main.settings_page.is_gpu_enabled())
                 results: dict[str, list[TextBlock]] = {}
                 for file_path in selected_paths:
-                    state = self.main.image_states.get(file_path, {})
+                    state = self.main.image_states.get_page_state(file_path, {})
                     blk_list = state.get("blk_list", [])
                     if not blk_list:
                         continue
@@ -278,7 +278,7 @@ class ManualWorkflowController:
             def on_ocr_ready(results: dict[str, list[TextBlock]]) -> None:
                 current_file = context["current_file"]
                 for file_path, blk_list in (results or {}).items():
-                    state = self.main.image_states.get(file_path)
+                    state = self.main.image_states.get_page_state(file_path)
                     if state is None:
                         continue
                     state["blk_list"] = blk_list
@@ -322,14 +322,14 @@ class ManualWorkflowController:
         if len(selected_paths) > 1 and not single_block:
             has_any_text = False
             for file_path in selected_paths:
-                blk_list = self.main.image_states.get(file_path, {}).get("blk_list", [])
+                blk_list = self.main.image_states.blk_list(file_path)
                 if is_there_text(blk_list):
                     has_any_text = True
                     break
             if not has_any_text:
                 return
             for file_path in selected_paths:
-                target_lang = self.main.image_states.get(file_path, {}).get(
+                target_lang = self.main.image_states.get_page_state(file_path, {}).get(
                     "target_lang",
                     to_canonical_language_name(
                         self.main.t_combo.currentText(),
@@ -358,7 +358,7 @@ class ManualWorkflowController:
                 cache_manager = self.main.pipeline.cache_manager
                 results: dict[str, list[TextBlock]] = {}
                 for file_path in selected_paths:
-                    state = self.main.image_states.get(file_path, {})
+                    state = self.main.image_states.get_page_state(file_path, {})
                     blk_list = state.get("blk_list", [])
                     if not blk_list:
                         continue
@@ -393,7 +393,7 @@ class ManualWorkflowController:
             def on_translation_ready(results: dict[str, list[TextBlock]]) -> None:
                 current_file = context["current_file"]
                 for file_path, blk_list in (results or {}).items():
-                    state = self.main.image_states.get(file_path)
+                    state = self.main.image_states.get_page_state(file_path)
                     if state is None:
                         continue
                     state["blk_list"] = blk_list
@@ -537,7 +537,7 @@ class ManualWorkflowController:
                 path_to_index = {p: i for i, p in enumerate(self.main.image_files)}
 
                 for file_path in selected_paths:
-                    state = self.main.image_states.get(file_path, {})
+                    state = self.main.image_states.get_page_state(file_path, {})
                     strokes = state.get("brush_strokes", [])
                     if not strokes:
                         continue
@@ -584,7 +584,7 @@ class ManualWorkflowController:
                         if stack is not None:
                             stack.endMacro()
 
-                    state = self.main.image_states.get(file_path)
+                    state = self.main.image_states.get_page_state(file_path)
                     if state is not None:
                         state['brush_strokes'] = []
                     processed_any = True
@@ -661,7 +661,7 @@ class ManualWorkflowController:
                 def compute_selected_bboxes() -> dict[str, tuple[list[TextBlock], list[dict]]]:
                     results = {}
                     for file_path in selected_paths:
-                        state = self.main.image_states.get(file_path, {})
+                        state = self.main.image_states.get_page_state(file_path, {})
                         blk_list = state.get("blk_list", [])
                         if not blk_list:
                             continue
@@ -675,7 +675,7 @@ class ManualWorkflowController:
                 def on_selected_bboxes_ready(results: dict[str, tuple[list[TextBlock], list[dict]]]) -> None:
                     current_file = context["current_file"]
                     for file_path, (blk_list, strokes) in (results or {}).items():
-                        state = self.main.image_states.get(file_path)
+                        state = self.main.image_states.get_page_state(file_path)
                         if state is None:
                             continue
                         state["blk_list"] = blk_list
