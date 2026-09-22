@@ -65,7 +65,7 @@ class TextItemManager:
                     text_items_to_remove.append(text_item)
         
         # Store text items in image_states
-        self.main_controller.image_states[file_path]['viewer_state']['text_items_state'] = text_items_data
+        self.main_controller.image_states.ensure_viewer_state(file_path)['text_items_state'] = text_items_data
         
         # Remove text items from scene and viewer list
         for text_item in text_items_to_remove:
@@ -448,7 +448,7 @@ class TextItemManager:
         # Collect all text items from all pages
         for page_idx in range(len(self.image_loader.image_file_paths)):
             file_path = self.image_loader.image_file_paths[page_idx]
-            state = self.main_controller.image_states.get(file_path, {})
+            state = self.main_controller.image_states.get_page_state(file_path, {})
             text_items = state.get('viewer_state', {}).get('text_items_state', [])
             
             for text_item in text_items:
@@ -598,7 +598,7 @@ class TextItemManager:
         for item in group:
             page_idx = item['page_idx']
             file_path = self.image_loader.image_file_paths[page_idx]
-            state = self.main_controller.image_states[file_path]
+            state = self.main_controller.image_states.get_page_state(file_path)
             text_items = state['viewer_state']['text_items_state']
             
             # Remove this item
@@ -606,7 +606,7 @@ class TextItemManager:
         
         # Add merged item to target page
         target_file_path = self.image_loader.image_file_paths[target_page]
-        target_state = self.main_controller.image_states[target_file_path]
+        target_state = self.main_controller.image_states.get_page_state(target_file_path)
         target_state['viewer_state']['text_items_state'].append(base_data)
 
     def _merge_text_content(self, text_fragments):

@@ -483,7 +483,7 @@ class SearchReplaceController(QtCore.QObject):
                         if not (0 <= page_idx < len(self.main.image_files)):
                             continue
                         file_path = self.main.image_files[page_idx]
-                        state = self.main.image_states.get(file_path) or {}
+                        state = self.main.image_states.get_page_state(file_path) or {}
                         blks = state.get("blk_list") or []
                         for idx, blk in enumerate(blks):
                             yield file_path, blks, idx, blk
@@ -506,7 +506,7 @@ class SearchReplaceController(QtCore.QObject):
                 pass
 
         for file_path in self.main.image_files:
-            state = self.main.image_states.get(file_path) or {}
+            state = self.main.image_states.get_page_state(file_path) or {}
             blks = state.get("blk_list") or []
             for idx, blk in enumerate(blks):
                 yield file_path, blks, idx, blk
@@ -795,7 +795,7 @@ class SearchReplaceController(QtCore.QObject):
     def _apply_webtoon_fallback_selection(self, m: SearchMatch, focus: bool, preserve_focus_state=None):
         # Webtoon mode: if the page hasn't loaded into the scene yet, fall back to the
         # page's stored blk_list to at least populate the MTPE edits.
-        state = self.main.image_states.get(m.key.file_path) or {}
+        state = self.main.image_states.get_page_state(m.key.file_path) or {}
         blks = state.get("blk_list") or []
         blk = next(
             (
@@ -950,7 +950,7 @@ class SearchReplaceController(QtCore.QObject):
     def _apply_block_text_with_html(
         self, opts: SearchOptions, key: BlockKey, new_text: str, *, html_override: str | None
     ):
-        state = self.main.image_states.get(key.file_path)
+        state = self.main.image_states.get_page_state(key.file_path)
         if state:
             blks = state.get("blk_list") or []
             for blk in blks:
@@ -1067,7 +1067,7 @@ class SearchReplaceController(QtCore.QObject):
         new_html = None
 
         # If the page has a persisted TextBlockItem state (rich text), update it in-place to preserve formatting.
-        state = self.main.image_states.get(m.key.file_path) or {}
+        state = self.main.image_states.get_page_state(m.key.file_path) or {}
         if opts.in_target:
             ti = self._find_matching_text_item_state(state, m.key)
             existing_html = (ti.get("text") if ti else None) if isinstance(ti, dict) else None
@@ -1159,7 +1159,7 @@ class SearchReplaceController(QtCore.QObject):
             old_html = None
             new_html = None
 
-            state = self.main.image_states.get(file_path) or {}
+            state = self.main.image_states.get_page_state(file_path) or {}
             if opts.in_target:
                 ti = self._find_matching_text_item_state(state, key)
                 existing_html = (ti.get("text") if ti else None) if isinstance(ti, dict) else None

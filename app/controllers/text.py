@@ -415,7 +415,7 @@ class TextController:
         # Page navigation sets these combos with signals blocked, so this only
         # runs for genuine user changes.
         for image_path in self.main.image_files:
-            state = self.main.image_states.get(image_path)
+            state = self.main.image_states.get_page_state(image_path)
             if state is not None:
                 state['source_lang'] = source_lang
                 state['target_lang'] = target_lang
@@ -433,8 +433,7 @@ class TextController:
         source_lang = to_canonical_language_name(self.main.s_combo.currentText(), self.main.lang_mapping)
         target_lang = to_canonical_language_name(self.main.t_combo.currentText(), self.main.lang_mapping)
         for image_path in self.main.image_files:
-            self.main.image_states[image_path]['source_lang'] = source_lang
-            self.main.image_states[image_path]['target_lang'] = target_lang
+            self.main.image_states.set_languages(image_path, source_lang, target_lang)
         if self.main.image_files:
             self.main.mark_project_dirty()
 
@@ -1006,7 +1005,10 @@ class TextController:
                 updated_paths: set[str] = set()
                 target_lang_fallback = self.main.t_combo.currentText()
                 for file_path in selected_paths:
-                    state = self.main.image_states.get(file_path, {})
+                    # This block needs the whole live page state: it reads the
+                    # target language and mutates viewer_state below, so fetch
+                    # the page once rather than through per-field accessors.
+                    state = self.main.image_states.get_page_state(file_path, {})
                     blk_list = state.get("blk_list", [])
                     if not blk_list:
                         continue
@@ -1099,11 +1101,11 @@ class TextController:
                 if current_file in updated_paths:
                     if self.main.webtoon_mode:
                         self.main.manual_workflow_ctrl._set_current_blocks_from_page_state(
-                            self.main.image_states.get(current_file, {}).get("blk_list", []),
+                            self.main.image_states.blk_list(current_file),
                             current_page_unloaded=context["current_page_unloaded"],
                         )
                     else:
-                        self.main.blk_list = self.main.image_states.get(current_file, {}).get("blk_list", []).copy()
+                        self.main.blk_list = self.main.image_states.blk_list(current_file).copy()
                         self.main.image_ctrl.on_render_state_ready(current_file)
 
                 self.main.mark_project_dirty()

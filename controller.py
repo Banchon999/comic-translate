@@ -35,6 +35,7 @@ from app.controllers.shortcuts import ShortcutController
 from app.controllers.task_runner import TaskRunnerController
 from app.controllers.batch_report import BatchReportController
 from app.controllers.manual_workflow import ManualWorkflowController
+from app.projects.page_state_store import PageStateStore
 from modules.utils.exceptions import InsufficientCreditsException, ContentFlaggedException
 
 
@@ -86,7 +87,7 @@ class ComicTranslate(ComicTranslateUI):
         self.path_originals: dict[str, str] = {}
         self.selected_batch = []
         self.curr_img_idx = -1
-        self.image_states = {}
+        self.image_states = PageStateStore()  # page path -> page state (Slice 1 access boundary)
         self.image_data = {}  # Store the latest version of each image
         self.image_history = {}  # Store file path history for all images
         self.in_memory_history = {}  # Store image history for recent images
@@ -849,7 +850,7 @@ class ComicTranslate(ComicTranslateUI):
             return
 
         for path in unique_paths:
-            tgt = self.image_states[path]['target_lang']
+            _, tgt = self.image_states.languages(path)
             if not validate_settings(self, tgt):
                 return
 

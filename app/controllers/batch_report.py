@@ -35,7 +35,7 @@ class BatchReportController:
         tracked_paths = [
             path
             for path in batch_paths
-            if not self.main.image_states.get(path, {}).get("skip", False)
+            if not self.main.image_states.is_skipped(path)
         ]
         self._current_batch_report = {
             "started_at": datetime.now(),

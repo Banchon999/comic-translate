@@ -87,7 +87,7 @@ class RectangleManager:
                     rectangles_to_remove.append(rect_item)
         
         # Store rectangles in image_states
-        self.main_controller.image_states[file_path]['viewer_state']['rectangles'] = rectangles_data
+        self.main_controller.image_states.ensure_viewer_state(file_path)['rectangles'] = rectangles_data
         
         # Remove rectangle items from scene and viewer list
         for rect_item in rectangles_to_remove:
@@ -222,7 +222,7 @@ class RectangleManager:
         # Collect all rectangles from all pages
         for page_idx in range(len(self.image_loader.image_file_paths)):
             file_path = self.image_loader.image_file_paths[page_idx]
-            state = self.main_controller.image_states.get(file_path, {})
+            state = self.main_controller.image_states.get_page_state(file_path, {})
             rectangles = state.get('viewer_state', {}).get('rectangles', [])
             
             for rect_data in rectangles:
@@ -337,11 +337,11 @@ class RectangleManager:
         for item in group:
             page_idx = item['page_idx']
             file_path = self.image_loader.image_file_paths[page_idx]
-            state = self.main_controller.image_states[file_path]
+            state = self.main_controller.image_states.get_page_state(file_path)
             rectangles = state['viewer_state']['rectangles']
             rectangles[:] = [r for r in rectangles if r != item['data']]
         
         # Add merged rectangle to target page
         target_file_path = self.image_loader.image_file_paths[target_page]
-        target_state = self.main_controller.image_states[target_file_path]
+        target_state = self.main_controller.image_states.get_page_state(target_file_path)
         target_state['viewer_state']['rectangles'].append(base_data)

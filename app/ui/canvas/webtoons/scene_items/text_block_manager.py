@@ -165,7 +165,7 @@ class TextBlockManager:
             return
             
         file_path = self.image_loader.image_file_paths[page_idx]
-        stored_blks = self.main_controller.image_states[file_path].get('blk_list', []).copy()
+        stored_blks = self.main_controller.image_states.blk_list(file_path).copy()
 
         # Convert coordinates from page-local to scene coordinates for webtoon mode.
         for blk in stored_blks:
@@ -206,10 +206,8 @@ class TextBlockManager:
                 text_blocks_to_store.append(blk)
                 text_blocks_to_remove.append(blk)
         
-        # Store text blocks in image_states 
-        if file_path not in self.main_controller.image_states:
-            self.main_controller.image_states[file_path] = {}
-        self.main_controller.image_states[file_path]['blk_list'] = text_blocks_to_store
+        # Store text blocks in image_states
+        self.main_controller.image_states.set_blk_list(file_path, text_blocks_to_store)
         
         # Remove text blocks from main.blk_list
         for blk in text_blocks_to_remove:
@@ -328,7 +326,7 @@ class TextBlockManager:
         # Collect all text blocks from all pages
         for page_idx in range(len(self.image_loader.image_file_paths)):
             file_path = self.image_loader.image_file_paths[page_idx]
-            state = self.main_controller.image_states.get(file_path, {})
+            state = self.main_controller.image_states.get_page_state(file_path, {})
             text_blocks = state.get('blk_list', [])
             
             for blk in text_blocks:
@@ -526,7 +524,7 @@ class TextBlockManager:
         for item in group:
             page_idx = item['page_idx']
             file_path = self.image_loader.image_file_paths[page_idx]
-            state = self.main_controller.image_states[file_path]
+            state = self.main_controller.image_states.get_page_state(file_path)
             blk_list = state.get('blk_list', [])
             # Remove this block
             if item['blk'] in blk_list:
@@ -534,7 +532,7 @@ class TextBlockManager:
         
         # Add merged block to target page
         target_file_path = self.image_loader.image_file_paths[target_page]
-        target_state = self.main_controller.image_states[target_file_path]
+        target_state = self.main_controller.image_states.get_page_state(target_file_path)
         if 'blk_list' not in target_state:
             target_state['blk_list'] = []
         target_state['blk_list'].append(merged_blk)

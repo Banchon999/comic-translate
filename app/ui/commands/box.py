@@ -267,7 +267,7 @@ class ReplaceDetectedBlocksCommand(QUndoCommand):
             return
 
         file_path = self.main.image_files[self.main.curr_img_idx]
-        state = self.main.image_states.get(file_path)
+        state = self.main.image_states.get_page_state(file_path)
         if state is None:
             return
 

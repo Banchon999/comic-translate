@@ -60,10 +60,10 @@ class SceneItemManager:
         file_path = self.image_loader.image_file_paths[page_idx]
         
         # Check if this page has stored state in image_states
-        if file_path not in self.main_controller.image_states:
+        if not self.main_controller.image_states.has_page(file_path):
             return
-            
-        state = self.main_controller.image_states[file_path]
+
+        state = self.main_controller.image_states.get_page_state(file_path)
         
         # Load TextBlock objects for this page first (needed for text items)
         self.text_block_manager.load_text_blocks(page_idx)
@@ -83,11 +83,8 @@ class SceneItemManager:
             
         file_path = self.image_loader.image_file_paths[page_idx]
         
-        # Ensure image_states entry exists
-        if file_path not in self.main_controller.image_states:
-            self.main_controller.image_states[file_path] = {}
-        if 'viewer_state' not in self.main_controller.image_states[file_path]:
-            self.main_controller.image_states[file_path]['viewer_state'] = {}
+        # Ensure the page and its viewer_state exist.
+        self.main_controller.image_states.ensure_viewer_state(file_path)
         
         # Determine page bounds for this page from the layout_manager
         page_y = self.layout_manager.image_positions[page_idx]
@@ -125,10 +122,7 @@ class SceneItemManager:
         
         for page_idx in relevant_pages:
             file_path = self.image_loader.image_file_paths[page_idx]
-            if file_path not in self.main_controller.image_states:
-                self.main_controller.image_states[file_path] = {'viewer_state': {}}
-
-            state = self.main_controller.image_states[file_path]
+            state = self.main_controller.image_states.ensure_page(file_path)
             viewer_state = state.setdefault('viewer_state', {})
             
             # Only collect existing items if the page is NOT loaded.
@@ -156,7 +150,7 @@ class SceneItemManager:
             if not (0 <= page_idx < len(self.image_loader.image_file_paths)):
                 continue
             file_path = self.image_loader.image_file_paths[page_idx]
-            state = self.main_controller.image_states.setdefault(file_path, {})
+            state = self.main_controller.image_states.ensure_page(file_path)
             viewer_state = state.setdefault('viewer_state', {})
             viewer_state.setdefault('rectangles', [])
             viewer_state.setdefault('text_items_state', [])
@@ -220,7 +214,7 @@ class SceneItemManager:
         
         for page_idx in self._get_relevant_page_indices():
             file_path = self.image_loader.image_file_paths[page_idx]
-            state = self.main_controller.image_states.get(file_path, {})
+            state = self.main_controller.image_states.get_page_state(file_path, {})
             text_items = state.get('viewer_state', {}).get('text_items_state', [])
             text_blocks = state.get('blk_list', [])
             if not text_items or not text_blocks:
@@ -283,7 +277,7 @@ class SceneItemManager:
         relevant_pages = set(self.image_loader.loaded_pages)
 
         for page_idx, file_path in enumerate(self.image_loader.image_file_paths):
-            state = self.main_controller.image_states.get(file_path, {})
+            state = self.main_controller.image_states.get_page_state(file_path, {})
             viewer_state = state.get('viewer_state', {})
             if (
                 viewer_state.get('rectangles')

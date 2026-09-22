@@ -83,7 +83,7 @@ class BrushStrokeManager:
                         brush_strokes_to_remove.append(item)
         
         # Store brush strokes in image_states
-        self.main_controller.image_states[file_path]['brush_strokes'] = brush_strokes_data
+        self.main_controller.image_states.ensure_page(file_path)['brush_strokes'] = brush_strokes_data
         
         # Remove brush stroke items from scene
         for stroke_item in brush_strokes_to_remove:
@@ -312,7 +312,7 @@ class BrushStrokeManager:
         # Collect all brush strokes from all pages
         for page_idx in range(len(self.image_loader.image_file_paths)):
             file_path = self.image_loader.image_file_paths[page_idx]
-            state = self.main_controller.image_states.get(file_path, {})
+            state = self.main_controller.image_states.get_page_state(file_path, {})
             strokes = state.get('brush_strokes', [])
             
             for stroke_data in strokes:
@@ -431,7 +431,7 @@ class BrushStrokeManager:
         for item in group:
             page_idx = item['page_idx']
             file_path = self.image_loader.image_file_paths[page_idx]
-            state = self.main_controller.image_states[file_path]
+            state = self.main_controller.image_states.get_page_state(file_path)
             strokes = state.get('brush_strokes', [])
             # Remove the stroke data
             if item['data'] in strokes:
@@ -439,7 +439,7 @@ class BrushStrokeManager:
         
         # Add merged stroke to target page
         target_file_path = self.image_loader.image_file_paths[target_page]
-        target_state = self.main_controller.image_states[target_file_path]
+        target_state = self.main_controller.image_states.get_page_state(target_file_path)
         if 'brush_strokes' not in target_state:
             target_state['brush_strokes'] = []
         target_state['brush_strokes'].append(base_data)

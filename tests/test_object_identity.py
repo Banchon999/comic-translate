@@ -343,10 +343,11 @@ def test_webtoon_text_item_merge_restores_one_identity(viewer):
              "text_color": "#101010", "outline_color": "#ffffff"}
     frag_top = {**style, "position": (150, 60)}     # page 0, scene y 60..100
     frag_bottom = {**style, "position": (150, 0)}    # page 1, scene y 100..140 (adjacent)
-    image_states = {
+    from app.projects.page_state_store import PageStateStore
+    image_states = PageStateStore({
         "p0": {"viewer_state": {"text_items_state": [frag_top]}},
         "p1": {"viewer_state": {"text_items_state": [frag_bottom]}},
-    }
+    })
     mgr.main_controller = type("M", (), {"image_states": image_states})()
 
     mgr.merge_clipped_text_items()
