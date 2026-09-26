@@ -36,6 +36,7 @@ from app.controllers.task_runner import TaskRunnerController
 from app.controllers.batch_report import BatchReportController
 from app.controllers.manual_workflow import ManualWorkflowController
 from app.projects.page_state_store import PageStateStore
+from core.layers import DocumentLayers
 from modules.utils.exceptions import InsufficientCreditsException, ContentFlaggedException
 
 
@@ -95,6 +96,7 @@ class ComicTranslate(ComicTranslateUI):
         self.displayed_images = set()  # Set to track displayed images
         self.image_patches = {}  # Store patches for each image
         self.in_memory_patches = {}  # Store patches in memory for each image
+        self.document_layers = DocumentLayers()  # document-wide layer group props
         self.max_images_in_memory = 5
         self.loaded_images = []
 

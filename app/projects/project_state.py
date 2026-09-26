@@ -12,6 +12,7 @@ import imkit as imk
 
 from modules.utils.archives import close_pdf_cache
 from modules.utils.common_utils import new_object_id
+from core.layers import DocumentLayers
 from .parsers import ProjectEncoder, ProjectDecoder, ensure_string_keys
 from .page_state_store import PageStateStore
 from .project_state_v2 import (
@@ -66,6 +67,8 @@ def load_state_from_proj_file(comic_translate: ComicTranslate, file_name: str):
         return load_state_from_proj_file_v2(comic_translate, file_name)
 
     decoder = ProjectDecoder()
+    # v1 projects predate layers: every group starts at its defaults.
+    comic_translate.document_layers = DocumentLayers()
 
     if not hasattr(comic_translate, 'temp_dir'):
         comic_translate.temp_dir = tempfile.mkdtemp()

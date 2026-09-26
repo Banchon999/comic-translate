@@ -49,6 +49,8 @@ class PatchInsertCommand(QUndoCommand, PatchCommandBase):
                 # and webtoon lazy loading (hash stays the content/dedup key).
                 'object_id': patch.get('object_id') or new_object_id(),
             }
+            if patch.get('layer'):
+                prop['layer'] = dict(patch['layer'])
             
             # Add webtoon mode information if present
             if 'scene_pos' in patch:
@@ -76,6 +78,8 @@ class PatchInsertCommand(QUndoCommand, PatchCommandBase):
                 'hash': prop['hash'],
                 'object_id': prop['object_id'],
             }
+            if prop.get('layer'):
+                patch_entry['layer'] = prop['layer']
             # Save scene position and page index for webtoon mode
             if 'scene_pos' in prop:
                 patch_entry['scene_pos'] = prop['scene_pos']
