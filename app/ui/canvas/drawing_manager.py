@@ -13,6 +13,7 @@ from app.ui.commands.base import PathCommandBase as pcb
 from app.ui.commands.base import OBJECT_ID_KEY
 from modules.utils.common_utils import new_object_id
 from app.ui.canvas.scene_registry import put_layer, set_item_layer
+from app.ui.canvas.layer_apply import is_locked
 import imkit as imk
 from modules.utils.image_utils import build_block_mask_data, clip_mask_to_bubble, clip_mask_components_to_bubble
 from modules.utils.text_segmentation import peek_page_mask
@@ -325,8 +326,12 @@ class DrawingManager:
         erase_path = QPainterPath()
         erase_path.addEllipse(pos, self.eraser_size, self.eraser_size)
 
+        doc = self.viewer.layer_document()
         for item in self._scene.items(erase_path):
             if isinstance(item, QGraphicsPathItem) and item != self.viewer.photo:
+                # A hidden or locked stroke is out of reach, as in any editor.
+                if not item.isVisible() or is_locked(item, doc):
+                    continue
                 self._erase_item_path(item, erase_path, pos)
 
     def _erase_item_path(self, item, erase_path, pos):

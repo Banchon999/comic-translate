@@ -5,6 +5,8 @@ from PySide6.QtWidgets import QGraphicsPixmapItem, QGraphicsPathItem
 
 from .text_item import TextBlockItem, TextBlockState
 from .rectangle import MoveableRectItem, RectState
+from .layer_apply import is_locked
+from .scene_registry import is_top_level
 
 
 class EventHandler:
@@ -19,7 +21,7 @@ class EventHandler:
 
     def handle_mouse_press(self, event: QtGui.QMouseEvent):
         scene_pos = self.viewer.mapToScene(event.position().toPoint())
-        clicked_item = self._resolve_top_level_item(self.viewer.itemAt(event.pos()))
+        clicked_item = self._item_at(event.pos())
         ctrl_pressed = bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
         
         # Delegate page change detection to the appropriate manager
@@ -270,11 +272,34 @@ class EventHandler:
 
     # Event Handler Helpers 
 
+    def _item_at(self, view_pos):
+        """The topmost page item under the cursor that is not locked.
+
+        itemAt() is purely geometric, so it would hand back a locked item and
+        let the click select or drag it. A locked item is skipped instead and
+        the click reaches whatever lies beneath it, as it does in an image
+        editor.
+        """
+        doc = self.viewer.layer_document()
+        for raw in self.viewer.items(view_pos):
+            item = self._resolve_top_level_item(raw)
+            if item is None or not item.isVisible():
+                continue
+            if is_locked(item, doc):
+                continue
+            return item
+        return None
+
     def _resolve_top_level_item(self, item):
         """Walk up the parent chain to find a top-level TextBlockItem, MoveableRectItem, or QGraphicsPathItem."""
         cur = item
         while cur is not None and not isinstance(
             cur, (TextBlockItem, MoveableRectItem, QGraphicsPixmapItem, QGraphicsPathItem)):
+            # Never call parentItem() on a parentless item: in PySide6 that
+            # hands the C++ item to its Python wrapper and it is deleted when
+            # the wrapper is collected (see scene_registry.is_top_level).
+            if is_top_level(cur):
+                return None
             cur = cur.parentItem()
         return cur
 

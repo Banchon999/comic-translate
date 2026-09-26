@@ -14,6 +14,7 @@ from typing import List
 
 from core.i18n import translate
 from core.text_style import build_text_item_state
+from core.layers import merge_preserving_locked
 from core.messages import server_error_text
 from modules.detection.processor import TextBlockDetector
 from modules.translation.processor import Translator
@@ -614,8 +615,12 @@ class BatchProcessor:
                     outline=outline,
                 ))
 
-            self.main_page.image_states.ensure_viewer_state(image_path).update({
-                'text_items_state': text_items_state
+            page_viewer_state = self.main_page.image_states.ensure_viewer_state(image_path)
+            page_viewer_state.update({
+                # Text the user locked survives a re-run of the pipeline.
+                'text_items_state': merge_preserving_locked(
+                    page_viewer_state.get('text_items_state'), text_items_state
+                )
                 })
 
             self.main_page.image_states.ensure_viewer_state(image_path).update({

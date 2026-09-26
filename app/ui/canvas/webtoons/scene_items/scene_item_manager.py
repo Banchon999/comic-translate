@@ -73,6 +73,8 @@ class SceneItemManager:
         self.text_item_manager.load_text_items(state, page_idx)
         self.brush_stroke_manager.load_brush_strokes(state, page_idx)
         self.patch_manager.load_patches(page_idx)
+        # Freshly loaded items take the page's layer state (hidden, locked...).
+        self.viewer.refresh_layers()
     
     def unload_page_scene_items(self, page_idx: int):
         """Unload scene items for a specific page (saving state if needed)."""

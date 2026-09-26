@@ -319,6 +319,9 @@ def test_webtoon_text_split_keeps_layer(viewer):
 # --- group props persist with the project ---------------------------------------
 
 def test_v2_project_keeps_group_props(qapp, tmp_path):
+    """Save, reset to defaults, load back into the same window (one window per
+    test: several full ComicTranslate instances in one process make a native Qt
+    font-database hang likelier)."""
     import controller as controller_mod
     from PIL import Image
     from app.projects.project_state_v2 import (
@@ -326,22 +329,22 @@ def test_v2_project_keeps_group_props(qapp, tmp_path):
         save_state_to_proj_file_v2,
     )
 
-    a = controller_mod.ComicTranslate()
-    b = controller_mod.ComicTranslate()
+    win = controller_mod.ComicTranslate()
     try:
         page = tmp_path / "001.png"
         Image.fromarray(np.full((20, 30, 3), 200, np.uint8)).save(page)
-        a.image_files = [str(page)]
-        a.image_data = {str(page): np.full((20, 30, 3), 200, np.uint8)}
-        a.document_layers.group(LayerGroup.TEXT).visible = False
-        a.document_layers.group(LayerGroup.PATCHES).opacity = 0.5
+        win.image_files = [str(page)]
+        win.image_data = {str(page): np.full((20, 30, 3), 200, np.uint8)}
+        win.document_layers.group(LayerGroup.TEXT).visible = False
+        win.document_layers.group(LayerGroup.PATCHES).opacity = 0.5
 
         proj = tmp_path / "p.ctpr"
-        save_state_to_proj_file_v2(a, str(proj))
-        load_state_from_proj_file_v2(b, str(proj))
-        assert b.document_layers.group(LayerGroup.TEXT).visible is False
-        assert b.document_layers.group(LayerGroup.PATCHES).opacity == 0.5
-        assert b.document_layers.group(LayerGroup.RAW).visible is True
+        save_state_to_proj_file_v2(win, str(proj))
+        win.document_layers = DocumentLayers()
+        load_state_from_proj_file_v2(win, str(proj))
+        assert win.document_layers.group(LayerGroup.TEXT).visible is False
+        assert win.document_layers.group(LayerGroup.PATCHES).opacity == 0.5
+        assert win.document_layers.group(LayerGroup.RAW).visible is True
     finally:
-        a.close()
-        b.close()
+        win._skip_close_prompt = True
+        win.close()

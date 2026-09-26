@@ -30,6 +30,19 @@ OBJECT_ID_KEY = 1
 LAYER_KEY = 2
 
 
+def is_top_level(item: QGraphicsItem) -> bool:
+    """Whether an item has no parent, without calling parentItem().
+
+    In PySide6 (seen on 6.11.2), calling ``parentItem()`` on an item that has
+    no parent hands ownership of the C++ item to its Python wrapper, so when
+    that wrapper is next garbage-collected the item is deleted and drops out of
+    the scene. Items from ``scene.addPath`` and patch pixmaps usually have no
+    other live wrapper, so they vanish. ``topLevelItem()`` answers the same
+    question without that side effect.
+    """
+    return item.topLevelItem() is item
+
+
 def kind_of(item: QGraphicsItem) -> LayerGroup | None:
     """The layer group an item belongs to, or None for items that are not
     part of the page (handles, previews, selection outlines, ...)."""
@@ -70,7 +83,8 @@ def iter_items(scene, kind: LayerGroup | None = None, viewer=None) -> Iterator[Q
     the in-progress lasso outline."""
     skip = _excluded(viewer)
     for item in scene.items():
-        if item in skip or item.parentItem() is not None:
+        # topLevelItem(), never parentItem(): see is_top_level.
+        if item in skip or not is_top_level(item):
             continue
         k = kind_of(item)
         if k is None or (kind is not None and k is not kind):

@@ -202,3 +202,27 @@ class DocumentLayers:
                     continue  # a group this version does not know
                 doc.groups[group] = GroupProps.from_dict(value)
         return doc
+
+
+def is_locked_state(state: Mapping[str, Any] | None) -> bool:
+    """Whether a serialised object (a state dict) is locked by its own props."""
+    if not isinstance(state, Mapping):
+        return False
+    return LayerProps.from_dict(state.get("layer")).locked
+
+
+def merge_preserving_locked(existing: list, fresh: list) -> list:
+    """Replace a page's objects with freshly generated ones, except those the
+    user locked.
+
+    Batch processing rebuilds a page's text from scratch. A locked object is
+    the user saying "leave this alone", so it is kept, and a fresh object with
+    the same ``object_id`` (a re-render of the same block) is dropped rather
+    than stacked on top of it.
+    """
+    locked = [s for s in existing or [] if is_locked_state(s)]
+    if not locked:
+        return list(fresh)
+    locked_ids = {s.get("object_id") for s in locked if s.get("object_id")}
+    kept_fresh = [s for s in fresh if not (s.get("object_id") and s.get("object_id") in locked_ids)]
+    return locked + kept_fresh

@@ -37,6 +37,7 @@ from app.controllers.batch_report import BatchReportController
 from app.controllers.manual_workflow import ManualWorkflowController
 from app.projects.page_state_store import PageStateStore
 from core.layers import DocumentLayers
+from app.controllers.layers import LayerController
 from modules.utils.exceptions import InsufficientCreditsException, ContentFlaggedException
 
 
@@ -102,6 +103,11 @@ class ComicTranslate(ComicTranslateUI):
 
         self.undo_group = QUndoGroup(self)
         self.undo_stacks: dict[str, QUndoStack] = {}
+        # Every command that adds, removes or edits items moves the active
+        # stack's index, so re-applying layers there covers all of them.
+        self.image_viewer.document_layers_getter = lambda: self.document_layers
+        self.undo_group.indexChanged.connect(lambda _idx: self.image_viewer.refresh_layers())
+        self.undo_group.activeStackChanged.connect(lambda _s: self.image_viewer.refresh_layers())
         self.project_file = None
         self.temp_dir = tempfile.mkdtemp()
         self._manual_dirty = False
@@ -130,6 +136,7 @@ class ComicTranslate(ComicTranslateUI):
         self.task_runner_ctrl = TaskRunnerController(self)
         self.batch_report_ctrl = BatchReportController(self)
         self.manual_workflow_ctrl = ManualWorkflowController(self)
+        self.layer_ctrl = LayerController(self)
         try:
             if self._memlogger is not None:
                 self._memlogger.emit("after_controllers_init")
