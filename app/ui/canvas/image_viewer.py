@@ -21,6 +21,8 @@ from .event_handler import EventHandler
 
 class ImageViewer(QGraphicsView):
     # Signals
+    # Emitted after layer state is re-applied (page loads, edits, undo).
+    layers_refreshed = Signal()
     rectangle_created = Signal(MoveableRectItem)
     rectangle_selected = Signal(QRectF)
     rectangle_deleted = Signal(QRectF)
@@ -580,6 +582,7 @@ class ImageViewer(QGraphicsView):
         doc = self.layer_document()
         for item in list(iter_items(self._scene, viewer=self)):
             apply_layer_state(item, doc, self)
+        self.layers_refreshed.emit()
 
     # State Management
     def save_state(self) -> Dict:

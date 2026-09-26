@@ -23,6 +23,8 @@ from app.ui.canvas.scene_registry import (
 )
 from app.ui.commands.layers import SetLayerPropsCommand, apply_object_layer
 from core.layers import LayerGroup, LayerProps
+from modules.utils.common_utils import new_object_id
+from app.ui.canvas.scene_registry import OBJECT_ID_KEY
 
 
 class LayerController(QObject):
@@ -54,9 +56,43 @@ class LayerController(QObject):
             if kind is LayerGroup.RAW:
                 continue
             oid = object_id_of(item)
-            if oid:
-                out.append((kind, oid, item))
+            if not oid:
+                # A stroke gets its id when it is first snapshotted (undo,
+                # save); one drawn or loaded without that still is a layer.
+                oid = new_object_id()
+                if hasattr(item, "object_id"):
+                    item.object_id = oid
+                else:
+                    item.setData(OBJECT_ID_KEY, oid)
+            out.append((kind, oid, item))
         return out
+
+    def select_on_canvas(self, object_id: str) -> None:
+        """Make an object the canvas selection, as clicking it would. Only text
+        and boxes are selectable; locked or hidden objects are left alone."""
+        from app.ui.canvas.layer_apply import is_hidden, is_locked
+
+        viewer = self.viewer
+        item = find_by_id(viewer._scene, object_id, viewer=viewer)
+        if item is None:
+            return
+        doc = self.document()
+        if is_locked(item, doc) or is_hidden(item, doc):
+            return
+        kind = kind_of(item)
+        if kind is LayerGroup.TEXT:
+            if not getattr(item, "selected", False):
+                viewer.deselect_all()
+                item.selected = True
+                item.setSelected(True)
+                item.item_selected.emit(item)
+        elif kind is LayerGroup.BOXES:
+            if not getattr(item, "selected", False):
+                viewer.deselect_all()
+                viewer.select_rectangle(item)
+        else:
+            return
+        viewer.ensureVisible(item)
 
     # --- object props (undoable) -------------------------------------------------
 

@@ -137,6 +137,8 @@ class ComicTranslate(ComicTranslateUI):
         self.batch_report_ctrl = BatchReportController(self)
         self.manual_workflow_ctrl = ManualWorkflowController(self)
         self.layer_ctrl = LayerController(self)
+        self.layers_panel.bind(self.layer_ctrl)
+        self.layers_button.toggled.connect(self.layers_panel.setVisible)
         try:
             if self._memlogger is not None:
                 self._memlogger.emit("after_controllers_init")
