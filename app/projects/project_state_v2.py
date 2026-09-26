@@ -12,6 +12,7 @@ import msgpack
 from .parsers import ProjectDecoder, ProjectEncoder, ensure_string_keys
 from .page_state_store import PageStateStore
 from modules.utils.file_handler import ensure_prepared_path_materialized
+from modules.utils.common_utils import new_object_id
 
 if TYPE_CHECKING:
     from controller import ComicTranslate
@@ -361,7 +362,12 @@ def save_state_to_proj_file_v2(comic_translate: "ComicTranslate", file_name: str
             src_png = patch["png_path"]
             blob_hash = add_blob_if_needed(src_png, "patch")
             image_patches_references[page_path].append(
-                {"bbox": patch["bbox"], "png_hash": blob_hash, "hash": patch["hash"]}
+                {
+                    "bbox": patch["bbox"],
+                    "png_hash": blob_hash,
+                    "hash": patch["hash"],
+                    "object_id": patch.get("object_id") or new_object_id(),
+                }
             )
 
     page_paths = list(
@@ -617,7 +623,14 @@ def _materialize_from_manifest_and_pages(
             patch_disk_path = os.path.join(page_folder, f"{idx}_{png_hash[:12]}{ext}")
             register_lazy_blob_path(project_file, patch_disk_path, str(png_hash))
 
-            new_list.append({"bbox": patch["bbox"], "png_path": patch_disk_path, "hash": patch["hash"]})
+            new_list.append({
+                "bbox": patch["bbox"],
+                "png_path": patch_disk_path,
+                "hash": patch["hash"],
+                # Projects saved before patches carried an id mint one here;
+                # it is written back on the next save.
+                "object_id": patch.get("object_id") or new_object_id(),
+            })
 
         if new_list:
             reconstructed[page_path] = new_list

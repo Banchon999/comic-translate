@@ -11,6 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import imkit as imk
 
 from modules.utils.archives import close_pdf_cache
+from modules.utils.common_utils import new_object_id
 from .parsers import ProjectEncoder, ProjectDecoder, ensure_string_keys
 from .page_state_store import PageStateStore
 from .project_state_v2 import (
@@ -240,7 +241,8 @@ def load_state_from_proj_file(comic_translate: ComicTranslate, file_name: str):
                 if os.path.isfile(abs_png):  
                     new_list.append({'bbox': p['bbox'],
                                     'png_path': abs_png,
-                                    'hash': p['hash']})
+                                    'hash': p['hash'],
+                                    'object_id': p.get('object_id') or new_object_id()})
             if new_list:
                 reconstructed[page_path] = new_list
 

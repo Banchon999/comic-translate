@@ -285,23 +285,19 @@ class PatchProperties(TypedDict):
     bbox: tuple            # (x, y, w, h)
     png_path: str          # absolute path to the patch PNG on disk
     hash: str             # hash of the patch image + bbox
+    object_id: str        # logical identity, minted once at registration
 
 class PatchCommandBase:
     """Shared helpers for pixmap patch commands.
 
-    TECH DEBT (document/layer migration) — two distinct notions of identity:
-      * ``hash`` (HASH_KEY) is *content* identity: a deterministic digest of the
-        patch image + bbox, used for match and de-duplication. It is what a
-        patch is keyed by everywhere today (image_states, the inpaint commands),
-        and it is already persisted and collision-safe.
-      * ``object_id`` (OBJECT_ID_KEY) is *logical editable-object* identity —
-        the Slice 0 concept the other scene items carry.
-    Patches deliberately keep only ``hash`` for Slice 0: a patch is tied to a
-    cleaned region and is never moved, so content identity is sufficient and a
-    second id would be redundant churn. When patches become document-owned,
-    movable LayerItems, give them a real ``object_id`` (this class already
-    matches id-first when one is supplied) and keep ``hash`` alongside it purely
-    for content/dedup — the two must not be conflated.
+    Patches carry two distinct identities, which must not be conflated:
+      * ``hash`` (HASH_KEY) is *content* identity: a digest of the patch image
+        + bbox, used for matching and de-duplication.
+      * ``object_id`` (OBJECT_ID_KEY) is *logical editable-object* identity,
+        the same concept the other scene items carry. It is minted once when
+        the patch is registered (``PatchInsertCommand``), stored in the patch
+        dict and in the project, and copied onto every scene item drawn for
+        that patch, so it survives undo/redo, reloads and webtoon lazy loading.
     """
 
     HASH_KEY = 0

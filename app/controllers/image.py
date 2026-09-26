@@ -1042,7 +1042,8 @@ class ImageStateController:
                 prop = {
                     'bbox': saved['bbox'],
                     'image': match['image'],
-                    'hash': saved['hash']
+                    'hash': saved['hash'],
+                    'object_id': saved.get('object_id'),
                 }
             else:
                 # load into memory
@@ -1051,7 +1052,8 @@ class ImageStateController:
                 prop = {
                     'bbox': saved['bbox'],
                     'image': rgb_img,
-                    'hash': saved['hash']
+                    'hash': saved['hash'],
+                    'object_id': saved.get('object_id'),
                 }
                 self.main.in_memory_patches[file_path].append(prop)
             
