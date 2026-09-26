@@ -194,6 +194,9 @@ def _write_page_psd(page: PsdPageData, out_path: str) -> str:
 	text_group = psapi.GroupLayer_8bit("Editable Text")
 	_apply_group_props(text_group, layers.group(LayerGroup.TEXT))
 	doc.add_layer(text_group)
+	# (text the type layer carries, its raster), topmost first — the order the
+	# layers are added in. Filled into the written file by _finish_type_layers.
+	type_rasters: list[tuple[str, Any]] = []
 	for idx, text_state in _in_stack_order(text_items):
 		try:
 			text_layer = _build_text_layer(text_state, idx)
@@ -203,6 +206,7 @@ def _write_page_psd(page: PsdPageData, out_path: str) -> str:
 		if text_layer is not None:
 			_apply_object_props(text_layer, text_state.get("layer"))
 			text_group.add_layer(doc, text_layer)
+			type_rasters.append((str(text_layer.text), _render_type_raster(text_state, width, height, idx)))
 		else:
 			logger.warning("Text layer %d returned None", idx)
 
@@ -253,6 +257,13 @@ def _write_page_psd(page: PsdPageData, out_path: str) -> str:
 	doc.write(out_path, force_overwrite=True)
 	logger.info("PSD write finished: %s (%d bytes)", out_path, os.path.getsize(out_path))
 
+	try:
+		_finish_type_layers(out_path, type_rasters)
+	except Exception:
+		# The file PhotoshopAPI wrote is left exactly as it was: its text is
+		# still editable everywhere, and still invisible in Photopea on load.
+		logger.exception("Could not give the text layers their pixels in %s", out_path)
+
 	preview = page.composite_image
 	if preview is None:
 		preview = _compose_preview(image, page.patches)
@@ -269,6 +280,242 @@ def _write_page_psd(page: PsdPageData, out_path: str) -> str:
 		logger.exception("Could not clean up layer names in %s", out_path)
 
 	return out_path
+
+
+
+def _render_type_raster(text_state: dict[str, Any], width: int, height: int, index: int):
+	"""The text item's own pixels, as the canvas draws it: (top, left, rgba) or None.
+
+	Hidden items are rendered too — the PSD keeps them as hidden layers, and a
+	layer the user shows again in Photopea has to have something to show.
+	"""
+	try:
+		from app.ui.canvas.save_renderer import render_text_item_rgba
+
+		return render_text_item_rgba(text_state, width, height)
+	except Exception:
+		logger.exception("Could not render text layer %d; it will be written without pixels", index)
+		return None
+
+
+# Tagged blocks that carry an 8-byte length in PSB (the PSD/PSB spec's list);
+# every other key keeps a 4-byte length in both formats.
+_PSB_LONG_KEYS = frozenset(
+	(b"LMsk", b"Lr16", b"Lr32", b"Layr", b"Mt16", b"Mt32", b"Mtrn", b"Alph", b"FMsk", b"lnk2", b"FEid", b"FXid", b"PxSD")
+)
+
+
+def _read_tysh_text(extra: bytes) -> str | None:
+	"""The string a type layer's TySh descriptor carries (its 'Txt ' field)."""
+	start = extra.find(b"8BIMTySh")
+	if start < 0:
+		return None
+	field = extra.find(b"Txt TEXT", start)
+	if field < 0:
+		return None
+	count = struct.unpack(">I", extra[field + 8:field + 12])[0]
+	raw = extra[field + 12:field + 12 + 2 * count]
+	return raw.decode("utf-16-be", errors="replace")
+
+
+def _normalise_type_text(text: str) -> str:
+	return text.replace("\r", "\n").rstrip("\n\x00")
+
+
+def _even_tagged_blocks(extra: bytes, is_psb: bool) -> bytes:
+	"""Declare every odd-length tagged block at its padded, even length.
+
+	PhotoshopAPI writes TySh (and any other block) with its exact, possibly
+	odd, length and then a padding byte the length does not cover. psd-tools
+	skips it; Photopea reads the padding as the next block's signature and
+	reports "Error in PSD file: wrong signature" on every page with text. The
+	spec gives the length "rounded up to an even byte count", so the fix is to
+	say so — no byte moves, the padding just becomes part of the block.
+	"""
+	out = bytearray(extra)
+	mask_len = struct.unpack(">I", extra[0:4])[0]
+	position = 4 + mask_len
+	ranges_len = struct.unpack(">I", extra[position:position + 4])[0]
+	position += 4 + ranges_len
+	position += (extra[position] + 1 + 3) // 4 * 4  # Pascal name, padded to 4
+	while position + 12 <= len(extra):
+		signature = extra[position:position + 4]
+		if signature not in (b"8BIM", b"8B64"):
+			break
+		key = extra[position + 4:position + 8]
+		if is_psb and key in _PSB_LONG_KEYS:
+			length = struct.unpack(">Q", extra[position + 8:position + 16])[0]
+			header = 16
+		else:
+			length = struct.unpack(">I", extra[position + 8:position + 12])[0]
+			header = 12
+		end = position + header + length
+		if length % 2 and end < len(extra):
+			length += 1
+			fmt = ">Q" if header == 16 else ">I"
+			out[position + 8:position + header] = struct.pack(fmt, length)
+			end += 1
+		position = end
+	return bytes(out)
+
+
+def _rle_layer_channel(plane: np.ndarray, is_psb: bool) -> bytes:
+	"""One layer channel as PSD image data: compression 1 (RLE), row byte
+	counts, then the rows."""
+	count_format = ">I" if is_psb else ">H"
+	counts = bytearray()
+	body = bytearray()
+	for row in plane:
+		encoded = _pack_bits(row.tobytes())
+		counts += struct.pack(count_format, len(encoded))
+		body += encoded
+	return struct.pack(">H", 1) + bytes(counts) + bytes(body)
+
+
+
+def _parse_layer_info(data: bytes):
+	"""The layer records of a PSD/PSB and where their channel data ends.
+
+	Returns (is_psb, long_fmt, lmi_at, lmi_len, li_end, lmi_end, count,
+	records, channel_data_end), or None for a file with no layers. Each record
+	is a dict of rect, channels [(id, length)], blend (12 bytes), extra (the
+	record's extra data: mask, blending ranges, name and tagged blocks) and
+	data (each channel's bytes). Raises on anything that does not add up.
+	"""
+	if data[:4] != b"8BPS":
+		raise ValueError("Not a PSD file")
+	version = struct.unpack(">H", data[4:6])[0]
+	is_psb = version == 2
+	long_fmt, long_size = (">Q", 8) if is_psb else (">I", 4)
+
+	offset = 26
+	for _ in range(2):  # colour mode data, image resources
+		offset += 4 + struct.unpack(">I", data[offset:offset + 4])[0]
+	lmi_at = offset
+	lmi_len = struct.unpack(long_fmt, data[lmi_at:lmi_at + long_size])[0]
+	lmi_end = lmi_at + long_size + lmi_len
+	li_at = lmi_at + long_size
+	li_len = struct.unpack(long_fmt, data[li_at:li_at + long_size])[0]
+	li_end = li_at + long_size + li_len
+	if li_len == 0:
+		return None
+
+	position = li_at + long_size
+	count = struct.unpack(">h", data[position:position + 2])[0]
+	position += 2
+	records = []
+	for _ in range(abs(count)):
+		rect = struct.unpack(">4i", data[position:position + 16])
+		position += 16
+		channel_count = struct.unpack(">H", data[position:position + 2])[0]
+		position += 2
+		channels = []
+		for _ in range(channel_count):
+			channel_id = struct.unpack(">h", data[position:position + 2])[0]
+			channel_len = struct.unpack(long_fmt, data[position + 2:position + 2 + long_size])[0]
+			channels.append((channel_id, channel_len))
+			position += 2 + long_size
+		blend = data[position:position + 12]
+		extra_len = struct.unpack(">I", data[position + 12:position + 16])[0]
+		extra = data[position + 16:position + 16 + extra_len]
+		position += 16 + extra_len
+		records.append({"rect": rect, "channels": channels, "blend": blend, "extra": extra})
+	for record in records:
+		record["data"] = []
+		for _, channel_len in record["channels"]:
+			record["data"].append(data[position:position + channel_len])
+			position += channel_len
+	if position > li_end:
+		raise ValueError("Layer records overrun the layer info section")
+	return is_psb, long_fmt, lmi_at, lmi_len, li_end, lmi_end, count, records, position
+
+
+
+def _finish_type_layers(path: str, type_rasters: list[tuple[str, Any]]) -> None:
+	"""Give each type layer the pixels it is drawn with, and fix its block lengths.
+
+	PhotoshopAPI writes a type layer with bounds (0,0,0,0) and no channels at
+	all — TextLayer_8bit has no way to supply them. Photoshop re-runs its text
+	engine on open, so the text appears there; Photopea, like most readers,
+	draws a type layer from its cached raster, so on load it drew nothing while
+	listing the layer and reading its text back. Photoshop's own files always
+	carry that raster. This writes one — the item rendered by the same code the
+	canvas and the flattened export use — into each type layer's record, which
+	stays a type layer: its text remains editable, and editing it in Photopea
+	re-lays it out from the text data as before.
+
+	``type_rasters`` is (text, (top, left, rgba) | None) per type layer in the
+	order they were added, topmost first. PhotoshopAPI writes records bottom
+	to top, so the file's type records come in the reverse order; each match
+	is confirmed by the string the record's TySh block carries, and on any
+	mismatch no raster is written at all rather than one on the wrong layer.
+	The rewritten layer section is parsed back before it replaces the file.
+	"""
+	with open(path, "rb") as handle:
+		data = handle.read()
+	layout = _parse_layer_info(data)
+	if layout is None:
+		return
+	is_psb, long_fmt, lmi_at, lmi_len, li_end, lmi_end, count, records, position = layout
+
+	for record in records:
+		record["extra"] = _even_tagged_blocks(record["extra"], is_psb)
+
+	type_records = [r for r in records if b"8BIMTySh" in r["extra"]]
+	wanted = list(reversed(type_rasters))
+	matched = len(type_records) == len(wanted) and all(
+		_normalise_type_text(_read_tysh_text(r["extra"]) or "") == _normalise_type_text(text)
+		for r, (text, _) in zip(type_records, wanted)
+	)
+	if not matched:
+		logger.warning(
+			"Type layers in %s do not line up with the text items (%d vs %d); writing them without pixels",
+			path, len(type_records), len(wanted),
+		)
+	else:
+		for record, (_, raster) in zip(type_records, wanted):
+			if raster is None or record["channels"]:
+				continue
+			top, left, rgba = raster
+			height, width = rgba.shape[:2]
+			record["rect"] = (top, left, top + height, left + width)
+			planes = [(-1, rgba[:, :, 3]), (0, rgba[:, :, 0]), (1, rgba[:, :, 1]), (2, rgba[:, :, 2])]
+			record["data"] = [_rle_layer_channel(np.ascontiguousarray(plane), is_psb) for _, plane in planes]
+			record["channels"] = [(cid, len(blob)) for (cid, _), blob in zip(planes, record["data"])]
+
+	section = bytearray(struct.pack(">h", count))
+	for record in records:
+		section += struct.pack(">4i", *record["rect"])
+		section += struct.pack(">H", len(record["channels"]))
+		for channel_id, channel_len in record["channels"]:
+			section += struct.pack(">h", channel_id) + struct.pack(long_fmt, channel_len)
+		section += record["blend"] + struct.pack(">I", len(record["extra"])) + record["extra"]
+	for record in records:
+		for blob in record["data"]:
+			section += blob
+	# Keep whatever padding the writer used after the channel data.
+	section += data[position:li_end]
+	if len(section) % 2:
+		section += b"\0"
+
+	layer_info = struct.pack(long_fmt, len(section)) + bytes(section)
+	layer_and_mask = layer_info + data[li_end:lmi_end]
+	rewritten = data[:lmi_at] + struct.pack(long_fmt, len(layer_and_mask)) + layer_and_mask + data[lmi_end:]
+
+	# Parse the result back before it replaces the file: every record has to
+	# come out again, each type layer with the channels it was given, and the
+	# composite image section has to follow the layer section untouched.
+	check = _parse_layer_info(rewritten)
+	if check is None or check[6] != count or len(check[7]) != len(records):
+		raise ValueError("Rewritten layer section does not parse back")
+	if [len(r["channels"]) for r in check[7]] != [len(r["channels"]) for r in records]:
+		raise ValueError("Rewritten layer records lost their channels")
+	if rewritten[check[5]:] != data[lmi_end:]:
+		raise ValueError("Rewritten file moved the composite image section")
+
+	with open(path, "r+b") as handle:
+		handle.write(rewritten)
+		handle.truncate()
 
 
 def _strip_layer_name_terminators(path: str) -> None:

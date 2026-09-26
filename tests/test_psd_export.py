@@ -490,7 +490,6 @@ def a_page_with_text():
                     "scale": 1.0,
                     "transform_origin": (0.0, 0.0),
                     "selection_outlines": [],
-                    "direction": "ltr",
                 }
             ]
         },
@@ -524,3 +523,187 @@ def test_the_text_layer_carries_the_string_it_was_given(exported_with_text):
 
     assert len(text_layers) == 1
     assert text_layers[0].text.strip() == "HELLO WORLD"
+
+
+# --- type layers carry their pixels -------------------------------------------------
+#
+# PhotoshopAPI writes a type layer with no channels and bounds (0,0,0,0).
+# Photoshop re-runs its text engine on open, so that looks fine there; Photopea
+# draws a type layer from its cached raster and so drew *nothing* for it, while
+# listing the layer and reading its text back. The exporter now writes the
+# item's own render into each type layer's record (_finish_type_layers).
+
+
+def _text_state(text, x, y, layer=None, width=140.0, height=40.0):
+    state = {
+        "text": text, "font_family": "Arial", "font_size": 20.0,
+        "text_color": "#101010", "position": (x, y), "width": width,
+        "height": height, "alignment": 1, "line_spacing": 1.0,
+        "outline_color": "#FFFFFF", "outline_width": 0.0, "bold": False,
+        "italic": False, "underline": False, "rotation": 0.0, "scale": 1.0,
+        "transform_origin": (0.0, 0.0), "selection_outlines": [],
+    }
+    if layer:
+        state["layer"] = layer
+    return state
+
+
+def _text_page(states, width=WIDTH, height=HEIGHT, name="003.png"):
+    art = np.full((height, width, 3), 210, dtype=np.uint8)
+    return psd_exporter.PsdPageData(
+        file_path=name, rgb_image=art,
+        viewer_state={"text_items_state": states}, patches=[],
+    )
+
+
+def _type_layers(psd):
+    return {layer.name: layer for layer in psd.descendants() if layer.kind == "type"}
+
+
+def test_the_text_layer_carries_its_own_pixels(exported_with_text):
+    """Still a type layer (editable text), now also with pixels to draw."""
+    psd, _ = exported_with_text
+    (layer,) = _type_layers(psd).values()
+    assert layer.text.strip() == "HELLO WORLD"
+    left, top, right, bottom = layer.bbox
+    assert right > left and bottom > top, f"type layer has an empty box {layer.bbox}"
+    pixels = layer.numpy()
+    assert pixels is not None and pixels.shape[2] == 4
+    assert (pixels[:, :, 3] > 0).sum() > 50, "type layer has no opaque pixels"
+    # The fixture puts the box at (20, 20), 140 wide.
+    assert 20 <= left and right <= 160 + 2, layer.bbox
+
+
+def test_type_layer_pixels_are_what_the_flattened_page_shows(sandbox_dir, qapp):
+    """The raster is the same render the flattened export draws, so a reader
+    showing the raster shows what the app showed."""
+    from app.ui.canvas.save_renderer import ImageSaveRenderer
+
+    page = _text_page([_text_state("HELLO", 20.0, 30.0)])
+    path = psd_exporter.export_psd_pages(str(sandbox_dir), [page], "flat")
+    (layer,) = _type_layers(psd_tools.PSDImage.open(path)).values()
+    left, top, right, bottom = layer.bbox
+    rgba = layer.numpy()  # floats 0..1
+
+    alpha = rgba[:, :, 3:4]
+    art = page.rgb_image[top:bottom, left:right].astype(float) / 255.0
+    composed = rgba[:, :, :3] * alpha + art * (1 - alpha)
+
+    renderer = ImageSaveRenderer(page.rgb_image.copy())
+    renderer.add_state_to_image(page.viewer_state)
+    flat = renderer.render_to_image()[top:bottom, left:right].astype(float) / 255.0
+
+    assert np.abs(composed - flat).mean() < 2 / 255, "the layer's pixels differ from the flattened page"
+
+
+def test_each_text_layer_gets_its_own_pixels(sandbox_dir, qapp):
+    """Records are matched to text items by order and confirmed by content: a
+    raster on the wrong layer would draw one item's text where another is."""
+    page = _text_page([
+        _text_state("TOP", 10.0, 5.0),
+        _text_state("BOTTOM", 10.0, 70.0, layer={"z": 5.0}),  # reordered to the top
+    ])
+    path = psd_exporter.export_psd_pages(str(sandbox_dir), [page], "two")
+    layers = _type_layers(psd_tools.PSDImage.open(path))
+
+    assert layers["Text 1"].text.strip() == "TOP"
+    assert layers["Text 2"].text.strip() == "BOTTOM"
+    assert layers["Text 1"].bbox[3] <= 60, layers["Text 1"].bbox
+    assert layers["Text 2"].bbox[1] >= 65, layers["Text 2"].bbox
+
+
+def test_a_hidden_text_layer_still_has_pixels_to_show(sandbox_dir, qapp):
+    """Hidden in the Layers panel means a hidden PSD layer, which the user can
+    show again in Photopea — so it needs its raster like any other."""
+    page = _text_page([_text_state("SECRET", 20.0, 30.0, layer={"visible": False})])
+    path = psd_exporter.export_psd_pages(str(sandbox_dir), [page], "hidden")
+    (layer,) = _type_layers(psd_tools.PSDImage.open(path)).values()
+    assert layer.visible is False
+    assert (layer.numpy()[:, :, 3] > 0).sum() > 50
+
+
+def _layer_record_blocks(path):
+    """(layer name, key, declared length, bytes left in the record after it)
+    for every tagged block in every layer record, read straight from the file
+    rather than through the exporter's own parser."""
+    data = open(path, "rb").read()
+    offset = 26
+    for _ in range(2):
+        offset += 4 + struct.unpack(">I", data[offset:offset + 4])[0]
+    position = offset + 8
+    count = abs(struct.unpack(">h", data[position:position + 2])[0])
+    position += 2
+    found = []
+    for _ in range(count):
+        position += 16
+        channels = struct.unpack(">H", data[position:position + 2])[0]
+        position += 2 + 6 * channels + 12
+        extra_len = struct.unpack(">I", data[position:position + 4])[0]
+        position += 4
+        end = position + extra_len
+        cursor = position + 4 + struct.unpack(">I", data[position:position + 4])[0]
+        cursor += 4 + struct.unpack(">I", data[cursor:cursor + 4])[0]
+        name = data[cursor + 1:cursor + 1 + data[cursor]].decode("latin-1")
+        cursor += (data[cursor] + 1 + 3) // 4 * 4
+        while cursor + 12 <= end and data[cursor:cursor + 4] == b"8BIM":
+            key = data[cursor + 4:cursor + 8]
+            length = struct.unpack(">I", data[cursor + 8:cursor + 12])[0]
+            cursor += 12 + length
+            found.append((name, key, length, end - cursor))
+        position = end
+    return found
+
+
+def test_no_tagged_block_leaves_padding_a_reader_takes_for_a_signature(sandbox_dir, qapp):
+    """PhotoshopAPI declares TySh at its exact, odd, length and leaves the
+    padding byte uncounted. Photopea then reads that byte as the next block's
+    signature and tells the user "Error in PSD file: wrong signature".
+
+    EngineData writes numbers as text, so the length's parity follows the
+    content (font size 24 and 31 came out odd, 20 even, with the font name
+    adding a machine-dependent constant) — hence a spread of sizes, so some
+    are odd before the fix wherever this runs. Every block has to end exactly
+    where the next begins, or at the end of its record."""
+    states = [
+        dict(_text_state(f"SIZE {size}", 10.0, 5.0 + 12 * i, height=30.0), font_size=float(size))
+        for i, size in enumerate((20, 21, 22, 23, 24, 25, 31))
+    ]
+    path = psd_exporter.export_psd_pages(str(sandbox_dir), [_text_page(states, height=200)], "parity")
+    blocks = _layer_record_blocks(path)
+    assert any(key == b"TySh" for _, key, _, _ in blocks), "no TySh block found — layout not as expected"
+    for name, key, length, left_over in blocks:
+        assert length % 2 == 0, f"{name!r} {key!r} declares odd length {length}"
+    # After the last block of each record nothing may remain.
+    last = {}
+    for name, key, length, left_over in blocks:
+        last[name] = (key, left_over)
+    for name, (key, left_over) in last.items():
+        assert left_over == 0, f"{name!r} ends with {left_over} stray bytes after {key!r}"
+
+
+def test_an_oversized_page_with_text_is_a_psb_whose_text_layer_has_pixels(sandbox_dir, qapp):
+    """PSB widens the section and channel lengths to 8 bytes and the RLE row
+    counts to 4; the rewrite has to follow."""
+    page = _text_page([_text_state("WIDE", 29000.0, 10.0)], width=30010, height=60, name="wide.png")
+    path = psd_exporter.export_psd_pages(str(sandbox_dir), [page], "wide")
+    assert path.endswith(".psb") and _read_psd_version(path) == 2
+    (layer,) = _type_layers(psd_tools.PSDImage.open(path)).values()
+    left, top, right, bottom = layer.bbox
+    assert right > left and 29000 <= left
+    assert (layer.numpy()[:, :, 3] > 0).sum() > 50
+
+
+def test_a_mismatch_writes_no_pixels_rather_than_wrong_ones(sandbox_dir, qapp):
+    """If the file's type layers cannot be matched to the text items, no raster
+    is written — the file stays as PhotoshopAPI wrote it, text still editable."""
+    page = _text_page([_text_state("ALPHA", 20.0, 30.0)])
+    path = psd_exporter.export_psd_pages(str(sandbox_dir), [page], "mismatch")
+    # Re-run the finishing pass on a fresh write with a raster for other text.
+    fake = np.zeros((5, 5, 4), dtype=np.uint8)
+    fake[..., 3] = 255
+    before = open(path, "rb").read()
+    psd_exporter._finish_type_layers(path, [("SOMETHING ELSE", (0, 0, fake))])
+    (layer,) = _type_layers(psd_tools.PSDImage.open(path)).values()
+    assert layer.text.strip() == "ALPHA"
+    assert layer.bbox != (0, 0, 5, 5)
+    assert open(path, "rb").read() == before, "a mismatched pass changed the file"

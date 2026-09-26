@@ -156,7 +156,7 @@ def _a_page_with_text():
         viewer_state={
             "text_items_state": [
                 {
-                    "text": "<p>HELLO WORLD</p>",
+                    "text": "HELLO WORLD",
                     "font_family": "Arial",
                     "font_size": 24.0,
                     "text_color": "#000000",
@@ -174,7 +174,6 @@ def _a_page_with_text():
                     "scale": 1.0,
                     "transform_origin": (0.0, 0.0),
                     "selection_outlines": [],
-                    "direction": "ltr",
                 }
             ]
         },
@@ -182,30 +181,20 @@ def _a_page_with_text():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "PhotoshopAPI writes type layers with bounds (0,0,0,0) and no colour "
-        "channels — confirmed by psd-tools on the written file, and by "
-        "TextLayer_8bit having no way to supply pixel data at all. Photopea "
-        "composites a type layer from its cached raster, so it draws nothing "
-        "on load while still reporting the layer present and editable; "
-        "writing the same string back through Photopea's own API forces a "
-        "re-layout and the glyphs appear (bounds become (46,34,220,53), 1047 "
-        "dark pixels). Not a parsing failure: the EngineData does also carry "
-        "two empty containers written without whitespace ('<<>>' and '[]') "
-        "that psd-tools refuses to tokenise, but byte-patching those to "
-        "'<< >>' and '[ ]' leaves Photopea's composite bit-for-bit identical. "
-        "Remove this xfail with the fix."
-    ),
-)
 def test_photopea_renders_the_translated_text(tmp_path, sandbox_dir, qapp):
-    """The half of the blank-export bug that is still open.
+    """Translated text is on the page when the PSD opens in Photopea.
 
-    Fill opacity 0 made every layer invisible and is fixed. Text layers are
-    still invisible in Photopea, for an unrelated reason, and a user without
-    Photoshop is exactly the user this export is for — so the page they open
-    has the artwork and the cleaned patches but none of the translation.
+    It was not, for two independent reasons, both in how PhotoshopAPI writes a
+    type layer. (1) No pixels: bounds (0,0,0,0) and no colour channels, while
+    Photopea draws a type layer from its cached raster — so the page opened
+    with the artwork and patches and none of the translation, the layer still
+    listed and its text still readable. The exporter now writes the item's own
+    render as that raster. (2) TySh declared at an odd length with its padding
+    byte uncounted, which Photopea reads as the next block's signature: an
+    "Error in PSD file: wrong signature" toast on every page with text, which
+    the harness now fails on. The composite is compared with the app's own
+    flattened render of the page, so the text is not merely present but where
+    and how the app drew it.
 
     `qapp` is required, not incidental: `_apply_editor_style` measures line
     height with `QFontMetricsF`, and Qt **aborts the process** rather than
@@ -214,11 +203,14 @@ def test_photopea_renders_the_translated_text(tmp_path, sandbox_dir, qapp):
     just SIGABRT. Every other PSD test passes `text_items_state: []`, so
     nothing in the suite had ever exported a text layer before this.
     """
-    psd = Path(psd_exporter.export_psd_pages(str(sandbox_dir), [_a_page_with_text()], "text"))
+    page = _a_page_with_text()
+    psd = Path(psd_exporter.export_psd_pages(str(sandbox_dir), [page], "text"))
+    reference = tmp_path / "flat.png"
+    _save_flat(page, reference)
 
     out = tmp_path / "report-text"
     result = subprocess.run(
-        [sys.executable, str(SCRIPT), str(psd), "--out", str(out)],
+        [sys.executable, str(SCRIPT), str(psd), "--out", str(out), "--compare", str(reference)],
         capture_output=True,
         text=True,
         cwd=str(REPO_ROOT),
@@ -233,3 +225,70 @@ def test_photopea_renders_the_translated_text(tmp_path, sandbox_dir, qapp):
     assert result.returncode == 0, (
         "Photopea did not render the exported text:\n" + result.stdout + result.stderr
     )
+
+
+def _save_flat(page, path):
+    """ComicTranslate's own flattened render of a page, as a PNG."""
+    from PIL import Image
+
+    from app.ui.canvas.save_renderer import ImageSaveRenderer
+
+    renderer = ImageSaveRenderer(page.rgb_image.copy(), page.document_layers)
+    renderer.apply_patches(page.patches)
+    renderer.add_state_to_image(page.viewer_state)
+    Image.fromarray(renderer.render_to_image()).save(path)
+
+
+def _text(text, x, y, **extra):
+    state = {
+        "text": text, "font_family": "Arial", "font_size": 22.0,
+        "text_color": "#000000", "position": (x, y), "width": 200.0,
+        "height": 40.0, "alignment": 1, "line_spacing": 1.0,
+        "outline_color": "#FFFFFF", "outline_width": 0.0, "bold": False,
+        "italic": False, "underline": False, "rotation": 0.0, "scale": 1.0,
+        "transform_origin": (0.0, 0.0), "selection_outlines": [],
+    }
+    state.update(extra)
+    return state
+
+
+def test_photopea_draws_each_text_layer_in_its_own_place(tmp_path, sandbox_dir, qapp):
+    """Several text layers, one reordered, one hidden, one at half opacity: each
+    raster has to land on its own layer, the hidden one listed but not drawn,
+    and the composite has to match the app's flattened render."""
+    art = np.full((HEIGHT, WIDTH, 3), 225, dtype=np.uint8)
+    art[150:220, 40:280] = (40, 70, 190)
+    page = psd_exporter.PsdPageData(
+        file_path="004.png", rgb_image=art,
+        viewer_state={"text_items_state": [
+            _text("FIRST", 20.0, 10.0),
+            _text("SECOND", 20.0, 60.0, layer={"z": 3.0}),
+            _text("HIDDEN", 20.0, 110.0, layer={"visible": False, "name": "Hidden note"}),
+            _text("FADED", 60.0, 165.0, text_color="#FFFFFF", layer={"opacity": 0.5}),
+        ]},
+        patches=[],
+    )
+    psd = Path(psd_exporter.export_psd_pages(str(sandbox_dir), [page], "several"))
+    reference = tmp_path / "flat.png"
+    _save_flat(page, reference)
+
+    out = tmp_path / "report-several"
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), str(psd), "--out", str(out), "--compare", str(reference),
+         "--expect-hidden", "Hidden note"],
+        capture_output=True,
+        text=True,
+        cwd=str(REPO_ROOT),
+    )
+
+    if result.returncode == 2:
+        pytest.skip(f"the harness could not start: {result.stderr.strip()[:200]}")
+
+    if result.returncode != 0 and out.exists():
+        shutil.copytree(out, tmp_path / "failed-report-several", dirs_exist_ok=True)
+
+    assert result.returncode == 0, (
+        "Photopea did not render the text layers as ComicTranslate does:\n" + result.stdout + result.stderr
+    )
+    for name in ("Text 1", "Text 2", "Hidden note", "Text 4"):
+        assert f"layer renders its own pixels: {name!r}" in result.stdout, name

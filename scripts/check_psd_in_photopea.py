@@ -26,6 +26,10 @@ What it checks, per file:
   A layer Photopea sizes at nothing is now a failure in its own right.
 * whether a text layer is still *editable* — that Photopea reads its string
   back out, not merely that a layer with that name exists
+* **that Photopea shows no error while opening the file.** It reports a file
+  it half-understands in a toast that is gone within a second, then opens
+  whatever it parsed, so every other check can pass while the user was told
+  the file is broken ("Error in PSD file: wrong signature" did exactly that)
 * alpha is not uniformly zero anywhere it should not be
 * the full composite, exported as PNG and optionally compared with the page
   ComicTranslate rendered
@@ -172,6 +176,27 @@ d.saveToOE("png");
 # Making everything visible instead is wrong the moment a PSD carries a hidden
 # layer on purpose: the composite exported afterwards then draws it, and the
 # check blames the export for what the harness did.
+# Installed in Photopea's own frame before a file is opened: collects the text
+# of any message containing "Error" that appears anywhere in its UI.
+WATCH_ERRORS = """
+() => {
+    window.__ctErrors = [];
+    const grab = (text) => {
+        text = (text || "").trim();
+        if (/error/i.test(text) && text.length < 300 && !window.__ctErrors.includes(text)) {
+            window.__ctErrors.push(text);
+        }
+    };
+    new MutationObserver((mutations) => {
+        for (const m of mutations) {
+            if (m.type === "characterData") grab(m.target.textContent);
+            for (const n of m.addedNodes) grab(n.innerText || n.textContent);
+        }
+    }).observe(document.body, {childList: true, subtree: true, characterData: true});
+}
+"""
+
+
 RESTORE = """
 var d = app.activeDocument;
 var saved = %s;
@@ -256,10 +281,30 @@ class Photopea:
     def _count(self) -> int:
         return self.page.evaluate("window.__msgs.length")
 
+    def _photopea_frame(self):
+        for frame in self.page.frames:
+            if "photopea.com" in frame.url:
+                return frame
+        return None
+
     def open_bytes(self, data: bytes) -> None:
+        # Photopea reports a file it cannot read properly in a toast that is
+        # gone a second later, and still opens whatever it managed to parse --
+        # so the layer tree and every render can look fine while it has told
+        # the user the file is broken. Record any such message as it appears.
+        frame = self._photopea_frame()
+        if frame is not None:
+            frame.evaluate(WATCH_ERRORS)
         since = self._count()
         self.page.evaluate("b64 => window.__sendBytes(b64)", base64.b64encode(data).decode())
         self._wait_done(since)
+
+    def errors(self) -> list[str]:
+        """Error messages Photopea showed since the file was opened."""
+        frame = self._photopea_frame()
+        if frame is None:
+            return []
+        return list(frame.evaluate("() => window.__ctErrors || []"))
 
     def script(self, source: str) -> list[dict]:
         since = self._count()
@@ -329,6 +374,8 @@ def check_file(
 
     tree = pp.echo(READ_TREE)
     report.tree = tree
+    shown = pp.errors()
+    report.add(not shown, "Photopea reports no error opening the file", "; ".join(shown))
     nodes = _flatten(tree["layers"])
     report.add(bool(nodes), "Photopea parsed a layer tree", f"{len(nodes)} nodes")
 
