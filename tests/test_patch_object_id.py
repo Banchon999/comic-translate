@@ -70,40 +70,41 @@ def test_undo_redo_redraws_the_same_id(controller):
     assert _scene_patch_ids(controller.image_viewer) == [first]
 
 
+def _reload(controller, proj_path):
+    """Load a project back into the same window after forgetting the patches.
+
+    One window per test on purpose: every ComicTranslate builds the whole UI
+    and its font machinery, and several in one process make a native Qt
+    font-database hang/crash (pre-existing, environment-dependent) far likelier.
+    """
+    from app.projects.project_state_v2 import load_state_from_proj_file_v2
+
+    controller.image_patches = {}
+    load_state_from_proj_file_v2(controller, str(proj_path))
+    (plist,) = controller.image_patches.values()
+    return plist
+
+
 def test_v2_roundtrip_keeps_patch_id(controller, tmp_path):
-    import controller as controller_mod
     from app.ui.commands.inpaint import PatchInsertCommand
-    from app.projects.project_state_v2 import (
-        save_state_to_proj_file_v2,
-        load_state_from_proj_file_v2,
-    )
+    from app.projects.project_state_v2 import save_state_to_proj_file_v2
 
     page = controller.image_files[0]
     PatchInsertCommand(controller, [_patch()], page).redo()
-    saved_id = controller.image_patches[page][0]["object_id"]
+    saved = dict(controller.image_patches[page][0])
 
     proj = tmp_path / "proj.ctpr"
     save_state_to_proj_file_v2(controller, str(proj))
-
-    other = controller_mod.ComicTranslate()
-    try:
-        load_state_from_proj_file_v2(other, str(proj))
-        (plist,) = other.image_patches.values()
-        assert plist[0]["object_id"] == saved_id
-        assert plist[0]["hash"] == controller.image_patches[page][0]["hash"]
-    finally:
-        other.close()
+    plist = _reload(controller, proj)
+    assert plist[0]["object_id"] == saved["object_id"]
+    assert plist[0]["hash"] == saved["hash"]
 
 
 def test_v2_patch_saved_without_an_id_gets_one_that_persists(controller, tmp_path):
     """A project written before patches carried an id: load mints one, and the
     next save writes it, so a second reload sees the same id."""
-    import controller as controller_mod
     from app.ui.commands.inpaint import PatchInsertCommand
-    from app.projects.project_state_v2 import (
-        save_state_to_proj_file_v2,
-        load_state_from_proj_file_v2,
-    )
+    from app.projects.project_state_v2 import save_state_to_proj_file_v2
 
     page = controller.image_files[0]
     PatchInsertCommand(controller, [_patch()], page).redo()
@@ -111,20 +112,9 @@ def test_v2_patch_saved_without_an_id_gets_one_that_persists(controller, tmp_pat
 
     first = tmp_path / "old.ctpr"
     save_state_to_proj_file_v2(controller, str(first))
+    minted = _reload(controller, first)[0]["object_id"]
+    assert minted
 
-    a = controller_mod.ComicTranslate()
-    b = controller_mod.ComicTranslate()
-    try:
-        load_state_from_proj_file_v2(a, str(first))
-        (plist,) = a.image_patches.values()
-        minted = plist[0]["object_id"]
-        assert minted
-
-        second = tmp_path / "resaved.ctpr"
-        save_state_to_proj_file_v2(a, str(second))
-        load_state_from_proj_file_v2(b, str(second))
-        (plist_b,) = b.image_patches.values()
-        assert plist_b[0]["object_id"] == minted
-    finally:
-        a.close()
-        b.close()
+    second = tmp_path / "resaved.ctpr"
+    save_state_to_proj_file_v2(controller, str(second))
+    assert _reload(controller, second)[0]["object_id"] == minted

@@ -13,6 +13,7 @@ from modules.utils.textblock import sort_blk_list
 from modules.detection.heuristic_lines import annotate_blocks_with_heuristic_lines
 from modules.utils.language_utils import to_canonical_language_name
 from pipeline.virtual_page import VirtualPage
+from core.layers import merge_preserving_locked
 
 if TYPE_CHECKING:
     from .processor import WebtoonBatchProcessor
@@ -340,7 +341,9 @@ class FlowMixin:
         if page_info.get("skip", False):
             page_state["blk_list"] = []
             page_state["skip_render"] = True
-            page_state["viewer_state"]["text_items_state"] = []
+            page_state["viewer_state"]["text_items_state"] = merge_preserving_locked(
+                page_state["viewer_state"].get("text_items_state"), []
+            )
             self.final_patches_for_save[image_path] = []
             self.main_page.render_state_ready.emit(image_path)
             self._save_final_rendered_page(selected_index, image_path, timestamp)

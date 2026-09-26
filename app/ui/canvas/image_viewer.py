@@ -9,7 +9,9 @@ from .text_item import TextBlockItem
 from .text.text_item_properties import TextItemProperties
 from .rectangle import MoveableRectItem
 from modules.utils.common_utils import new_object_id
-from app.ui.canvas.scene_registry import put_layer, set_item_layer
+from app.ui.canvas.scene_registry import put_layer, set_item_layer, iter_items
+from app.ui.canvas.layer_apply import apply_layer_state
+from core.layers import DocumentLayers
 from .rotate_cursor import RotateHandleCursors
 from .drawing_manager import DrawingManager
 from .webtoons.webtoon_manager import LazyWebtoonManager
@@ -74,6 +76,12 @@ class ImageViewer(QGraphicsView):
         # Page detection state (used by webtoon and event handlers)
         self._programmatic_scroll = False
         
+        # Layers: the owner supplies the live document-wide group props (the
+        # controller replaces its DocumentLayers on project load, so this is a
+        # getter, not a reference). Standalone viewers fall back to defaults.
+        self.document_layers_getter = None
+        self._default_layers = DocumentLayers()
+
         # Item lists
         self.rectangles: list[MoveableRectItem] = []
         self.text_items: list[TextBlockItem] = []
@@ -562,6 +570,17 @@ class ImageViewer(QGraphicsView):
         if self.webtoon_mode:
             return self.webtoon_manager.get_visible_area_image(paint_all, include_patches)
         
+    # Layers
+    def layer_document(self) -> DocumentLayers:
+        getter = self.document_layers_getter
+        return getter() if getter is not None else self._default_layers
+
+    def refresh_layers(self) -> None:
+        """Re-apply layer visibility, opacity, lock and order to every page item."""
+        doc = self.layer_document()
+        for item in list(iter_items(self._scene, viewer=self)):
+            apply_layer_state(item, doc, self)
+
     # State Management
     def save_state(self) -> Dict:
         transform = self.transform()

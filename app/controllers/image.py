@@ -1185,6 +1185,8 @@ class ImageStateController:
                 needs_default_fit = True
 
             self.main.text_ctrl.clear_text_edits()
+            # The page's items take their layer state (hidden, locked...).
+            viewer.refresh_layers()
         finally:
             viewer.setUpdatesEnabled(True)
             viewer.viewport().update()
