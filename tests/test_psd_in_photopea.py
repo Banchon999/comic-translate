@@ -83,6 +83,70 @@ def test_photopea_renders_the_exported_page(tmp_path, sandbox_dir):
     )
 
 
+def _a_layered_page():
+    """A page the user edited in the Layers panel: one patch hidden, one at
+    half opacity. Returned with the page ComicTranslate itself flattens from
+    the same data, which is what Photopea's composite has to match."""
+    from app.ui.canvas.save_renderer import ImageSaveRenderer
+
+    art = np.full((HEIGHT, WIDTH, 3), 225, dtype=np.uint8)
+    art[60:180, 40:280] = (40, 70, 190)
+    black = np.zeros((60, 80, 3), dtype=np.uint8)
+    patches = [
+        {"bbox": (20, 20, 80, 60), "image": black, "hash": "a", "object_id": "A",
+         "layer": {"visible": False, "name": "Cleaned SFX"}},
+        {"bbox": (120, 90, 80, 60), "image": black, "hash": "b", "object_id": "B",
+         "layer": {"opacity": 0.5, "name": "Half"}},
+    ]
+    page = psd_exporter.PsdPageData(
+        file_path="003.png", rgb_image=art,
+        viewer_state={"text_items_state": []}, patches=patches,
+    )
+    renderer = ImageSaveRenderer(art.copy())
+    renderer.apply_patches(patches)
+    renderer.add_state_to_image({"text_items_state": []})
+    return page, renderer.render_to_image()
+
+
+def test_photopea_keeps_hidden_layers_hidden_and_honours_opacity(tmp_path, sandbox_dir, qapp):
+    """A hidden layer must arrive hidden, still carry its pixels (so it can be
+    shown again), and stay out of the composite; opacity must blend.
+
+    The composite is compared with ComicTranslate's own flattened render of the
+    same page. That comparison is also what caught the harness itself making
+    every layer visible again after soloing them, which drew the hidden patch
+    into the composite and blamed the export for it.
+    """
+    from PIL import Image
+
+    page, flat = _a_layered_page()
+    psd = Path(psd_exporter.export_psd_pages(str(sandbox_dir), [page], "layers"))
+    reference = tmp_path / "flat.png"
+    Image.fromarray(flat).save(reference)
+
+    out = tmp_path / "report-layers"
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), str(psd), "--out", str(out),
+         "--compare", str(reference), "--expect-hidden", "Cleaned SFX"],
+        capture_output=True,
+        text=True,
+        cwd=str(REPO_ROOT),
+    )
+
+    if result.returncode == 2:
+        pytest.skip(f"the harness could not start: {result.stderr.strip()[:200]}")
+
+    if result.returncode != 0 and out.exists():
+        shutil.copytree(out, tmp_path / "failed-report-layers", dirs_exist_ok=True)
+
+    assert result.returncode == 0, (
+        "Photopea did not render the layered PSD as ComicTranslate does:\n"
+        + result.stdout + result.stderr
+    )
+    assert "layer arrives hidden as intended: 'Cleaned SFX'" in result.stdout
+    assert "layer renders its own pixels: 'Cleaned SFX'" in result.stdout
+
+
 def _a_page_with_text():
     art = np.full((HEIGHT, WIDTH, 3), 225, dtype=np.uint8)
     art[150:220, 40:280] = (40, 70, 190)

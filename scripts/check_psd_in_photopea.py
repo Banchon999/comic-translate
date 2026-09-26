@@ -167,14 +167,20 @@ while (node && node.typename) {
 d.saveToOE("png");
 """
 
+# Put every layer back to the visibility the file arrived with, given as
+# [[index path], visible] pairs read from the tree before anything was soloed.
+# Making everything visible instead is wrong the moment a PSD carries a hidden
+# layer on purpose: the composite exported afterwards then draws it, and the
+# check blames the export for what the harness did.
 RESTORE = """
-function each(layers, fn) {
-    for (var i = 0; i < layers.length; i++) {
-        fn(layers[i]);
-        if (layers[i].typename == "LayerSet") each(layers[i].layers, fn);
-    }
+var d = app.activeDocument;
+var saved = %s;
+for (var i = 0; i < saved.length; i++) {
+    var target = d;
+    var path = saved[i][0];
+    for (var j = 0; j < path.length; j++) target = target.layers[path[j]];
+    try { target.visible = saved[i][1]; } catch (e) {}
 }
-each(app.activeDocument.layers, function (l) { try { l.visible = true; } catch (e) {} });
 app.echoToOE("restored");
 """
 
@@ -314,7 +320,10 @@ def _has_extent(node: dict) -> bool:
     return (right - left) > 0 and (bottom - top) > 0
 
 
-def check_file(pp: Photopea, path: Path, out_dir: Path, compare: Path | None) -> Report:
+def check_file(
+    pp: Photopea, path: Path, out_dir: Path, compare: Path | None,
+    expect_hidden: frozenset[str] = frozenset(),
+) -> Report:
     report = Report(path)
     pp.open_bytes(path.read_bytes())
 
@@ -327,7 +336,12 @@ def check_file(pp: Photopea, path: Path, out_dir: Path, compare: Path | None) ->
         bounds = node.get("bounds")
         if isinstance(bounds, str):
             report.add(False, f"bounds readable: {node['name']!r}", bounds)
-        if node.get("visible") is False:
+        # A layer the user hid in the Layers panel is exported hidden on
+        # purpose; every other layer must arrive visible.
+        if node["name"] in expect_hidden:
+            report.add(node.get("visible") is False, f"layer arrives hidden as intended: {node['name']!r}",
+                       f"Photopea reports visible={node.get('visible')}")
+        elif node.get("visible") is False:
             report.add(False, f"layer arrives visible: {node['name']!r}", "Photopea reports it hidden")
 
     text_layers = [n for _, n in nodes if n.get("is_text")]
@@ -346,6 +360,7 @@ def check_file(pp: Photopea, path: Path, out_dir: Path, compare: Path | None) ->
     # nothing for them — and the check that would have caught it was the one
     # the empty box excluded. It reported PASS on a page with invisible text.
     leaves = [(p, n) for p, n in nodes if _is_leaf(n)]
+    restore = json.dumps([[list(p), n.get("visible") is not False] for p, n in nodes])
     report.add(bool(leaves), "there is at least one layer to render", f"{len(leaves)} found")
 
     for path_indices, node in leaves:
@@ -360,7 +375,7 @@ def check_file(pp: Photopea, path: Path, out_dir: Path, compare: Path | None) ->
             )
             continue
         png = pp.export_png(SOLO_AND_EXPORT % json.dumps(list(path_indices)))
-        pp.script(RESTORE)
+        pp.script(RESTORE % restore)
         stats = _png_stats(png)
         name = "".join(c if c.isalnum() else "_" for c in node["name"])
         (out_dir / f"{path.stem}.layer-{name}.png").write_bytes(png)
@@ -405,6 +420,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--compare", type=Path, help="a PNG of the same page, to compare the composite against")
     parser.add_argument("--timeout", type=int, default=120_000, help="per-step timeout in ms")
     parser.add_argument("--json", type=Path, help="also write the findings as JSON")
+    parser.add_argument("--expect-hidden", action="append", default=[], metavar="NAME",
+                        help="a layer exported hidden on purpose (repeatable); it must arrive hidden")
     args = parser.parse_args(argv)
 
     try:
@@ -435,7 +452,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 pp = Photopea(page, args.timeout)
                 try:
-                    report = check_file(pp, psd, args.out, args.compare)
+                    report = check_file(pp, psd, args.out, args.compare, frozenset(args.expect_hidden))
                 except Exception as exc:  # a failure to drive Photopea is a result, not a crash
                     report = Report(psd)
                     report.add(False, "Photopea could be driven at all", f"{type(exc).__name__}: {exc}")

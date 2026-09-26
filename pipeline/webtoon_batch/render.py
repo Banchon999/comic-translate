@@ -217,7 +217,7 @@ class RenderMixin:
         if export_settings["export_inpainted_image"]:
             from app.ui.canvas.save_renderer import ImageSaveRenderer
 
-            renderer = ImageSaveRenderer(image)
+            renderer = ImageSaveRenderer(image, getattr(self.main_page, 'document_layers', None))
             patches = self.final_patches_for_save.get(image_path, [])
             renderer.apply_patches(patches)
             path = os.path.join(
