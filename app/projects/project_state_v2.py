@@ -13,6 +13,7 @@ from .parsers import ProjectDecoder, ProjectEncoder, ensure_string_keys
 from .page_state_store import PageStateStore
 from modules.utils.file_handler import ensure_prepared_path_materialized
 from modules.utils.common_utils import new_object_id
+from core.layers import DocumentLayers
 
 if TYPE_CHECKING:
     from controller import ComicTranslate
@@ -367,6 +368,7 @@ def save_state_to_proj_file_v2(comic_translate: "ComicTranslate", file_name: str
                     "png_hash": blob_hash,
                     "hash": patch["hash"],
                     "object_id": patch.get("object_id") or new_object_id(),
+                    **({"layer": patch["layer"]} if patch.get("layer") else {}),
                 }
             )
 
@@ -402,6 +404,8 @@ def save_state_to_proj_file_v2(comic_translate: "ComicTranslate", file_name: str
         "webtoon_mode": comic_translate.webtoon_mode,
         "webtoon_view_state": comic_translate.image_viewer.webtoon_view_state,
         "unique_images": ensure_string_keys(unique_images),
+        # Only groups that differ from the default; absent in old projects.
+        "document_layers": getattr(comic_translate, "document_layers", DocumentLayers()).to_dict(),
     }
     manifest_blob = msgpack.packb(manifest, default=encoder.encode, use_bin_type=True)
 
@@ -564,6 +568,7 @@ def _materialize_from_manifest_and_pages(
 
     comic_translate.curr_img_idx = manifest.get("current_image_index", 0)
     comic_translate.webtoon_mode = manifest.get("webtoon_mode", False)
+    comic_translate.document_layers = DocumentLayers.from_dict(manifest.get("document_layers"))
     comic_translate.image_viewer.webtoon_view_state = manifest.get("webtoon_view_state", {})
 
     original_image_files = manifest.get("original_image_files", [])
@@ -630,6 +635,7 @@ def _materialize_from_manifest_and_pages(
                 # Projects saved before patches carried an id mint one here;
                 # it is written back on the next save.
                 "object_id": patch.get("object_id") or new_object_id(),
+                **({"layer": patch["layer"]} if patch.get("layer") else {}),
             })
 
         if new_list:

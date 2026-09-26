@@ -12,6 +12,7 @@ from app.ui.commands.brush import BrushStrokeCommand, ClearBrushStrokesCommand, 
 from app.ui.commands.base import PathCommandBase as pcb
 from app.ui.commands.base import OBJECT_ID_KEY
 from modules.utils.common_utils import new_object_id
+from app.ui.canvas.scene_registry import put_layer, set_item_layer
 import imkit as imk
 from modules.utils.image_utils import build_block_mask_data, clip_mask_to_bubble, clip_mask_components_to_bubble
 from modules.utils.text_segmentation import peek_page_mask
@@ -416,13 +417,13 @@ class DrawingManager:
                 if not object_id:
                     object_id = new_object_id()
                     item.setData(OBJECT_ID_KEY, object_id)
-                strokes.append({
+                strokes.append(put_layer({
                     'object_id': object_id,
                     'path': item.path(),
                     'pen': item.pen().color().name(QColor.HexArgb),
                     'brush': item.brush().color().name(QColor.HexArgb),
                     'width': item.pen().width()
-                })
+                }, item))
         return strokes
 
     def load_brush_strokes(self, strokes: List[Dict]):
@@ -442,6 +443,7 @@ class DrawingManager:
             # Preserve the stroke's identity across the page-reload recreate
             # cycle; mint one for strokes saved before identity existed.
             path_item.setData(OBJECT_ID_KEY, stroke.get('object_id') or new_object_id())
+            set_item_layer(path_item, stroke.get('layer'))
                 
     def clear_brush_strokes(self, page_switch=False):
         if page_switch:      

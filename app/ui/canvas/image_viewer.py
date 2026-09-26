@@ -9,6 +9,7 @@ from .text_item import TextBlockItem
 from .text.text_item_properties import TextItemProperties
 from .rectangle import MoveableRectItem
 from modules.utils.common_utils import new_object_id
+from app.ui.canvas.scene_registry import put_layer, set_item_layer
 from .rotate_cursor import RotateHandleCursors
 from .drawing_manager import DrawingManager
 from .webtoons.webtoon_manager import LazyWebtoonManager
@@ -479,6 +480,7 @@ class ImageViewer(QGraphicsView):
         # Stable identity: keep the properties' id (load, undo/redo, page
         # reload, webtoon merge), otherwise mint one for a brand-new item.
         item.object_id = getattr(properties, 'object_id', '') or new_object_id()
+        set_item_layer(item, getattr(properties, 'layer', None))
 
         # Update the item
         item.update()
@@ -568,12 +570,12 @@ class ImageViewer(QGraphicsView):
         rectangles_state = []
         for item in self._scene.items():
             if isinstance(item, MoveableRectItem):
-                rectangles_state.append({
+                rectangles_state.append(put_layer({
                     'object_id': getattr(item, 'object_id', '') or new_object_id(),
                     'rect': (item.pos().x(), item.pos().y(), item.boundingRect().width(), item.boundingRect().height()),
                     'rotation': item.rotation(),
                     'transform_origin': (item.transformOriginPoint().x(), item.transformOriginPoint().y())
-                })
+                }, item))
             
         text_items_state = []
         for item in self._scene.items():
@@ -609,8 +611,9 @@ class ImageViewer(QGraphicsView):
         for data in state['rectangles']:
             x, y, w, h = data['rect']
             origin = QPointF(*data.get('transform_origin', (0,0))) if 'transform_origin' in data else None
-            self.add_rectangle(QRectF(0,0,w,h), QPointF(x,y), data.get('rotation', 0), origin,
-                               object_id=data.get('object_id'))
+            rect_item = self.add_rectangle(QRectF(0,0,w,h), QPointF(x,y), data.get('rotation', 0), origin,
+                                           object_id=data.get('object_id'))
+            set_item_layer(rect_item, data.get('layer'))
 
         for data in state.get('text_items_state', []):
             # Use the new add_text_item function for consistency

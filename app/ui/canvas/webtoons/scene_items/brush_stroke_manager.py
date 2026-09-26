@@ -11,6 +11,7 @@ from PySide6.QtGui import QPen, QBrush, QColor, QPainterPath, Qt
 
 from app.ui.commands.base import OBJECT_ID_KEY
 from modules.utils.common_utils import new_object_id
+from app.ui.canvas.scene_registry import put_layer, set_item_layer
 
 
 class BrushStrokeManager:
@@ -53,6 +54,7 @@ class BrushStrokeManager:
                     path_item = self._scene.addPath(scene_path, pen)
                 # Preserve identity across the webtoon load/unload recreate cycle.
                 path_item.setData(OBJECT_ID_KEY, stroke_data.get('object_id') or new_object_id())
+                set_item_layer(path_item, stroke_data.get('layer'))
     
     def unload_brush_strokes(self, page_idx: int, page_y: float, page_bottom: float, file_path: str):
         """Unload brush strokes for a specific page."""
@@ -79,6 +81,7 @@ class BrushStrokeManager:
                         # stroke's identity so it is never split into unrelated
                         # logical objects.
                         page_local_stroke['object_id'] = item.data(OBJECT_ID_KEY) or new_object_id()
+                        put_layer(page_local_stroke, item)
                         brush_strokes_data.append(page_local_stroke)
                         brush_strokes_to_remove.append(item)
         
@@ -96,13 +99,13 @@ class BrushStrokeManager:
                 item != self.viewer.photo):
                 
                 # Process this brush stroke using coordinate converter
-                stroke_data = {
+                stroke_data = put_layer({
                     'object_id': item.data(OBJECT_ID_KEY) or new_object_id(),
                     'path': item.path(),
                     'pen': item.pen().color().name(QColor.HexArgb) if hasattr(item, 'pen') else '#80ff0000',
                     'brush': item.brush().color().name(QColor.HexArgb) if hasattr(item, 'brush') else '#00000000',
                     'width': item.pen().width() if hasattr(item, 'pen') else 25
-                }
+                }, item)
                 
                 # Find all pages this stroke intersects with and create clipped versions
                 self._process_single_brush_stroke(stroke_data, scene_items_by_page)
@@ -114,6 +117,7 @@ class BrushStrokeManager:
         brush_color = stroke['brush']
         width = stroke['width']
         object_id = stroke.get('object_id') or new_object_id()
+        layer = stroke.get('layer')
         
         # Get all points in the path to determine which pages this stroke touches
         pages_touched = set()
@@ -144,6 +148,10 @@ class BrushStrokeManager:
                     'brush': brush_color,
                     'width': width
                 }
+                if layer:
+                    # Every fragment of a page-spanning stroke is the same
+                    # logical object, so each carries its layer props too.
+                    page_stroke['layer'] = dict(layer)
                 scene_items_by_page[page_index]['brush_strokes'].append(page_stroke)
         
         return pages_touched

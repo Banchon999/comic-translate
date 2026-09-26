@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import imkit as imk
+from core.layers import DocumentLayers
 import numpy as np
 from typing import TYPE_CHECKING, List
 from PySide6 import QtCore, QtWidgets, QtGui
@@ -317,6 +318,7 @@ class ImageStateController:
         self.main.undo_stacks.clear()
         self.main.image_patches.clear()
         self.main.in_memory_patches.clear()
+        self.main.document_layers = DocumentLayers()
         self.main.project_file = None
         self.main.page_list.blockSignals(True)
         self.main.page_list.clear()
@@ -1044,6 +1046,7 @@ class ImageStateController:
                     'image': match['image'],
                     'hash': saved['hash'],
                     'object_id': saved.get('object_id'),
+                    'layer': saved.get('layer'),
                 }
             else:
                 # load into memory
@@ -1054,6 +1057,7 @@ class ImageStateController:
                     'image': rgb_img,
                     'hash': saved['hash'],
                     'object_id': saved.get('object_id'),
+                    'layer': saved.get('layer'),
                 }
                 self.main.in_memory_patches[file_path].append(prop)
             

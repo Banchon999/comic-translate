@@ -14,6 +14,7 @@ from modules.utils.textblock import TextBlock
 from ..canvas.rectangle import MoveableRectItem
 from ..canvas.text_item import TextBlockItem
 from modules.utils.common_utils import is_close, new_object_id
+from app.ui.canvas.scene_registry import put_layer, set_item_layer
 
 if TYPE_CHECKING:
     from app.ui.canvas.image_viewer import ImageViewer
@@ -53,7 +54,7 @@ class PathCommandBase:
         if not object_id:
             object_id = new_object_id()
             path_item.setData(OBJECT_ID_KEY, object_id)
-        return {
+        return put_layer({
             'object_id': object_id,
             'path': path_item.path(),
             'pen': path_item.pen().color().name(QColor.HexArgb),
@@ -66,7 +67,7 @@ class PathCommandBase:
                 'cap': path_item.pen().capStyle(),
                 'join': path_item.pen().joinStyle()
             }
-        }
+        }, path_item)
 
     @staticmethod
     def create_path_item(properties):
@@ -83,6 +84,7 @@ class PathCommandBase:
         path_item.setPath(properties['path'])
         path_item.setPen(pen)
         path_item.setData(OBJECT_ID_KEY, properties.get('object_id') or new_object_id())
+        set_item_layer(path_item, properties.get('layer'))
 
         if properties['brush'] == "#80ff0000":
             brush_color = QColor(properties['brush'])
@@ -118,7 +120,7 @@ class RectCommandBase:
     @staticmethod
     def save_rect_properties(item):
         """Save properties of a path item"""
-        return {
+        return put_layer({
             'object_id': getattr(item, 'object_id', '') or new_object_id(),
             'pos':(item.pos().x(), item.pos().y()),
             'rotation': item.rotation(),
@@ -126,7 +128,7 @@ class RectCommandBase:
             'height': item.boundingRect().height(),
             'transform_origin': (item.transformOriginPoint().x(),
                                      item.transformOriginPoint().y()),
-        }
+        }, item)
 
     @staticmethod
     def create_rect_item(properties, viewer: ImageViewer):
@@ -139,6 +141,7 @@ class RectCommandBase:
         # Use the viewer's add_rectangle method for consistent handling
         rect_item = viewer.add_rectangle(rect, position, rotation, transform_origin,
                                          object_id=properties.get('object_id'))
+        set_item_layer(rect_item, properties.get('layer'))
         return rect_item
 
 
@@ -327,6 +330,7 @@ class PatchCommandBase:
             item.setZValue(0.5)
         item.setData(PatchCommandBase.HASH_KEY, properties['hash'])
         item.setData(OBJECT_ID_KEY, properties.get('object_id') or new_object_id())
+        set_item_layer(item, properties.get('layer'))
         viewer._scene.addItem(item)
         viewer._scene.update()
         return item
