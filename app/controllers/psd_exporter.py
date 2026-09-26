@@ -430,7 +430,6 @@ def _parse_layer_info(data: bytes):
 	return is_psb, long_fmt, lmi_at, lmi_len, li_end, lmi_end, count, records, position
 
 
-
 def _finish_type_layers(path: str, type_rasters: list[tuple[str, Any]]) -> None:
 	"""Give each type layer the pixels it is drawn with, and fix its block lengths.
 
@@ -513,6 +512,8 @@ def _finish_type_layers(path: str, type_rasters: list[tuple[str, Any]]) -> None:
 	if rewritten[check[5]:] != data[lmi_end:]:
 		raise ValueError("Rewritten file moved the composite image section")
 
+	if rewritten == data:
+		return  # nothing to fix: leave the file exactly as it was written
 	with open(path, "r+b") as handle:
 		handle.write(rewritten)
 		handle.truncate()
