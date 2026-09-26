@@ -4,10 +4,26 @@ import numpy as np
 from app.path_materialization import ensure_path_materialized
 from .text_item import TextBlockItem
 from .text.text_item_properties import TextItemProperties
+from core.layers import DocumentLayers, LayerGroup, LayerProps
+
+
+def _as_document_layers(value) -> DocumentLayers:
+    if isinstance(value, DocumentLayers):
+        return value
+    return DocumentLayers.from_dict(value)
 
 class ImageSaveRenderer:
-    def __init__(self, image: np.ndarray):
+    """Renders a page to a flat image: the artwork, its patches and its text.
+
+    Layer props decide what is drawn, the same way they do on the canvas: a
+    hidden object (or an object in a hidden group) is not drawn, and opacity
+    applies. ``document_layers`` is the document's group props; objects carry
+    their own under their ``"layer"`` key.
+    """
+
+    def __init__(self, image: np.ndarray, document_layers=None):
         self.rgb_image = image
+        self.layers = _as_document_layers(document_layers)
         self.scene = QtWidgets.QGraphicsScene()
 
         self.qimage = self.img_array_to_qimage(image)
@@ -21,6 +37,12 @@ class ImageSaveRenderer:
         # Add QGraphicsPixmapItem to the scene
         self.scene.addItem(self.pixmap_item)
 
+        # Raw Image group. Patches are children of this item, so a hidden raw
+        # image is faded to 0 rather than setVisible(False), which would hide
+        # them too; they ignore their parent's opacity (see apply_patches).
+        raw = self.layers.effective(LayerGroup.RAW)
+        self.pixmap_item.setOpacity(raw.opacity if raw.visible else 0.0)
+
 
     def img_array_to_qimage(self, rgb_img: np.ndarray) -> QtGui.QImage:
         height, width, channel = rgb_img.shape
@@ -33,6 +55,9 @@ class ImageSaveRenderer:
             self.add_spanning_text_items(state, page_idx, main_page)
 
         for text_block in state.get('text_items_state', []):
+            eff = self.layers.effective(LayerGroup.TEXT, text_block.get('layer'))
+            if not eff.visible:
+                continue  # hidden on the canvas, so not in the flat export
             # Use TextItemProperties for consistent text item construction
             text_props = TextItemProperties.from_dict(text_block)
             
@@ -80,6 +105,10 @@ class ImageSaveRenderer:
                 text_props.gradient_angle,
             )
             text_item.set_curvature(text_props.curvature)
+            text_item.setOpacity(eff.opacity)
+            order = LayerProps.from_dict(text_block.get('layer')).z
+            if order:
+                text_item.setZValue(text_item.zValue() + order * 1e-4)
             text_item.update()
 
             self.scene.addItem(text_item)
@@ -215,7 +244,10 @@ class ImageSaveRenderer:
         scaled_size = original_size * scale_factor
         
         qimage = QtGui.QImage(scaled_size, QtGui.QImage.Format.Format_ARGB32)
-        qimage.fill(QtCore.Qt.transparent)
+        # White, not transparent: the page is flattened to RGB, where
+        # transparent becomes black. With the artwork shown it covers this
+        # entirely; with the raw image hidden or faded, the page reads as paper.
+        qimage.fill(QtCore.Qt.white)
 
         # Create a QPainter with antialiasing
         painter = QtGui.QPainter(qimage)
@@ -265,6 +297,9 @@ class ImageSaveRenderer:
         """Apply inpainting patches to the image."""
 
         for patch in patches:
+            eff = self.layers.effective(LayerGroup.PATCHES, patch.get('layer'))
+            if not eff.visible:
+                continue
             # Extract data from the patch dict
             x, y, w, h = patch['bbox']
             if 'png_path' in patch:
@@ -285,6 +320,9 @@ class ImageSaveRenderer:
             # Position the patch relative to its parent (pixmap_item)
             patch_item.setPos(x, y)
             patch_item.setZValue(self.pixmap_item.zValue() + 0.5)
+            # Its own opacity, not the raw image's (which may be faded out).
+            patch_item.setFlag(QtWidgets.QGraphicsItem.GraphicsItemFlag.ItemIgnoresParentOpacity, True)
+            patch_item.setOpacity(eff.opacity)
 
 
 

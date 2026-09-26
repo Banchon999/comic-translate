@@ -999,7 +999,7 @@ class ProjectController:
                         print(f"  Skipping this page in export")
                         continue
                     
-                    renderer = ImageSaveRenderer(rgb_img)
+                    renderer = ImageSaveRenderer(rgb_img, self.main.document_layers)
                     viewer_state = all_pages_current_state[file_path]['viewer_state']
 
                     renderer.apply_patches(self.main.image_patches.get(file_path, []))
@@ -1043,7 +1043,9 @@ class ProjectController:
                 renderer.add_spanning_text_items(viewer_state, page_idx, temp_main_page_context)
 
             patch_list = copy.deepcopy(self.main.image_patches.get(file_path, []))
-            composite = self._render_psd_preview(rgb_img, viewer_state, patch_list)
+            composite = self._render_psd_preview(
+                rgb_img, viewer_state, patch_list, self.main.document_layers
+            )
             text_items = viewer_state.get('text_items_state', [])
             logger.info(
                 "PSD page %d (%s): patches=%d, text_items=%d, viewer_state_keys=%s",
@@ -1059,20 +1061,21 @@ class ProjectController:
                     viewer_state=viewer_state,
                     patches=patch_list,
                     composite_image=composite,
+                    document_layers=self.main.document_layers.to_dict(),
                 )
             )
 
         return pages
 
     @staticmethod
-    def _render_psd_preview(rgb_img, viewer_state: dict, patches: list[dict]):
+    def _render_psd_preview(rgb_img, viewer_state: dict, patches: list[dict], document_layers=None):
         """The page as it looks on the canvas, for the PSD's flattened preview.
 
         Everything except Photoshop reads that preview rather than compositing
         the layers, so it has to carry the translated text too.
         """
         try:
-            renderer = ImageSaveRenderer(rgb_img)
+            renderer = ImageSaveRenderer(rgb_img, document_layers)
             renderer.apply_patches(patches)
             renderer.add_state_to_image(viewer_state)
             return renderer.render_to_image()

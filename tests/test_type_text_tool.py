@@ -108,9 +108,19 @@ def test_placing_types_an_editable_box_that_survives_typing_and_undo(window):
     # text, or the add command can no longer find the box to undo it.
     assert abs(width_empty - width_typed) < 1.0
 
-    window._test_stack.undo()
+    # Typing becomes its own undo step once the 400 ms text-edit debounce
+    # fires. Whether it already has depends on how long processEvents() above
+    # took (it also runs deferred deletions of windows earlier tests closed),
+    # so commit it explicitly: the stack is then always [add, edit], and
+    # undoing both must remove the box — the add command still finding it
+    # after the text changed is what this test is about.
+    window.text_ctrl._commit_pending_text_command()
+    stack = window._test_stack
+    while stack.canUndo():
+        stack.undo()
     assert len(viewer.text_items) == 0
-    window._test_stack.redo()
+    while stack.canRedo():
+        stack.redo()
     assert len(viewer.text_items) == 1
 
 
