@@ -167,14 +167,20 @@ while (node && node.typename) {
 d.saveToOE("png");
 """
 
+# Put every layer back to the visibility the file arrived with, given as
+# [[index path], visible] pairs read from the tree before anything was soloed.
+# Making everything visible instead is wrong the moment a PSD carries a hidden
+# layer on purpose: the composite exported afterwards then draws it, and the
+# check blames the export for what the harness did.
 RESTORE = """
-function each(layers, fn) {
-    for (var i = 0; i < layers.length; i++) {
-        fn(layers[i]);
-        if (layers[i].typename == "LayerSet") each(layers[i].layers, fn);
-    }
+var d = app.activeDocument;
+var saved = %s;
+for (var i = 0; i < saved.length; i++) {
+    var target = d;
+    var path = saved[i][0];
+    for (var j = 0; j < path.length; j++) target = target.layers[path[j]];
+    try { target.visible = saved[i][1]; } catch (e) {}
 }
-each(app.activeDocument.layers, function (l) { try { l.visible = true; } catch (e) {} });
 app.echoToOE("restored");
 """
 
@@ -354,6 +360,7 @@ def check_file(
     # nothing for them — and the check that would have caught it was the one
     # the empty box excluded. It reported PASS on a page with invisible text.
     leaves = [(p, n) for p, n in nodes if _is_leaf(n)]
+    restore = json.dumps([[list(p), n.get("visible") is not False] for p, n in nodes])
     report.add(bool(leaves), "there is at least one layer to render", f"{len(leaves)} found")
 
     for path_indices, node in leaves:
@@ -368,7 +375,7 @@ def check_file(
             )
             continue
         png = pp.export_png(SOLO_AND_EXPORT % json.dumps(list(path_indices)))
-        pp.script(RESTORE)
+        pp.script(RESTORE % restore)
         stats = _png_stats(png)
         name = "".join(c if c.isalnum() else "_" for c in node["name"])
         (out_dir / f"{path.stem}.layer-{name}.png").write_bytes(png)
