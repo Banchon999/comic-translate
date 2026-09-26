@@ -425,7 +425,10 @@ class LazyImageLoader:
         
         # Calculate total height of combined image
         total_h = sum(d['image'].shape[0] for d in visible_pages_data)
-        width = visible_pages_data[0]['image'].shape[1]
+        # Pages need not share a width. Each crop is copied left-aligned, so a
+        # combined-image x stays a page-local x (what callers read it back as),
+        # and a narrower page is padded rather than broadcast into the row.
+        width = max(d['image'].shape[1] for d in visible_pages_data)
         channels = visible_pages_data[0]['image'].shape[2] if len(visible_pages_data[0]['image'].shape) > 2 else 1
         dtype = visible_pages_data[0]['image'].dtype
         
@@ -440,7 +443,7 @@ class LazyImageLoader:
             h_img = img.shape[0]
             
             # Copy image data to combined image
-            combined_img[current_y:current_y + h_img] = img
+            combined_img[current_y:current_y + h_img, :img.shape[1]] = img
             
             # Create mapping information
             mappings.append({
