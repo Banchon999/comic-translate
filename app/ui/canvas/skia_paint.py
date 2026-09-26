@@ -4,7 +4,7 @@ The adapter between the Qt item and `core.skia_render`, which knows nothing
 about Qt. It reads the item's current visual state into a plain
 `TextRenderSpec`, renders an RGBA array, and blits it through the painter the
 scene handed us — so the item stays an ordinary `QGraphicsTextItem` as far as
-selection, handles, editing, undo and the layer panels are concerned. Only the
+selection, handles, editing, undo and the Layers panel are concerned. Only the
 pixels change.
 
 The QImage wraps the numpy buffer rather than copying it, so the array has to

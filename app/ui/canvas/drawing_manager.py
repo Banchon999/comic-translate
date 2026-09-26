@@ -12,6 +12,8 @@ from app.ui.commands.brush import BrushStrokeCommand, ClearBrushStrokesCommand, 
 from app.ui.commands.base import PathCommandBase as pcb
 from app.ui.commands.base import OBJECT_ID_KEY
 from modules.utils.common_utils import new_object_id
+from app.ui.canvas.scene_registry import put_layer, set_item_layer
+from app.ui.canvas.layer_apply import is_locked
 import imkit as imk
 from modules.utils.image_utils import build_block_mask_data, clip_mask_to_bubble, clip_mask_components_to_bubble
 from modules.utils.text_segmentation import peek_page_mask
@@ -63,7 +65,7 @@ class DrawingManager:
         """Select the region under the cursor and add it as a stroke.
 
         The result is an ordinary filled path item — the same thing the brush
-        produces — so mask generation, undo, the layer panels and saving all
+        produces — so mask generation, undo, the Layers panel and saving all
         treat it exactly like a hand-drawn stroke and needed no changes.
         """
         image = self.viewer.get_image_array(include_patches=True)
@@ -324,8 +326,12 @@ class DrawingManager:
         erase_path = QPainterPath()
         erase_path.addEllipse(pos, self.eraser_size, self.eraser_size)
 
+        doc = self.viewer.layer_document()
         for item in self._scene.items(erase_path):
             if isinstance(item, QGraphicsPathItem) and item != self.viewer.photo:
+                # A hidden or locked stroke is out of reach, as in any editor.
+                if not item.isVisible() or is_locked(item, doc):
+                    continue
                 self._erase_item_path(item, erase_path, pos)
 
     def _erase_item_path(self, item, erase_path, pos):
@@ -416,13 +422,13 @@ class DrawingManager:
                 if not object_id:
                     object_id = new_object_id()
                     item.setData(OBJECT_ID_KEY, object_id)
-                strokes.append({
+                strokes.append(put_layer({
                     'object_id': object_id,
                     'path': item.path(),
                     'pen': item.pen().color().name(QColor.HexArgb),
                     'brush': item.brush().color().name(QColor.HexArgb),
                     'width': item.pen().width()
-                })
+                }, item))
         return strokes
 
     def load_brush_strokes(self, strokes: List[Dict]):
@@ -442,6 +448,7 @@ class DrawingManager:
             # Preserve the stroke's identity across the page-reload recreate
             # cycle; mint one for strokes saved before identity existed.
             path_item.setData(OBJECT_ID_KEY, stroke.get('object_id') or new_object_id())
+            set_item_layer(path_item, stroke.get('layer'))
                 
     def clear_brush_strokes(self, page_switch=False):
         if page_switch:      

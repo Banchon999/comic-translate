@@ -6,6 +6,7 @@ from PySide6.QtCore import QTimer, QRectF, Qt
 from PySide6.QtGui import QPixmap, QColor, QPen, QBrush, QImage, QPainter
 import imkit as imk
 from app.path_materialization import ensure_path_materialized
+from app.ui.canvas.scene_registry import is_top_level
 
 
 class LazyImageLoader:
@@ -247,8 +248,11 @@ class LazyImageLoader:
                     item.setPos(current_pos.x(), current_pos.y() + height_diff)
             # Also handle brush strokes and other QGraphicsItems
             elif hasattr(item, 'pos') and hasattr(item, 'setPos'):
-                # Check if it's not a child item (those move with their parent)
-                if item.parentItem() is None:
+                # Check if it's not a child item (those move with their parent).
+                # topLevelItem(), never parentItem(): on a parentless item the
+                # latter hands ownership to the Python wrapper, and the item
+                # (a stroke, a patch) is deleted when the wrapper is collected.
+                if is_top_level(item):
                     item_y = item.pos().y()
                     if item_y >= threshold_y - 10:
                         current_pos = item.pos()

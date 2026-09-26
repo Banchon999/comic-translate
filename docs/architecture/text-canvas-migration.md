@@ -177,7 +177,7 @@ implementations have already exercised. Ship behind a flag; the Qt app stays
 shippable throughout.
 
 Budget honestly for what is *not* the canvas: 11 settings pages (3,811 lines),
-the layer and document-layer panels, webtoon lazy loading, project save/load,
+the Layers panel, webtoon lazy loading, project save/load,
 PSD import/export, and 10 localisation catalogues whose `@fallback` machinery
 (`scripts/build_translations.py`) is Qt-specific and does not carry over.
 
@@ -291,7 +291,7 @@ migration is behavioural, not legal, and is covered under Phase 4.
   the diagnosis.
 - **The bottleneck turns out to be interaction latency, not text fidelity.**
   Profile first: `QGraphicsScene` with hundreds of items, the debounced
-  `scene.changed` rebuild in `layer_panel.py`, and webtoon lazy loading are all
+  layers-panel rebuild (`app/ui/layers_panel.py`), and webtoon lazy loading are all
   plausible culprits that no amount of Skia touches.
 - **The real goal is a mobile or web client rather than a better canvas.**
   Then the canvas framing is a proxy, Option 1's process split becomes the

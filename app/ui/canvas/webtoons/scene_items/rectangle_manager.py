@@ -8,6 +8,7 @@ from typing import List, Dict
 from app.ui.canvas.rectangle import MoveableRectItem
 from PySide6.QtCore import QPointF, QRectF
 from modules.utils.common_utils import new_object_id
+from app.ui.canvas.scene_registry import put_layer, set_item_layer
 
 
 class RectangleManager:
@@ -48,6 +49,7 @@ class RectangleManager:
                 origin=origin,
                 object_id=rect_data.get('object_id')
             )
+            set_item_layer(rect_item, rect_data.get('layer'))
             
             # Connect signals - the viewer's add_rectangle should handle this
             self.viewer.connect_rect_item.emit(rect_item)
@@ -75,14 +77,14 @@ class RectangleManager:
                     scene_pos = rect_item.pos()
                     page_local_pos = self.coordinate_converter.scene_to_page_local_position(scene_pos, page_idx)
                     
-                    rect_data = {
+                    rect_data = put_layer({
                         'object_id': getattr(rect_item, 'object_id', '') or new_object_id(),
                         'rect': (page_local_pos.x(), page_local_pos.y(),
                                 rect_item.boundingRect().width(), rect_item.boundingRect().height()),
                         'rotation': rect_item.rotation(),
                         'transform_origin': (rect_item.transformOriginPoint().x(),
                                         rect_item.transformOriginPoint().y())
-                    }
+                    }, rect_item)
                     rectangles_data.append(rect_data)
                     rectangles_to_remove.append(rect_item)
         
@@ -117,13 +119,13 @@ class RectangleManager:
                     if 0 <= page_idx < len(self.image_loader.image_file_paths):
                         clipped_rect = self.coordinate_converter.clip_rectangle_to_page(rect_item, page_idx)
                         if clipped_rect and clipped_rect[2] > 0 and clipped_rect[3] > 0:
-                            rect_data = {
+                            rect_data = put_layer({
                                 'object_id': getattr(rect_item, 'object_id', '') or new_object_id(),
                                 'rect': clipped_rect,
                                 'rotation': rect_item.rotation(),
                                 'transform_origin': (rect_item.transformOriginPoint().x(),
                                                 rect_item.transformOriginPoint().y())
-                            }
+                            }, rect_item)
                             scene_items_by_page[page_idx]['rectangles'].append(rect_data)
     
     def clear(self):
@@ -186,6 +188,8 @@ class RectangleManager:
                             'rotation': rect_data.get('rotation', 0.0),
                             'transform_origin': rect_data.get('transform_origin', (0, 0))
                         }
+                        if rect_data.get('layer'):
+                            clipped_rect_data['layer'] = dict(rect_data['layer'])
                         scene_items_by_page[page_idx]['rectangles'].append(clipped_rect_data)
 
     def is_duplicate_rectangle(self, new_rect, existing_rects, margin=5):

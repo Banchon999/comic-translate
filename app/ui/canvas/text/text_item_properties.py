@@ -4,6 +4,8 @@ from PySide6.QtGui import QColor
 from PySide6.QtCore import Qt
 from app.ui.canvas.text_item import OutlineType
 from modules.utils.common_utils import new_object_id
+from core.layers import layer_dict
+from app.ui.canvas.scene_registry import get_item_layer
 
 @dataclass
 class TextItemProperties:
@@ -48,6 +50,9 @@ class TextItemProperties:
     # Advanced properties
     selection_outlines: list = field(default_factory=list)
 
+    # Own layer props (core.layers.LayerProps, minimal dict form); None = default.
+    layer: Optional[dict] = None
+
     @classmethod
     def from_dict(cls, data: dict) -> 'TextItemProperties':
         """Create TextItemProperties from dictionary state"""
@@ -56,6 +61,7 @@ class TextItemProperties:
         # Stable identity. Empty for text saved before this existed; the viewer
         # mints one on load and it is persisted on the next save.
         props.object_id = data.get('object_id', '')
+        props.layer = layer_dict(data.get('layer'))
 
         # Basic text properties
         props.text = data.get('text', '')
@@ -149,6 +155,7 @@ class TextItemProperties:
         # Carry the item's identity; mint one if this item predates identity
         # (e.g. built before object_id was assigned) so a save never loses it.
         props.object_id = getattr(item, 'object_id', '') or new_object_id()
+        props.layer = get_item_layer(item)
 
         # Basic text properties
         props.text = item.toHtml()
@@ -199,7 +206,7 @@ class TextItemProperties:
     
     def to_dict(self) -> dict:
         """Convert TextItemProperties to dictionary"""
-        return {
+        out = {
             'object_id': self.object_id,
             'text': self.text,
             'font_family': self.font_family,
@@ -232,6 +239,10 @@ class TextItemProperties:
             'curvature': self.curvature,
             'selection_outlines': self.selection_outlines,
         }
+        # Only when non-default, so untouched text serialises as before.
+        if self.layer:
+            out['layer'] = self.layer
+        return out
 
 
 def _has_full_document_outline(selection_outlines: list) -> bool:

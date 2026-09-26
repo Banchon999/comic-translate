@@ -56,7 +56,9 @@ class PatchManager:
                 prop = {
                     'bbox': patch_data['bbox'],
                     'png_path': patch_data['png_path'],
-                    'hash': patch_data['hash']
+                    'hash': patch_data['hash'],
+                    'object_id': patch_data.get('object_id'),
+                    'layer': patch_data.get('layer'),
                 }
                 
                 # Always convert from bbox even if scene_pos is available

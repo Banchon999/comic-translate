@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import imkit as imk
+from core.layers import DocumentLayers
 import numpy as np
 from typing import TYPE_CHECKING, List
 from PySide6 import QtCore, QtWidgets, QtGui
@@ -317,6 +318,7 @@ class ImageStateController:
         self.main.undo_stacks.clear()
         self.main.image_patches.clear()
         self.main.in_memory_patches.clear()
+        self.main.document_layers = DocumentLayers()
         self.main.project_file = None
         self.main.page_list.blockSignals(True)
         self.main.page_list.clear()
@@ -1042,7 +1044,9 @@ class ImageStateController:
                 prop = {
                     'bbox': saved['bbox'],
                     'image': match['image'],
-                    'hash': saved['hash']
+                    'hash': saved['hash'],
+                    'object_id': saved.get('object_id'),
+                    'layer': saved.get('layer'),
                 }
             else:
                 # load into memory
@@ -1051,7 +1055,9 @@ class ImageStateController:
                 prop = {
                     'bbox': saved['bbox'],
                     'image': rgb_img,
-                    'hash': saved['hash']
+                    'hash': saved['hash'],
+                    'object_id': saved.get('object_id'),
+                    'layer': saved.get('layer'),
                 }
                 self.main.in_memory_patches[file_path].append(prop)
             
@@ -1179,6 +1185,8 @@ class ImageStateController:
                 needs_default_fit = True
 
             self.main.text_ctrl.clear_text_edits()
+            # The page's items take their layer state (hidden, locked...).
+            viewer.refresh_layers()
         finally:
             viewer.setUpdatesEnabled(True)
             viewer.viewport().update()

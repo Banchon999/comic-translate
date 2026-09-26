@@ -15,6 +15,7 @@ from PySide6 import QtCore, QtGui
 
 from app.ui.canvas.text.text_item_properties import TextItemProperties
 from app.path_materialization import ensure_path_materialized
+from core.layers import DocumentLayers, LayerGroup, LayerProps
 
 try:
 	import photoshopapi as psapi
@@ -69,6 +70,8 @@ class PsdPageData:
 	# The page as it looks on the canvas — base art, patches and rendered text.
 	# Written into the PSD's flattened preview; see _write_flattened_preview.
 	composite_image: np.ndarray | None = None
+	# Document-wide layer group props (core.layers.DocumentLayers.to_dict()).
+	document_layers: dict[str, Any] | None = None
 
 
 @dataclass
@@ -142,6 +145,37 @@ def _psd_path_for_size(out_path: str, width: int, height: int) -> str:
 	return out_path
 
 
+def _apply_group_props(layer, props) -> None:
+	"""A group's document-wide props on its PSD group (or the raw image layer).
+
+	Hidden is written as a hidden layer, never omitted: the layers panel's
+	choice survives into Photoshop/Photopea, where the user can show it again.
+	"""
+	layer.is_visible = bool(props.visible)
+	layer.opacity = float(props.opacity)
+
+
+def _apply_object_props(layer, layer_state) -> None:
+	"""An object's own layer props on its PSD layer (hidden, opacity)."""
+	props = LayerProps.from_dict(layer_state)
+	if not props.visible:
+		layer.is_visible = False
+	if props.opacity != 1.0:
+		layer.opacity = float(props.opacity)
+	# The name is set when the layer is built (read-only afterwards).
+
+
+def _in_stack_order(states: list) -> list[tuple[int, Any]]:
+	"""(index, state) in the order PhotoshopAPI wants them added: topmost
+	first. An object's layer order (``z``) wins; equal orders keep the saved
+	order, which is how pages without any reordering were always written."""
+	numbered = list(enumerate(states, start=1))
+	return sorted(
+		numbered,
+		key=lambda pair: -LayerProps.from_dict((pair[1] or {}).get("layer")).z,
+	)
+
+
 def _write_page_psd(page: PsdPageData, out_path: str) -> str:
 	_require_psapi()
 	image = _ensure_rgb_uint8(page.rgb_image)
@@ -153,31 +187,37 @@ def _write_page_psd(page: PsdPageData, out_path: str) -> str:
 	# PhotoshopAPI add_layer() puts first-added at top of the stack.
 	# Desired visual order (top→bottom): Editable Text → Inpaint Patches → Raw Image
 
+	layers = DocumentLayers.from_dict(page.document_layers)
+
 	# Editable Text group (topmost)
 	text_items = page.viewer_state.get("text_items_state", []) or []
 	text_group = psapi.GroupLayer_8bit("Editable Text")
+	_apply_group_props(text_group, layers.group(LayerGroup.TEXT))
 	doc.add_layer(text_group)
-	for idx, text_state in enumerate(text_items, start=1):
+	for idx, text_state in _in_stack_order(text_items):
 		try:
 			text_layer = _build_text_layer(text_state, idx)
 		except Exception:
 			logger.exception("Failed to build text layer %d", idx)
 			text_layer = None
 		if text_layer is not None:
+			_apply_object_props(text_layer, text_state.get("layer"))
 			text_group.add_layer(doc, text_layer)
 		else:
 			logger.warning("Text layer %d returned None", idx)
 
 	# Inpaint Patches group (middle)
 	patch_group = psapi.GroupLayer_8bit("Inpaint Patches")
+	_apply_group_props(patch_group, layers.group(LayerGroup.PATCHES))
 	doc.add_layer(patch_group)
-	for idx, patch in enumerate(page.patches, start=1):
+	for idx, patch in _in_stack_order(page.patches):
 		try:
 			patch_layer = _build_patch_layer(patch, idx)
 		except Exception:
 			logger.exception("Failed to build patch layer %d", idx)
 			patch_layer = None
 		if patch_layer is not None:
+			_apply_object_props(patch_layer, patch.get("layer"))
 			patch_group.add_layer(doc, patch_layer)
 		else:
 			logger.warning("Patch %d returned None", idx)
@@ -191,6 +231,7 @@ def _write_page_psd(page: PsdPageData, out_path: str) -> str:
 		pos_x=width / 2,
 		pos_y=height / 2,
 	)
+	_apply_group_props(base_layer, layers.group(LayerGroup.RAW))
 	doc.add_layer(base_layer)
 
 	_force_rle_compression(doc)
@@ -422,7 +463,7 @@ def _build_patch_layer(patch: dict[str, Any], index: int) -> Any | None:
 	# PhotoshopAPI positions layers by center, so offset by half dimensions
 	return psapi.ImageLayer_8bit(
 		_to_psapi_image_data(patch_img),
-		f"Patch {index}",
+		(LayerProps.from_dict(patch.get("layer")).name or f"Patch {index}")[:255],
 		width=pw,
 		height=ph,
 		pos_x=x + pw / 2,
@@ -458,7 +499,9 @@ def _build_text_layer(state: dict[str, Any], index: int) -> Any | None:
 
 	# TextLayer position_x/position_y use top-left coordinates (no center offset)
 	layer = psapi.TextLayer_8bit(
-		layer_name=f"Text {index}",
+		# A name given in the layers panel wins; PhotoshopAPI's name is read-only
+		# after construction, so it has to be decided here.
+		layer_name=(LayerProps.from_dict(state.get("layer")).name or f"Text {index}")[:255],
 		text=plain_text,
 		font=base_font,
 		font_size=float(props.font_size),

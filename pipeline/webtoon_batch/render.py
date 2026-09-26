@@ -9,6 +9,7 @@ import imkit as imk
 
 from core.path_materialization import ensure_path_materialized
 from core.text_style import build_text_item_state
+from core.layers import merge_preserving_locked
 from modules.rendering.render import get_best_render_area, is_vertical_block, pyside_word_wrap, font_family_for_block
 from modules.utils.image_utils import get_smart_text_color
 from modules.utils.language_utils import get_language_code, is_no_space_lang
@@ -55,7 +56,11 @@ class RenderMixin:
     ) -> None:
         page_state = self.main_page.image_states.ensure_page(image_path)
         viewer_state = page_state.setdefault("viewer_state", {})
-        viewer_state["text_items_state"] = []
+        # Text the user locked survives a re-run; the rest is rebuilt below.
+        viewer_state["text_items_state"] = merge_preserving_locked(
+            viewer_state.get("text_items_state"), []
+        )
+        locked_ids = {s.get("object_id") for s in viewer_state["text_items_state"] if s.get("object_id")}
         viewer_state["push_to_stack"] = True
 
         if not blocks:
@@ -103,6 +108,8 @@ class RenderMixin:
             translation = block.translation
             if not is_renderable_translation(translation):
                 continue
+            if getattr(block, 'object_id', None) in locked_ids:
+                continue  # its locked text item is kept as the user left it
 
             vertical = is_vertical_block(block, target_lang_code)
             block_font = font_family_for_block(render_settings, block) or font
@@ -210,7 +217,7 @@ class RenderMixin:
         if export_settings["export_inpainted_image"]:
             from app.ui.canvas.save_renderer import ImageSaveRenderer
 
-            renderer = ImageSaveRenderer(image)
+            renderer = ImageSaveRenderer(image, getattr(self.main_page, 'document_layers', None))
             patches = self.final_patches_for_save.get(image_path, [])
             renderer.apply_patches(patches)
             path = os.path.join(

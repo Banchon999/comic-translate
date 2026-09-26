@@ -3,6 +3,7 @@ import hashlib
 import uuid
 from PySide6.QtGui import QUndoCommand
 from .base import PatchCommandBase
+from modules.utils.common_utils import new_object_id
 import imkit as imk
 
 class PatchInsertCommand(QUndoCommand, PatchCommandBase):
@@ -42,8 +43,14 @@ class PatchInsertCommand(QUndoCommand, PatchCommandBase):
             prop = {
                 'bbox': bbox,
                 'png_path': png_path,
-                'hash': img_hash
+                'hash': img_hash,
+                # Minted once here and stored with the patch, so the same
+                # patch keeps one logical identity across undo/redo, reload
+                # and webtoon lazy loading (hash stays the content/dedup key).
+                'object_id': patch.get('object_id') or new_object_id(),
             }
+            if patch.get('layer'):
+                prop['layer'] = dict(patch['layer'])
             
             # Add webtoon mode information if present
             if 'scene_pos' in patch:
@@ -68,8 +75,11 @@ class PatchInsertCommand(QUndoCommand, PatchCommandBase):
             patch_entry = {
                 'bbox': prop['bbox'],
                 'png_path': prop['png_path'],
-                'hash': prop['hash']
+                'hash': prop['hash'],
+                'object_id': prop['object_id'],
             }
+            if prop.get('layer'):
+                patch_entry['layer'] = prop['layer']
             # Save scene position and page index for webtoon mode
             if 'scene_pos' in prop:
                 patch_entry['scene_pos'] = prop['scene_pos']
@@ -83,7 +93,8 @@ class PatchInsertCommand(QUndoCommand, PatchCommandBase):
                 mem_list.append({
                     'bbox': prop['bbox'],
                     'image': img_data,
-                    'hash': prop['hash']
+                    'hash': prop['hash'],
+                    'object_id': prop['object_id'],
                 })
 
     def _unregister_patches(self):

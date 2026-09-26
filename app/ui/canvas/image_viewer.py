@@ -9,6 +9,9 @@ from .text_item import TextBlockItem
 from .text.text_item_properties import TextItemProperties
 from .rectangle import MoveableRectItem
 from modules.utils.common_utils import new_object_id
+from app.ui.canvas.scene_registry import put_layer, set_item_layer, iter_items
+from app.ui.canvas.layer_apply import apply_layer_state
+from core.layers import DocumentLayers
 from .rotate_cursor import RotateHandleCursors
 from .drawing_manager import DrawingManager
 from .webtoons.webtoon_manager import LazyWebtoonManager
@@ -18,6 +21,8 @@ from .event_handler import EventHandler
 
 class ImageViewer(QGraphicsView):
     # Signals
+    # Emitted after layer state is re-applied (page loads, edits, undo).
+    layers_refreshed = Signal()
     rectangle_created = Signal(MoveableRectItem)
     rectangle_selected = Signal(QRectF)
     rectangle_deleted = Signal(QRectF)
@@ -73,6 +78,12 @@ class ImageViewer(QGraphicsView):
         # Page detection state (used by webtoon and event handlers)
         self._programmatic_scroll = False
         
+        # Layers: the owner supplies the live document-wide group props (the
+        # controller replaces its DocumentLayers on project load, so this is a
+        # getter, not a reference). Standalone viewers fall back to defaults.
+        self.document_layers_getter = None
+        self._default_layers = DocumentLayers()
+
         # Item lists
         self.rectangles: list[MoveableRectItem] = []
         self.text_items: list[TextBlockItem] = []
@@ -479,6 +490,7 @@ class ImageViewer(QGraphicsView):
         # Stable identity: keep the properties' id (load, undo/redo, page
         # reload, webtoon merge), otherwise mint one for a brand-new item.
         item.object_id = getattr(properties, 'object_id', '') or new_object_id()
+        set_item_layer(item, getattr(properties, 'layer', None))
 
         # Update the item
         item.update()
@@ -560,6 +572,18 @@ class ImageViewer(QGraphicsView):
         if self.webtoon_mode:
             return self.webtoon_manager.get_visible_area_image(paint_all, include_patches)
         
+    # Layers
+    def layer_document(self) -> DocumentLayers:
+        getter = self.document_layers_getter
+        return getter() if getter is not None else self._default_layers
+
+    def refresh_layers(self) -> None:
+        """Re-apply layer visibility, opacity, lock and order to every page item."""
+        doc = self.layer_document()
+        for item in list(iter_items(self._scene, viewer=self)):
+            apply_layer_state(item, doc, self)
+        self.layers_refreshed.emit()
+
     # State Management
     def save_state(self) -> Dict:
         transform = self.transform()
@@ -568,12 +592,12 @@ class ImageViewer(QGraphicsView):
         rectangles_state = []
         for item in self._scene.items():
             if isinstance(item, MoveableRectItem):
-                rectangles_state.append({
+                rectangles_state.append(put_layer({
                     'object_id': getattr(item, 'object_id', '') or new_object_id(),
                     'rect': (item.pos().x(), item.pos().y(), item.boundingRect().width(), item.boundingRect().height()),
                     'rotation': item.rotation(),
                     'transform_origin': (item.transformOriginPoint().x(), item.transformOriginPoint().y())
-                })
+                }, item))
             
         text_items_state = []
         for item in self._scene.items():
@@ -609,8 +633,9 @@ class ImageViewer(QGraphicsView):
         for data in state['rectangles']:
             x, y, w, h = data['rect']
             origin = QPointF(*data.get('transform_origin', (0,0))) if 'transform_origin' in data else None
-            self.add_rectangle(QRectF(0,0,w,h), QPointF(x,y), data.get('rotation', 0), origin,
-                               object_id=data.get('object_id'))
+            rect_item = self.add_rectangle(QRectF(0,0,w,h), QPointF(x,y), data.get('rotation', 0), origin,
+                                           object_id=data.get('object_id'))
+            set_item_layer(rect_item, data.get('layer'))
 
         for data in state.get('text_items_state', []):
             # Use the new add_text_item function for consistency

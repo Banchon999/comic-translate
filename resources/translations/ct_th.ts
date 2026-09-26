@@ -4,7 +4,7 @@
 <context>
     <name></name>
     <message>
-        <location filename="../../modules/utils/pipeline_config.py" line="78"/>
+        <location filename="../../app/validation.py" line="59"/>
         <source>Custom</source>
         <translation>กำหนดเอง</translation>
     </message>
@@ -30,7 +30,7 @@
 <context>
     <name>AccountPage</name>
     <message>
-        <location filename="../../app/ui/messages.py" line="89"/>
+        <location filename="../../app/ui/messages.py" line="90"/>
         <location filename="../../app/ui/settings/account_page.py" line="92"/>
         <source>Buy Credits</source>
         <translation>ซื้อเครดิต</translation>
@@ -85,49 +85,64 @@
 <context>
     <name>ComicTranslate</name>
     <message>
-        <location filename="../../controller.py" line="332"/>
+        <location filename="../../controller.py" line="339"/>
         <source>Open Folder</source>
         <translation>เปิดโฟลเดอร์</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="333"/>
+        <location filename="../../controller.py" line="340"/>
         <source>No supported images were found in the selected folder.</source>
         <translation>ไม่พบรูปภาพที่รองรับในโฟลเดอร์ที่เลือก</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="749"/>
-        <location filename="../../controller.py" line="759"/>
+        <location filename="../../controller.py" line="611"/>
+        <source>Remove this font from favourites</source>
+        <translation>นำฟอนต์นี้ออกจากรายการโปรด</translation>
+    </message>
+    <message>
+        <location filename="../../controller.py" line="612"/>
+        <source>Add this font to favourites</source>
+        <translation>เพิ่มฟอนต์นี้ในรายการโปรด</translation>
+    </message>
+    <message>
+        <location filename="../../controller.py" line="626"/>
+        <source>No favourite fonts yet</source>
+        <translation>ยังไม่มีฟอนต์โปรด</translation>
+    </message>
+    <message>
+        <location filename="../../controller.py" line="791"/>
+        <location filename="../../controller.py" line="801"/>
         <source>Error</source>
         <translation>ข้อผิดพลาด</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="995"/>
-        <location filename="../../controller.py" line="1006"/>
+        <location filename="../../controller.py" line="1037"/>
+        <location filename="../../controller.py" line="1048"/>
         <source>Downloading model file: {filename}</source>
         <translation>กำลังดาวน์โหลดไฟล์โมเดล: {filename}</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="1037"/>
+        <location filename="../../controller.py" line="1079"/>
         <source>Unsaved Changes</source>
         <translation>มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="1038"/>
+        <location filename="../../controller.py" line="1080"/>
         <source>Save changes to this file?</source>
         <translation>บันทึกการเปลี่ยนแปลงของไฟล์นี้หรือไม่?</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="1039"/>
+        <location filename="../../controller.py" line="1081"/>
         <source>Save</source>
         <translation>บันทึก</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="1040"/>
+        <location filename="../../controller.py" line="1082"/>
         <source>Don&apos;t Save</source>
         <translation>ไม่บันทึก</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="1041"/>
+        <location filename="../../controller.py" line="1083"/>
         <source>Cancel</source>
         <translation>ยกเลิก</translation>
     </message>
@@ -355,71 +370,6 @@ Leave empty to use the same model as translation.</source>
         <location filename="../../app/ui/title_bar.py" line="699"/>
         <source>Auto-Save Project</source>
         <translation>บันทึกโปรเจกต์อัตโนมัติ</translation>
-    </message>
-</context>
-<context>
-    <name>DocumentLayersPanel</name>
-    <message>
-        <location filename="../../app/ui/canvas/document_layers.py" line="80"/>
-        <source>Text</source>
-        <translation>ข้อความ</translation>
-    </message>
-    <message>
-        <location filename="../../app/ui/canvas/document_layers.py" line="81"/>
-        <source>The translated text drawn on top of the page.</source>
-        <translation>ข้อความที่แปลแล้ว วาดทับอยู่บนหน้า</translation>
-    </message>
-    <message>
-        <location filename="../../app/ui/canvas/document_layers.py" line="82"/>
-        <source>Cleaner</source>
-        <translation>ลบข้อความเดิม</translation>
-    </message>
-    <message>
-        <location filename="../../app/ui/canvas/document_layers.py" line="83"/>
-        <source>The patches that cover the original lettering.
-Fade this to check what was painted over.</source>
-        <translation>แผ่นปะที่ทับข้อความเดิมเอาไว้
-ลดความทึบลงเพื่อดูว่าทับอะไรไปบ้าง</translation>
-    </message>
-    <message>
-        <location filename="../../app/ui/canvas/document_layers.py" line="85"/>
-        <source>Original image</source>
-        <translation>ภาพต้นฉบับ</translation>
-    </message>
-    <message>
-        <location filename="../../app/ui/canvas/document_layers.py" line="86"/>
-        <source>The untouched artwork underneath everything.</source>
-        <translation>ภาพต้นฉบับที่ยังไม่ถูกแก้ อยู่ล่างสุด</translation>
-    </message>
-    <message>
-        <location filename="../../app/ui/canvas/document_layers.py" line="89"/>
-        <source>Detection boxes</source>
-        <translation>กรอบที่ตรวจจับได้</translation>
-    </message>
-    <message>
-        <location filename="../../app/ui/canvas/document_layers.py" line="90"/>
-        <source>The boxes the detector found. Not part of the exported page.</source>
-        <translation>กรอบที่ตัวตรวจจับหาเจอ ไม่ถูกส่งออกไปกับหน้างาน</translation>
-    </message>
-    <message>
-        <location filename="../../app/ui/canvas/document_layers.py" line="91"/>
-        <source>Brush strokes</source>
-        <translation>รอยแปรง</translation>
-    </message>
-    <message>
-        <location filename="../../app/ui/canvas/document_layers.py" line="92"/>
-        <source>Your segmentation strokes. Not part of the exported page.</source>
-        <translation>รอยแปรงที่คุณวาดไว้สำหรับแยกพื้นที่ ไม่ถูกส่งออกไปกับหน้างาน</translation>
-    </message>
-    <message>
-        <location filename="../../app/ui/canvas/document_layers.py" line="95"/>
-        <source>Page</source>
-        <translation>หน้า</translation>
-    </message>
-    <message>
-        <location filename="../../app/ui/canvas/document_layers.py" line="101"/>
-        <source>While editing</source>
-        <translation>ระหว่างแก้ไข</translation>
     </message>
 </context>
 <context>
@@ -1037,49 +987,117 @@ most often a Korean name stored twice in different Unicode forms.</source>
     </message>
 </context>
 <context>
-    <name>LayerPanel</name>
+    <name>LayersPanel</name>
     <message>
-        <location filename="../../app/ui/canvas/layer_panel.py" line="121"/>
-        <source>Layer</source>
-        <translation>เลเยอร์</translation>
-    </message>
-    <message>
-        <location filename="../../app/ui/canvas/layer_panel.py" line="121"/>
-        <source>Show</source>
-        <translation>แสดง</translation>
-    </message>
-    <message>
-        <location filename="../../app/ui/canvas/layer_panel.py" line="121"/>
-        <source>Lock</source>
-        <translation>ล็อก</translation>
-    </message>
-    <message>
-        <location filename="../../app/ui/canvas/layer_panel.py" line="134"/>
+        <location filename="../../app/ui/layers_panel.py" line="62"/>
+        <location filename="../../app/ui/layers_panel.py" line="218"/>
         <source>Opacity</source>
         <translation>ความทึบ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/canvas/layer_panel.py" line="268"/>
-        <source>Show/Hide Layer</source>
-        <translation>แสดง/ซ่อนเลเยอร์</translation>
+        <location filename="../../app/ui/layers_panel.py" line="72"/>
+        <source>Move the selected layer up within its group</source>
+        <translation>เลื่อนเลเยอร์ที่เลือกขึ้นภายในกลุ่มเดียวกัน</translation>
     </message>
     <message>
-        <location filename="../../app/ui/canvas/layer_panel.py" line="278"/>
-        <source>Lock Layer</source>
-        <translation>ล็อกเลเยอร์</translation>
+        <location filename="../../app/ui/layers_panel.py" line="75"/>
+        <source>Move the selected layer down within its group</source>
+        <translation>เลื่อนเลเยอร์ที่เลือกลงภายในกลุ่มเดียวกัน</translation>
     </message>
     <message>
-        <location filename="../../app/ui/canvas/layer_panel.py" line="327"/>
-        <source>Layer Opacity</source>
-        <translation>ความทึบของเลเยอร์</translation>
+        <location filename="../../app/ui/layers_panel.py" line="77"/>
+        <source>Layers</source>
+        <translation>เลเยอร์</translation>
     </message>
-</context>
-<context>
-    <name>LayerRow</name>
     <message>
-        <location filename="../../app/ui/canvas/document_layers.py" line="53"/>
-        <source>Layer opacity</source>
-        <translation>ความทึบของชั้น</translation>
+        <location filename="../../app/ui/layers_panel.py" line="131"/>
+        <source>Editable Text</source>
+        <translation>ข้อความที่แก้ไขได้</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/layers_panel.py" line="132"/>
+        <source>Boxes</source>
+        <translation>กล่อง</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/layers_panel.py" line="133"/>
+        <source>Brush Strokes</source>
+        <translation>เส้นแปรง</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/layers_panel.py" line="134"/>
+        <source>Inpaint Patches</source>
+        <translation>แผ่นปะลบข้อความ</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/layers_panel.py" line="135"/>
+        <source>Raw Image</source>
+        <translation>ภาพต้นฉบับ</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/layers_panel.py" line="144"/>
+        <source>Text</source>
+        <translation>ข้อความ</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/layers_panel.py" line="146"/>
+        <source>Box</source>
+        <translation>กล่อง</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/layers_panel.py" line="147"/>
+        <source>Stroke</source>
+        <translation>เส้นแปรง</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/layers_panel.py" line="148"/>
+        <source>Patch</source>
+        <translation>แผ่นปะ</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/layers_panel.py" line="149"/>
+        <source>Layer</source>
+        <translation>เลเยอร์</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/layers_panel.py" line="164"/>
+        <source>Hide</source>
+        <translation>ซ่อน</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/layers_panel.py" line="164"/>
+        <source>Show</source>
+        <translation>แสดง</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/layers_panel.py" line="167"/>
+        <source>Unlock</source>
+        <translation>ปลดล็อก</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/layers_panel.py" line="167"/>
+        <source>Lock</source>
+        <translation>ล็อก</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/layers_panel.py" line="253"/>
+        <source>Toggle layer visibility</source>
+        <translation>สลับการแสดงเลเยอร์</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/layers_panel.py" line="256"/>
+        <source>Toggle layer lock</source>
+        <translation>สลับการล็อกเลเยอร์</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/layers_panel.py" line="266"/>
+        <source>Rename layer</source>
+        <translation>เปลี่ยนชื่อเลเยอร์</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/layers_panel.py" line="310"/>
+        <source>Change layer opacity</source>
+        <translation>เปลี่ยนความทึบของเลเยอร์</translation>
     </message>
 </context>
 <context>
@@ -1322,7 +1340,7 @@ most often a Korean name stored twice in different Unicode forms.</source>
 <context>
     <name>Messages</name>
     <message>
-        <location filename="../../app/controllers/image.py" line="1307"/>
+        <location filename="../../app/controllers/image.py" line="1320"/>
         <source>Skipping:</source>
         <translation>กำลังข้าม:</translation>
     </message>
@@ -1342,120 +1360,120 @@ most often a Korean name stored twice in different Unicode forms.</source>
         <translation>กำลังยกเลิก... %p%</translation>
     </message>
     <message>
-        <location filename="../../app/ui/messages.py" line="11"/>
+        <location filename="../../app/ui/messages.py" line="12"/>
         <source>Comic has been Translated!</source>
         <translation>แปลการ์ตูนเสร็จแล้ว!</translation>
     </message>
     <message>
-        <location filename="../../app/ui/messages.py" line="23"/>
+        <location filename="../../app/ui/messages.py" line="24"/>
         <source>No Font selected.
 Go to Settings &gt; Text Rendering &gt; Font to select or import one </source>
         <translation>ยังไม่ได้เลือกฟอนต์
 ไปที่ ตั้งค่า &gt; การแสดงผลข้อความ &gt; ฟอนต์ เพื่อเลือกหรือนำเข้าฟอนต์ </translation>
     </message>
     <message>
-        <location filename="../../app/ui/messages.py" line="35"/>
+        <location filename="../../app/ui/messages.py" line="36"/>
         <source>Please sign in or sign up via Settings &gt; Account to continue.</source>
         <translation>กรุณาเข้าสู่ระบบหรือสมัครสมาชิกที่ ตั้งค่า &gt; บัญชี เพื่อดำเนินการต่อ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/messages.py" line="47"/>
+        <location filename="../../app/ui/messages.py" line="48"/>
         <source>The translator does not support the selected target language. Please choose a different language or tool.</source>
         <translation>ตัวแปลไม่รองรับภาษาปลายทางที่เลือก กรุณาเลือกภาษาอื่นหรือเปลี่ยนเครื่องมือ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/messages.py" line="59"/>
+        <location filename="../../app/ui/messages.py" line="60"/>
         <source>No {} selected. Please select a {} in Settings &gt; Tools.</source>
         <translation>ยังไม่ได้เลือก{} กรุณาเลือก{}ที่ ตั้งค่า &gt; เครื่องมือ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/messages.py" line="79"/>
+        <location filename="../../app/ui/messages.py" line="80"/>
         <source>Insufficient Credits</source>
         <translation>เครดิตไม่เพียงพอ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/messages.py" line="80"/>
+        <location filename="../../app/ui/messages.py" line="81"/>
         <source>Insufficient credits to perform this action.
 Go to Settings &gt; Account to buy more credits.</source>
         <translation>เครดิตไม่เพียงพอสำหรับการดำเนินการนี้
 ไปที่ ตั้งค่า &gt; บัญชี เพื่อซื้อเครดิตเพิ่ม</translation>
     </message>
     <message>
-        <location filename="../../app/ui/messages.py" line="93"/>
-        <location filename="../../app/ui/messages.py" line="148"/>
+        <location filename="../../app/ui/messages.py" line="94"/>
+        <location filename="../../app/ui/messages.py" line="149"/>
         <source>OK</source>
         <translation>ตกลง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/messages.py" line="111"/>
+        <location filename="../../app/ui/messages.py" line="112"/>
         <source>Custom requires advanced API configuration. Most users should use the Credits system instead.
 Please sign in via Settings &gt; Account to use credits, or configure Custom API settings in Settings &gt; Advanced.</source>
         <translation>&quot;กำหนดเอง&quot; ต้องตั้งค่า API ขั้นสูง ผู้ใช้ทั่วไปควรใช้ระบบเครดิตแทน
 กรุณาเข้าสู่ระบบที่ ตั้งค่า &gt; บัญชี เพื่อใช้เครดิต หรือตั้งค่า Custom API ที่ ตั้งค่า &gt; ขั้นสูง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/messages.py" line="147"/>
+        <location filename="../../app/ui/messages.py" line="148"/>
         <source>Copy</source>
         <translation>คัดลอก</translation>
     </message>
     <message>
-        <location filename="../../app/ui/messages.py" line="149"/>
+        <location filename="../../app/ui/messages.py" line="150"/>
         <source>Close</source>
         <translation>ปิด</translation>
     </message>
     <message>
-        <location filename="../../app/ui/messages.py" line="171"/>
+        <location filename="../../app/ui/messages.py" line="230"/>
+        <source>Nothing is marked to clean.
+Draw a box over the leftover text, or paint it with the brush, lasso or magic wand, then press Clean.</source>
+        <translation>ยังไม่ได้ทำเครื่องหมายส่วนที่จะลบข้อความ
+ลากกล่องครอบข้อความที่เหลือ หรือระบายด้วยแปรง บ่วงบาศ หรือไม้กายสิทธิ์ แล้วกด ลบข้อความ</translation>
+    </message>
+    <message>
         <source>We encountered an unexpected server error.
 Please try again in a few moments.</source>
-        <translation>เกิดข้อผิดพลาดที่ไม่คาดคิดจากเซิร์ฟเวอร์
+        <translation type="vanished">เกิดข้อผิดพลาดที่ไม่คาดคิดจากเซิร์ฟเวอร์
 กรุณาลองใหม่อีกครั้งในอีกสักครู่</translation>
     </message>
     <message>
-        <location filename="../../app/ui/messages.py" line="172"/>
         <source>The external service provider is having trouble.
 Please try again later.</source>
-        <translation>ผู้ให้บริการภายนอกกำลังมีปัญหา
+        <translation type="vanished">ผู้ให้บริการภายนอกกำลังมีปัญหา
 กรุณาลองใหม่ภายหลัง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/messages.py" line="173"/>
         <source>The server is currently busy or under maintenance.
 Please try again shortly.</source>
-        <translation>ขณะนี้เซิร์ฟเวอร์ไม่ว่างหรืออยู่ระหว่างปรับปรุง
+        <translation type="vanished">ขณะนี้เซิร์ฟเวอร์ไม่ว่างหรืออยู่ระหว่างปรับปรุง
 กรุณาลองใหม่ในอีกสักครู่</translation>
     </message>
     <message>
-        <location filename="../../app/ui/messages.py" line="174"/>
         <source>The server took too long to respond.
 Please check your connection or try again later.</source>
-        <translation>เซิร์ฟเวอร์ตอบสนองช้าเกินไป
+        <translation type="vanished">เซิร์ฟเวอร์ตอบสนองช้าเกินไป
 กรุณาตรวจสอบการเชื่อมต่อ หรือลองใหม่ภายหลัง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/messages.py" line="179"/>
         <source>The selected text recognition tool is not supported.
 Please select a different tool in Settings.</source>
-        <translation>เครื่องมืออ่านข้อความที่เลือกไม่รองรับ
+        <translation type="vanished">เครื่องมืออ่านข้อความที่เลือกไม่รองรับ
 กรุณาเลือกเครื่องมืออื่นในหน้าตั้งค่า</translation>
     </message>
     <message>
-        <location filename="../../app/ui/messages.py" line="181"/>
         <source>The selected translator is not supported.
 Please select a different tool in Settings.</source>
-        <translation>ตัวแปลที่เลือกไม่รองรับ
+        <translation type="vanished">ตัวแปลที่เลือกไม่รองรับ
 กรุณาเลือกเครื่องมืออื่นในหน้าตั้งค่า</translation>
     </message>
     <message>
-        <location filename="../../app/ui/messages.py" line="183"/>
         <source>The selected tool is not supported.
 Please select a different tool in Settings.</source>
-        <translation>เครื่องมือที่เลือกไม่รองรับ
+        <translation type="vanished">เครื่องมือที่เลือกไม่รองรับ
 กรุณาเลือกเครื่องมืออื่นในหน้าตั้งค่า</translation>
     </message>
     <message>
-        <location filename="../../app/ui/messages.py" line="211"/>
-        <location filename="../../pipeline/batch_processor.py" line="354"/>
-        <location filename="../../pipeline/batch_processor.py" line="408"/>
+        <location filename="../../app/ui/messages.py" line="193"/>
+        <location filename="../../pipeline/batch_processor.py" line="352"/>
+        <location filename="../../pipeline/batch_processor.py" line="406"/>
         <location filename="../../pipeline/webtoon_batch/chunk.py" line="94"/>
         <source>Unable to connect to the server.
 Please check your internet connection.</source>
@@ -1463,50 +1481,47 @@ Please check your internet connection.</source>
 กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต</translation>
     </message>
     <message>
-        <location filename="../../app/ui/messages.py" line="226"/>
         <source>Text Recognition blocked: The AI provider flagged this content.
 Please try a different Text Recognition tool.</source>
-        <translation>การอ่านข้อความถูกระงับ: ผู้ให้บริการ AI ตีเนื้อหานี้ว่าไม่เหมาะสม
+        <translation type="vanished">การอ่านข้อความถูกระงับ: ผู้ให้บริการ AI ตีเนื้อหานี้ว่าไม่เหมาะสม
 กรุณาลองใช้เครื่องมืออ่านข้อความอื่น</translation>
     </message>
     <message>
-        <location filename="../../app/ui/messages.py" line="231"/>
         <source>Translation blocked: The AI provider flagged this content.
 Please try a different translator.</source>
-        <translation>การแปลถูกระงับ: ผู้ให้บริการ AI ตีเนื้อหานี้ว่าไม่เหมาะสม
+        <translation type="vanished">การแปลถูกระงับ: ผู้ให้บริการ AI ตีเนื้อหานี้ว่าไม่เหมาะสม
 กรุณาลองใช้ตัวแปลอื่น</translation>
     </message>
     <message>
-        <location filename="../../app/ui/messages.py" line="236"/>
         <source>Operation blocked: The AI provider flagged this content.
 Please try a different tool.</source>
-        <translation>การดำเนินการถูกระงับ: ผู้ให้บริการ AI ตีเนื้อหานี้ว่าไม่เหมาะสม
+        <translation type="vanished">การดำเนินการถูกระงับ: ผู้ให้บริการ AI ตีเนื้อหานี้ว่าไม่เหมาะสม
 กรุณาลองใช้เครื่องมืออื่น</translation>
     </message>
     <message>
-        <location filename="../../app/ui/messages.py" line="261"/>
+        <location filename="../../app/ui/messages.py" line="246"/>
         <source>{0} image(s) were skipped in this batch.
 Open Batch Report to see all skipped images and reasons.</source>
         <translation>มีรูปภาพถูกข้าม {0} รูปในชุดนี้
 เปิด &quot;รายงานการประมวลผลชุด&quot; เพื่อดูรูปที่ถูกข้ามทั้งหมดพร้อมเหตุผล</translation>
     </message>
     <message>
-        <location filename="../../modules/utils/pipeline_config.py" line="49"/>
+        <location filename="../../app/validation.py" line="30"/>
         <source>Text Recognition model</source>
         <translation>โมเดลอ่านข้อความ</translation>
     </message>
     <message>
-        <location filename="../../modules/utils/pipeline_config.py" line="68"/>
+        <location filename="../../app/validation.py" line="49"/>
         <source>Translator</source>
         <translation>ตัวแปล</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="960"/>
+        <location filename="../../controller.py" line="1002"/>
         <source>Processing:</source>
         <translation>กำลังประมวลผล:</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="963"/>
+        <location filename="../../controller.py" line="1005"/>
         <source>Archiving:</source>
         <translation>กำลังบีบอัด:</translation>
     </message>
@@ -1990,199 +2005,199 @@ This folder is separate from Auto-Recover snapshots.</source>
 <context>
     <name>SettingsPage</name>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="659"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="715"/>
         <source>OK</source>
         <translation>ตกลง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="672"/>
-        <location filename="../../app/ui/settings/settings_page.py" line="1017"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="728"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="1073"/>
         <source>Yes</source>
         <translation>ใช่</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="673"/>
-        <location filename="../../app/ui/settings/settings_page.py" line="1018"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="729"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="1074"/>
         <source>No</source>
         <translation>ไม่</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="682"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="738"/>
         <source>Restart Required</source>
         <translation>ต้องเริ่มโปรแกรมใหม่</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="683"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="739"/>
         <source>The application needs to restart for the language changes to take effect.
 Restart now?</source>
         <translation>ต้องเริ่มโปรแกรมใหม่เพื่อให้การเปลี่ยนภาษามีผล
 เริ่มใหม่ตอนนี้หรือไม่?</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="726"/>
-        <location filename="../../app/ui/settings/settings_page.py" line="1062"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="782"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="1118"/>
         <source>Cancel</source>
         <translation>ยกเลิก</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="734"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="790"/>
         <source>Failed to initiate sign-in process.</source>
         <translation>ไม่สามารถเริ่มขั้นตอนการเข้าสู่ระบบได้</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="751"/>
-        <location filename="../../app/ui/settings/settings_page.py" line="979"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="807"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="1035"/>
         <source>Sign In</source>
         <translation>เข้าสู่ระบบ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="768"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="824"/>
         <source>Sign In Required</source>
         <translation>ต้องเข้าสู่ระบบ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="769"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="825"/>
         <source>Please sign in to purchase or manage credits.</source>
         <translation>กรุณาเข้าสู่ระบบเพื่อซื้อหรือจัดการเครดิต</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="778"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="834"/>
         <source>Unable to Open Browser</source>
         <translation>ไม่สามารถเปิดเบราว์เซอร์ได้</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="779"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="835"/>
         <source>Please open the pricing page in your browser: {url}</source>
         <translation>กรุณาเปิดหน้าราคาในเบราว์เซอร์ของคุณ: {url}</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="851"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="907"/>
         <source>Sign In Error</source>
         <translation>เข้าสู่ระบบผิดพลาด</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="852"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="908"/>
         <source>Authentication failed: {error}</source>
         <translation>ยืนยันตัวตนไม่สำเร็จ: {error}</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="866"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="922"/>
         <source>Confirm Sign Out</source>
         <translation>ยืนยันการออกจากระบบ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="867"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="923"/>
         <source>Are you sure you want to sign out?</source>
         <translation>ต้องการออกจากระบบใช่หรือไม่?</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="871"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="927"/>
         <source>Signing Out...</source>
         <translation>กำลังออกจากระบบ...</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="894"/>
-        <location filename="../../app/ui/settings/settings_page.py" line="972"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="950"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="1028"/>
         <source>Sign Out</source>
         <translation>ออกจากระบบ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="910"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="966"/>
         <source>Session Expired</source>
         <translation>เซสชันหมดอายุ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="911"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="967"/>
         <source>Your session has expired. Please sign in again.</source>
         <translation>เซสชันของคุณหมดอายุแล้ว กรุณาเข้าสู่ระบบอีกครั้ง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="925"/>
-        <location filename="../../app/ui/settings/settings_page.py" line="928"/>
-        <location filename="../../app/ui/settings/settings_page.py" line="947"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="981"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="984"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="1003"/>
         <source>N/A</source>
         <translation>ไม่มี</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="939"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="995"/>
         <source>Free</source>
         <translation>ฟรี</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="954"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="1010"/>
         <source>Subscription</source>
         <translation>สมาชิกรายเดือน</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="957"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="1013"/>
         <source>One-time</source>
         <translation>ครั้งเดียว</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="960"/>
-        <location filename="../../app/ui/settings/settings_page.py" line="965"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="1016"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="1021"/>
         <source>Total</source>
         <translation>รวม</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="994"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="1050"/>
         <source>Checking...</source>
         <translation>กำลังตรวจสอบ...</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="1000"/>
-        <location filename="../../app/ui/settings/settings_page.py" line="1037"/>
-        <location filename="../../app/ui/settings/settings_page.py" line="1050"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="1056"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="1093"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="1106"/>
         <source>Check for Updates</source>
         <translation>ตรวจหาอัปเดต</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="1010"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="1066"/>
         <source>Update Available</source>
         <translation>มีอัปเดตใหม่</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="1013"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="1069"/>
         <source>A new version {version} is available.</source>
         <translation>มีเวอร์ชันใหม่ {version} พร้อมให้ใช้งาน</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="1014"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="1070"/>
         <source>Release Notes</source>
         <translation>บันทึกการเปลี่ยนแปลง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="1022"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="1078"/>
         <source>Skip This Version</source>
         <translation>ข้ามเวอร์ชันนี้</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="1040"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="1096"/>
         <source>Up to Date</source>
         <translation>เป็นเวอร์ชันล่าสุดแล้ว</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="1041"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="1097"/>
         <source>You are using the latest version.</source>
         <translation>คุณกำลังใช้เวอร์ชันล่าสุดอยู่แล้ว</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="1056"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="1112"/>
         <source>Update Error</source>
         <translation>อัปเดตผิดพลาด</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="1062"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="1118"/>
         <source>Downloading update...</source>
         <translation>กำลังดาวน์โหลดอัปเดต...</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="1079"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="1135"/>
         <source>Download Complete</source>
         <translation>ดาวน์โหลดเสร็จสิ้น</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="1080"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="1136"/>
         <source>Installer downloaded to {path}. Run it now?</source>
         <translation>ดาวน์โหลดตัวติดตั้งไปที่ {path} แล้ว เรียกใช้เลยหรือไม่?</translation>
     </message>
@@ -2360,52 +2375,52 @@ Restart now?</source>
         <translation>Anthropic Claude</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_ui.py" line="362"/>
+        <location filename="../../app/ui/settings/settings_ui.py" line="363"/>
         <source>Personalization</source>
         <translation>การปรับแต่งส่วนตัว</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_ui.py" line="363"/>
+        <location filename="../../app/ui/settings/settings_ui.py" line="364"/>
         <source>Account</source>
         <translation>บัญชี</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_ui.py" line="364"/>
+        <location filename="../../app/ui/settings/settings_ui.py" line="365"/>
         <source>Tools</source>
         <translation>เครื่องมือ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_ui.py" line="365"/>
+        <location filename="../../app/ui/settings/settings_ui.py" line="366"/>
         <source>LLMs</source>
         <translation>โมเดลภาษา (LLM)</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_ui.py" line="366"/>
+        <location filename="../../app/ui/settings/settings_ui.py" line="367"/>
         <source>Text Rendering</source>
         <translation>การแสดงผลข้อความ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_ui.py" line="367"/>
+        <location filename="../../app/ui/settings/settings_ui.py" line="368"/>
         <source>Project</source>
         <translation>โปรเจกต์</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_ui.py" line="368"/>
+        <location filename="../../app/ui/settings/settings_ui.py" line="369"/>
         <source>Export</source>
         <translation>ส่งออก</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_ui.py" line="369"/>
+        <location filename="../../app/ui/settings/settings_ui.py" line="370"/>
         <source>Shortcuts</source>
         <translation>คีย์ลัด</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_ui.py" line="370"/>
+        <location filename="../../app/ui/settings/settings_ui.py" line="371"/>
         <source>Advanced</source>
         <translation>ขั้นสูง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_ui.py" line="371"/>
+        <location filename="../../app/ui/settings/settings_ui.py" line="372"/>
         <source>About</source>
         <translation>เกี่ยวกับ</translation>
     </message>
@@ -2689,17 +2704,37 @@ Only pages with the same width are stitched.</source>
 จะต่อเฉพาะหน้าที่มีความกว้างเท่ากันเท่านั้น</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="62"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="63"/>
+        <source>Draw text with Skia</source>
+        <translation>วาดข้อความด้วย Skia</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/settings/tools_page.py" line="67"/>
+        <source>Lays out and draws translated text with Skia instead of Qt.
+On by default: it fits text to a bubble about twenty times faster,
+and the editor preview and the exported page match exactly.
+Measurement and drawing switch together — using one engine for each
+would make the preview stop matching the export.
+Turn it off to go back to Qt&apos;s renderer; curved text uses Qt either way.</source>
+        <translation>จัดวางและวาดข้อความคำแปลด้วย Skia แทน Qt
+เปิดไว้เป็นค่าเริ่มต้น: จัดข้อความให้พอดีกับฟองคำพูดได้เร็วขึ้นราวยี่สิบเท่า
+และภาพตัวอย่างในหน้าแก้ไขตรงกับหน้าที่ส่งออกทุกประการ
+การวัดและการวาดสลับไปพร้อมกัน เพราะถ้าใช้คนละเครื่องมือ
+ภาพตัวอย่างจะไม่ตรงกับไฟล์ที่ส่งออก
+ปิดเพื่อกลับไปใช้ตัววาดของ Qt ส่วนข้อความโค้งใช้ Qt เสมอ</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/settings/tools_page.py" line="75"/>
         <source>Image Cleaning</source>
         <translation>การลบข้อความออกจากภาพ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="65"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="78"/>
         <source>Use the AI text segmentation model (more precise cleaning)</source>
         <translation>ใช้โมเดล AI แยกพิกเซลตัวอักษร (ลบข้อความแม่นยำขึ้น)</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="69"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="82"/>
         <source>Works out which pixels are lettering with a neural model instead of by
 thresholding each box on its own. Much more accurate on text over artwork,
 gradients and screentone, and on coloured text.
@@ -2709,12 +2744,12 @@ Downloads a 90 MB model once, and adds a few seconds per page on CPU.</source>
 ดาวน์โหลดโมเดลขนาด 90 MB ครั้งเดียว และใช้เวลาเพิ่มไม่กี่วินาทีต่อหน้าเมื่อรันบน CPU</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="76"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="89"/>
         <source>Tidy JPEG artefacts around cleaned text</source>
         <translation>เก็บงานรอยหยักจาก JPEG รอบข้อความที่ลบแล้ว</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="80"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="93"/>
         <source>Smooths the ring of pixels just around each cleaned area, where a low-quality
 JPEG leaves a halo that inpainting blends into the patch. The rest of the page
 is left untouched, and an area whose surroundings are a flat fill is skipped
@@ -2725,126 +2760,126 @@ entirely — so a clean source loses nothing by leaving this on.</source>
 หากเปิดตัวเลือกนี้ทิ้งไว้</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="87"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="100"/>
         <source>Text Mask Expansion (px):</source>
         <translation>ระยะขยายมาสก์ข้อความ (พิกเซล):</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="93"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="106"/>
         <source>How far the text-removal mask grows past the detected glyphs.</source>
         <translation>มาสก์สำหรับลบข้อความจะขยายเลยขอบตัวอักษรที่ตรวจพบออกไปเท่าใด</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="100"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="113"/>
         <source>Bubble Protection Inset (px):</source>
         <translation>ระยะเว้นขอบฟองคำพูด (พิกเซล):</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="106"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="119"/>
         <source>Keeps the cleaning mask this many pixels away from the speech bubble outline.
 Increase it if cleaning eats into bubble borders.</source>
         <translation>เว้นระยะมาสก์ให้ห่างจากเส้นขอบฟองคำพูดตามจำนวนพิกเซลนี้
 เพิ่มค่านี้หากการลบข้อความกินเข้าไปในเส้นขอบฟอง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="114"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="127"/>
         <source>OCR Box Padding (%):</source>
         <translation>ระยะขยายกล่องก่อน OCR (%):</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="120"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="133"/>
         <source>How much larger than the detected box the crop sent to text recognition is.
 Raise it when recognised text comes back clipped or garbled.</source>
         <translation>ภาพที่ตัดส่งให้ระบบอ่านข้อความจะใหญ่กว่ากล่องที่ตรวจจับได้เท่าใด
 เพิ่มค่านี้เมื่อข้อความที่อ่านได้ขาดหายหรืออ่านออกมามั่ว</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="126"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="139"/>
         <source>Minimum (px):</source>
         <translation>อย่างน้อย (พิกเซล):</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="132"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="145"/>
         <source>A percentage of a small box is still a small number of pixels, which is
 why tight boxes around short lines get clipped. This is the floor in pixels.</source>
         <translation>เปอร์เซ็นต์ของกล่องเล็กก็ยังเป็นพิกเซลจำนวนน้อยอยู่ดี กล่องที่รัดข้อความสั้น ๆ
 จึงถูกตัดขาด ค่านี้คือขั้นต่ำที่รับประกันเป็นพิกเซล</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="139"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="152"/>
         <source>Inpainter</source>
         <translation>ตัวเติมภาพ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="141"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="154"/>
         <source>AOT</source>
         <translation>AOT</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="143"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="156"/>
         <source>HD Strategy</source>
         <translation>กลยุทธ์สำหรับภาพความละเอียดสูง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="145"/>
-        <location filename="../../app/ui/settings/tools_page.py" line="269"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="158"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="283"/>
         <source>Resize</source>
         <translation>ย่อ/ขยาย</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="155"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="168"/>
         <source>Resize Limit:</source>
         <translation>ขีดจำกัดการย่อขนาด:</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="156"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="169"/>
         <source>Resize the longer side of the image to a specific size,
 then do inpainting on the resized image.</source>
         <translation>ย่อด้านที่ยาวกว่าของภาพให้เหลือขนาดที่กำหนด
 แล้วจึงเติมภาพบนภาพที่ย่อแล้ว</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="172"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="185"/>
         <source>Crop masking area from the original image to do inpainting.</source>
         <translation>ครอบตัดเฉพาะบริเวณมาสก์จากภาพต้นฉบับเพื่อนำไปเติมภาพ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="174"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="187"/>
         <source>Crop Margin:</source>
         <translation>ระยะขอบการครอบตัด:</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="184"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="197"/>
         <source>Crop Trigger Size:</source>
         <translation>ขนาดที่เริ่มครอบตัด:</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="206"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="219"/>
         <source>Use GPU</source>
         <translation>ใช้ GPU</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="261"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="275"/>
         <source>{0} needs: {1}</source>
         <translation>{0} ต้องใช้: {1}</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="263"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="277"/>
         <source>Install with: {0}</source>
         <translation>ติดตั้งด้วย: {0}</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="264"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="278"/>
         <source>Restart the app afterwards.</source>
         <translation>ติดตั้งเสร็จแล้วเปิดแอปใหม่</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="270"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="284"/>
         <source>Crop</source>
         <translation>ครอบตัด</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/tools_page.py" line="271"/>
+        <location filename="../../app/ui/settings/tools_page.py" line="285"/>
         <source>Original</source>
         <translation>ขนาดเดิม</translation>
     </message>
@@ -2852,72 +2887,72 @@ then do inpainting on the resized image.</source>
 <context>
     <name>WorkspaceMixin</name>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="35"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="34"/>
         <source>Undo</source>
         <translation>เลิกทำ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="36"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="35"/>
         <source>Redo</source>
         <translation>ทำซ้ำ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="41"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="40"/>
         <source>Detect</source>
         <translation>ตรวจจับ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="42"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="41"/>
         <source>Recognize</source>
         <translation>อ่านข้อความ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="43"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="42"/>
         <source>Translate</source>
         <translation>แปล</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="44"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="43"/>
         <source>Segment</source>
         <translation>แยกส่วน</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="45"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="44"/>
         <source>Clean</source>
         <translation>ลบข้อความ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="46"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="45"/>
         <source>Render</source>
         <translation>แสดงผล</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="63"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="62"/>
         <source>Manual</source>
         <translation>ทีละขั้น</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="66"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="65"/>
         <source>Automatic</source>
         <translation>อัตโนมัติ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="75"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="74"/>
         <source>Toggle Webtoon Mode. For comics that are read in long vertical strips</source>
         <translation>สลับโหมดเว็บตูน สำหรับการ์ตูนที่อ่านเป็นภาพยาวแนวตั้ง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="79"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="78"/>
         <source>Translate All</source>
         <translation>แปลทั้งหมด</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="82"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="81"/>
         <source>Cancel</source>
         <translation>ยกเลิก</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="85"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="84"/>
         <source>Report</source>
         <translation>รายงาน</translation>
     </message>
@@ -2950,44 +2985,57 @@ then do inpainting on the resized image.</source>
         <translation type="vanished">แสดง/ซ่อนข้อความคำแปลที่วางบนภาพ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="94"/>
         <source>Layers of this page</source>
-        <translation>ชั้นต่างๆ ของหน้านี้</translation>
+        <translation type="vanished">ชั้นต่างๆ ของหน้านี้</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="106"/>
         <source>Show the layer list for individual items</source>
-        <translation>แสดงรายการเลเยอร์ของแต่ละชิ้น</translation>
+        <translation type="vanished">แสดงรายการเลเยอร์ของแต่ละชิ้น</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="111"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="90"/>
+        <source>Show the Layers panel</source>
+        <translation>แสดงแผงเลเยอร์</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="95"/>
         <source>Group the pages by the folder they came from</source>
         <translation>จัดกลุ่มหน้าตามโฟลเดอร์ต้นทาง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="162"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="145"/>
         <source>Click or drag files here</source>
         <translation>คลิกหรือลากไฟล์มาที่นี่</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="184"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="167"/>
         <source>Import Images, PDFs, Epubs or Comic Book Archive Files(cbr, cbz, etc)</source>
         <translation>นำเข้ารูปภาพ, PDF, EPUB หรือไฟล์อาร์ไคฟ์การ์ตูน (cbr, cbz ฯลฯ)</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="202"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="185"/>
         <source>Source Language</source>
         <translation>ภาษาต้นทาง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="212"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="195"/>
         <source>Target Language</source>
         <translation>ภาษาปลายทาง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="223"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="206"/>
         <source>Font</source>
         <translation>ฟอนต์</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="214"/>
+        <source>Add this font to favourites</source>
+        <translation>เพิ่มฟอนต์นี้ในรายการโปรด</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="218"/>
+        <source>Pick a favourite font</source>
+        <translation>เลือกฟอนต์โปรด</translation>
     </message>
     <message>
         <location filename="../../app/ui/main_window/builders/workspace.py" line="225"/>
@@ -3005,166 +3053,171 @@ then do inpainting on the resized image.</source>
         <translation>ระยะห่างตัวอักษร</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="260"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="262"/>
         <source>Font Color</source>
         <translation>สีฟอนต์</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="275"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="277"/>
         <source>Bold</source>
         <translation>ตัวหนา</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="277"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="279"/>
         <source>Italic</source>
         <translation>ตัวเอียง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="279"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="281"/>
         <source>Underline</source>
         <translation>ขีดเส้นใต้</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="290"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="292"/>
         <source>Outline</source>
         <translation>เส้นขอบ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="294"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="296"/>
         <source>Outline Color</source>
         <translation>สีเส้นขอบ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="301"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="303"/>
         <source>Outline Width</source>
         <translation>ความหนาเส้นขอบ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="314"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="316"/>
         <source>Shadow</source>
         <translation>เงา</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="317"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="319"/>
         <source>Shadow Color</source>
         <translation>สีเงา</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="323"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="325"/>
         <source>Shadow Offset X</source>
         <translation>ระยะเงาแนวนอน</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="330"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="332"/>
         <source>Shadow Offset Y</source>
         <translation>ระยะเงาแนวตั้ง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="337"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="339"/>
         <source>Shadow Blur</source>
         <translation>ความฟุ้งของเงา</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="352"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="354"/>
         <source>Gradient</source>
         <translation>ไล่เฉดสี</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="354"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="356"/>
         <source>Fade the fill from the text colour to a second one, across the whole text.</source>
         <translation>ไล่สีพื้นข้อความจากสีข้อความไปยังอีกสีหนึ่ง ต่อเนื่องทั้งก้อนข้อความ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="358"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="360"/>
         <source>Gradient End Color</source>
         <translation>สีปลายทางของการไล่เฉด</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="364"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="366"/>
         <source>Gradient Angle</source>
         <translation>มุมการไล่เฉดสี</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="370"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="372"/>
         <source>Curve</source>
         <translation>ความโค้ง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="372"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="374"/>
         <source>Bend the baseline into an arc: positive arches up, negative sags.</source>
         <translation>ดัดเส้นฐานข้อความให้เป็นส่วนโค้ง ค่าบวกโค้งขึ้น ค่าลบโค้งลง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="375"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="377"/>
         <source>Text Curve</source>
         <translation>ความโค้งของข้อความ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="406"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="408"/>
         <source>Pan Image</source>
         <translation>เลื่อนภาพ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="410"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="412"/>
         <source>Set for all</source>
         <translation>ใช้กับทุกหน้า</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="412"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="414"/>
         <source>Sets the Source and Target Language on the current page for all pages</source>
         <translation>ตั้งภาษาต้นทางและปลายทางของหน้าปัจจุบันให้กับทุกหน้า</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="422"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="424"/>
         <source>Draw or Select Text Boxes</source>
         <translation>วาดหรือเลือกกล่องข้อความ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="427"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="430"/>
+        <source>Type your own text: click on the page to place a text box and start typing</source>
+        <translation>พิมพ์ข้อความเอง: คลิกบนหน้าเพื่อวางกล่องข้อความแล้วเริ่มพิมพ์ได้ทันที</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="436"/>
         <source>Delete Selected Box</source>
         <translation>ลบกล่องที่เลือก</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="430"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="439"/>
         <source>Remove all the Boxes on the Image</source>
         <translation>ลบกล่องทั้งหมดบนภาพ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="435"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="444"/>
         <source>Draws all the Text Blocks in the existing Text Block List
 back on the Image (for further editing)</source>
         <translation>วาดกล่องข้อความทั้งหมดในรายการกลับลงบนภาพ
 (เพื่อแก้ไขต่อ)</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="446"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="456"/>
         <source>Reduce the size of all blocks</source>
         <translation>ลดขนาดกล่องทั้งหมด</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="457"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="467"/>
         <source>Increase the size of all blocks</source>
         <translation>เพิ่มขนาดกล่องทั้งหมด</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="468"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="478"/>
         <source>Draw Brush Strokes for Cleaning Image</source>
         <translation>วาดเส้นแปรงเพื่อลบข้อความออกจากภาพ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="473"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="483"/>
         <source>Erase Brush Strokes</source>
         <translation>ลบเส้นแปรง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="479"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="489"/>
         <source>Select a whole region with one click — the inside of a bubble, a panel gutter, a flat area behind a sound effect.
 Hold Ctrl to take every region of that colour on the page at once.</source>
         <translation>เลือกทั้งพื้นที่ด้วยคลิกเดียว — ในลูกโป่งคำพูด ช่องว่างระหว่างช่อง พื้นเรียบๆ หลังเสียงเอฟเฟกต์
 กด Ctrl ค้างเพื่อเลือกทุกพื้นที่ที่สีเดียวกันทั้งหน้าพร้อมกัน</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="488"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="498"/>
         <source>Draw around an irregular shape a round brush cannot follow.
 Drag to trace it freehand, or click corner to corner for straight edges.
 Double-click or press Enter to close it; Escape to start over.</source>
@@ -3173,22 +3226,22 @@ Double-click or press Enter to close it; Escape to start over.</source>
 ดับเบิลคลิกหรือกด Enter เพื่อปิดรูป กด Escape เพื่อเริ่มใหม่</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="496"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="506"/>
         <source>Remove all the brush strokes on the Image</source>
         <translation>ลบเส้นแปรงทั้งหมดบนภาพ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="509"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="519"/>
         <source>Brush/Eraser Size Slider</source>
         <translation>แถบปรับขนาดแปรง/ยางลบ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="513"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="523"/>
         <source>Box Drawing</source>
         <translation>การวาดกล่อง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="517"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="527"/>
         <source>Inpainting</source>
         <translation>การเติมภาพ</translation>
     </message>
@@ -3822,12 +3875,13 @@ It may have been moved, renamed, or deleted.
 <context>
     <name>self.ui</name>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="291"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="330"/>
         <source>Resize</source>
+        <extracomment>Marks that the &quot;Skia on by default&quot; change has been applied to this profile. Bump the suffix only if a later default change needs to reach existing users again.</extracomment>
         <translation>ย่อ/ขยาย</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/settings_page.py" line="293"/>
+        <location filename="../../app/ui/settings/settings_page.py" line="332"/>
         <source>Crop</source>
         <translation>ครอบตัด</translation>
     </message>
@@ -3852,7 +3906,7 @@ It may have been moved, renamed, or deleted.
         <translation>Open AI GPT</translation>
     </message>
     <message>
-        <location filename="../../modules/ocr/gemini_ocr.py" line="31"/>
+        <location filename="../../modules/ocr/gemini_ocr.py" line="36"/>
         <location filename="../../modules/translation/llm/gemini.py" line="31"/>
         <source>Google Gemini</source>
         <translation>Google Gemini</translation>
@@ -3888,12 +3942,12 @@ It may have been moved, renamed, or deleted.
 <context>
     <name>settings_page.ui</name>
     <message>
-        <location filename="../../modules/utils/pipeline_config.py" line="30"/>
+        <location filename="../../modules/utils/pipeline_config.py" line="27"/>
         <source>Resize</source>
         <translation>ย่อ/ขยาย</translation>
     </message>
     <message>
-        <location filename="../../modules/utils/pipeline_config.py" line="32"/>
+        <location filename="../../modules/utils/pipeline_config.py" line="29"/>
         <source>Crop</source>
         <translation>ครอบตัด</translation>
     </message>
@@ -3901,12 +3955,12 @@ It may have been moved, renamed, or deleted.
 <context>
     <name>view</name>
     <message>
-        <location filename="../../app/ui/canvas/rectangle.py" line="92"/>
+        <location filename="../../app/ui/canvas/rectangle.py" line="94"/>
         <source>OCR</source>
         <translation>OCR</translation>
     </message>
     <message>
-        <location filename="../../app/ui/canvas/rectangle.py" line="93"/>
+        <location filename="../../app/ui/canvas/rectangle.py" line="95"/>
         <source>Translate</source>
         <translation>แปล</translation>
     </message>
