@@ -213,7 +213,7 @@ Qt remains the default.
 | `TextBlockItem.paint` | Takes the Skia path when the engine is Skia |
 
 The item stays an ordinary `QGraphicsTextItem`. Selection, handles, editing,
-undo, the layer panels and the project format are untouched — only the pixels
+undo, the Layers panel and the project format are untouched — only the pixels
 change. That is what kept the blast radius small enough to do safely.
 
 ### Features covered

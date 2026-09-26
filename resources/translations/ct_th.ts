@@ -373,59 +373,6 @@ Leave empty to use the same model as translation.</source>
     </message>
 </context>
 <context>
-    <name>DocumentLayersPanel</name>
-    <message>
-        <source>Text</source>
-        <translation type="vanished">ข้อความ</translation>
-    </message>
-    <message>
-        <source>The translated text drawn on top of the page.</source>
-        <translation type="vanished">ข้อความที่แปลแล้ว วาดทับอยู่บนหน้า</translation>
-    </message>
-    <message>
-        <source>Cleaner</source>
-        <translation type="vanished">ลบข้อความเดิม</translation>
-    </message>
-    <message>
-        <source>The patches that cover the original lettering.
-Fade this to check what was painted over.</source>
-        <translation type="vanished">แผ่นปะที่ทับข้อความเดิมเอาไว้
-ลดความทึบลงเพื่อดูว่าทับอะไรไปบ้าง</translation>
-    </message>
-    <message>
-        <source>Original image</source>
-        <translation type="vanished">ภาพต้นฉบับ</translation>
-    </message>
-    <message>
-        <source>The untouched artwork underneath everything.</source>
-        <translation type="vanished">ภาพต้นฉบับที่ยังไม่ถูกแก้ อยู่ล่างสุด</translation>
-    </message>
-    <message>
-        <source>Detection boxes</source>
-        <translation type="vanished">กรอบที่ตรวจจับได้</translation>
-    </message>
-    <message>
-        <source>The boxes the detector found. Not part of the exported page.</source>
-        <translation type="vanished">กรอบที่ตัวตรวจจับหาเจอ ไม่ถูกส่งออกไปกับหน้างาน</translation>
-    </message>
-    <message>
-        <source>Brush strokes</source>
-        <translation type="vanished">รอยแปรง</translation>
-    </message>
-    <message>
-        <source>Your segmentation strokes. Not part of the exported page.</source>
-        <translation type="vanished">รอยแปรงที่คุณวาดไว้สำหรับแยกพื้นที่ ไม่ถูกส่งออกไปกับหน้างาน</translation>
-    </message>
-    <message>
-        <source>Page</source>
-        <translation type="vanished">หน้า</translation>
-    </message>
-    <message>
-        <source>While editing</source>
-        <translation type="vanished">ระหว่างแก้ไข</translation>
-    </message>
-</context>
-<context>
     <name>ExportChaptersDialog</name>
     <message>
         <location filename="../../app/ui/export_chapters_dialog.py" line="28"/>
@@ -1037,44 +984,6 @@ most often a Korean name stored twice in different Unicode forms.</source>
         <location filename="../../app/ui/settings/glossary_page.py" line="702"/>
         <source>Failed to export glossary: {0}</source>
         <translation>ส่งออกคลังคำศัพท์ไม่สำเร็จ: {0}</translation>
-    </message>
-</context>
-<context>
-    <name>LayerPanel</name>
-    <message>
-        <source>Layer</source>
-        <translation type="vanished">เลเยอร์</translation>
-    </message>
-    <message>
-        <source>Show</source>
-        <translation type="vanished">แสดง</translation>
-    </message>
-    <message>
-        <source>Lock</source>
-        <translation type="vanished">ล็อก</translation>
-    </message>
-    <message>
-        <source>Opacity</source>
-        <translation type="vanished">ความทึบ</translation>
-    </message>
-    <message>
-        <source>Show/Hide Layer</source>
-        <translation type="vanished">แสดง/ซ่อนเลเยอร์</translation>
-    </message>
-    <message>
-        <source>Lock Layer</source>
-        <translation type="vanished">ล็อกเลเยอร์</translation>
-    </message>
-    <message>
-        <source>Layer Opacity</source>
-        <translation type="vanished">ความทึบของเลเยอร์</translation>
-    </message>
-</context>
-<context>
-    <name>LayerRow</name>
-    <message>
-        <source>Layer opacity</source>
-        <translation type="vanished">ความทึบของชั้น</translation>
     </message>
 </context>
 <context>

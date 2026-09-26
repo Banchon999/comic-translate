@@ -1,6 +1,6 @@
 """The wand puts a real stroke on the canvas, indistinguishable from a brushed one.
 
-That equivalence is the whole design: mask generation, undo, the layer panels
+That equivalence is the whole design: mask generation, undo, the Layers panel
 and project saving all already handle brush strokes, so producing the same kind
 of item means none of them needed changing.
 """

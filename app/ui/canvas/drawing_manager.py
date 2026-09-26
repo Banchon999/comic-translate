@@ -65,7 +65,7 @@ class DrawingManager:
         """Select the region under the cursor and add it as a stroke.
 
         The result is an ordinary filled path item — the same thing the brush
-        produces — so mask generation, undo, the layer panels and saving all
+        produces — so mask generation, undo, the Layers panel and saving all
         treat it exactly like a hand-drawn stroke and needed no changes.
         """
         image = self.viewer.get_image_array(include_patches=True)

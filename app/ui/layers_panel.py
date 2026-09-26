@@ -214,8 +214,11 @@ class LayersPanel(QtWidgets.QWidget):
                         # it or its whole group is hidden.
                         orow.setForeground(COL_NAME, self.palette().brush(
                             QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Text))
+                    # The column is narrow and elides; the tooltip has it all.
+                    tip = name
                     if props.opacity < 1.0:
-                        orow.setToolTip(COL_NAME, self.tr("Opacity") + f" {round(props.opacity * 100)}%")
+                        tip += "\n" + self.tr("Opacity") + f" {round(props.opacity * 100)}%"
+                    orow.setToolTip(COL_NAME, tip)
                     if oid in selected:
                         orow.setSelected(True)
                 if first_build or group.value in expanded:
