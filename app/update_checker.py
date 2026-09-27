@@ -4,8 +4,9 @@ import logging
 import requests
 import subprocess
 import tempfile
+import threading
 from packaging import version
-from PySide6.QtCore import QObject, Signal, QThread, QStandardPaths
+from PySide6.QtCore import QObject, Signal, QStandardPaths
 from app.version import __version__
 
 logger = logging.getLogger(__name__)
@@ -13,6 +14,15 @@ logger = logging.getLogger(__name__)
 class UpdateChecker(QObject):
     """
     Checks for updates on GitHub and handles downloading/running installers.
+
+    The network work runs on a plain Python thread that only *emits this
+    object's signals*; Qt queues each emission to the receivers on the GUI
+    thread. No QObject is created, moved or destroyed on that thread. The
+    previous version moved a Python QObject worker onto a QThread and deleted
+    it there with deleteLater — destroying a Python-derived QObject needs the
+    GIL while Qt holds a pooled signal/slot mutex, so a check finishing while
+    the GUI thread was making connections could deadlock the process for good
+    (tests/test_update_checker.py has the full story).
     """
     update_available = Signal(str, str, str)  # version, release_notes, download_url
     up_to_date = Signal()
@@ -25,58 +35,35 @@ class UpdateChecker(QObject):
 
     def __init__(self):
         super().__init__()
-        self._worker_thread = None
-        self._worker = None
+        self._thread: threading.Thread | None = None
 
-    def _safe_stop_thread(self):
+    def _start(self, work) -> None:
+        # Daemon: a request stuck on a dead network must not keep the app
+        # from exiting. The previous request, if any, is left to finish on
+        # its own; its signals still arrive, which is what they always did.
+        self._thread = threading.Thread(target=work, name="update-checker", daemon=True)
+        self._thread.start()
+
+    def _emit(self, signal_name: str, *args) -> None:
+        """Emit one of this object's signals from the worker thread.
+
+        The window may have closed, and this object been deleted, while the
+        request was out; a late result then has nowhere to go and is dropped.
+        """
         try:
-            if self._worker_thread and self._worker_thread.isRunning():
-                self._worker_thread.quit()
-                self._worker_thread.wait()
+            getattr(self, signal_name).emit(*args)
         except RuntimeError:
-            # The C++ object has been deleted
-            pass
-        except Exception as e:
-            logger.error(f"Error stopping thread: {e}")
-        self._worker_thread = None
+            logger.debug("Update checker gone before its %s result arrived", signal_name)
 
     def check_for_updates(self):
         """Starts the check in a background thread."""
-        self._safe_stop_thread()
-            
-        self._worker_thread = QThread()
-        self._worker = UpdateWorker(self.REPO_OWNER, self.REPO_NAME, __version__)
-        self._worker.moveToThread(self._worker_thread)
-        
-        self._worker.finished.connect(self._worker_thread.quit)
-        self._worker.finished.connect(self._worker.deleteLater)
-        self._worker_thread.finished.connect(self._worker_thread.deleteLater)
-        
-        self._worker.update_available.connect(self.update_available)
-        self._worker.up_to_date.connect(self.up_to_date)
-        self._worker.error.connect(self.error_occurred)
-        
-        self._worker_thread.started.connect(self._worker.run)
-        self._worker_thread.start()
+        worker = UpdateWorker(self.REPO_OWNER, self.REPO_NAME, __version__, self._emit)
+        self._start(worker.run)
 
     def download_installer(self, url, filename):
         """Starts the download in a background thread."""
-        self._safe_stop_thread()
-
-        self._worker_thread = QThread()
-        self._worker = DownloadWorker(url, filename)
-        self._worker.moveToThread(self._worker_thread)
-        
-        self._worker.finished.connect(self._worker_thread.quit)
-        self._worker.finished.connect(self._worker.deleteLater)
-        self._worker_thread.finished.connect(self._worker_thread.deleteLater)
-        
-        self._worker.progress.connect(self.download_progress)
-        self._worker.finished_path.connect(self.download_finished)
-        self._worker.error.connect(self.error_occurred)
-        
-        self._worker_thread.started.connect(self._worker.run)
-        self._worker_thread.start()
+        worker = DownloadWorker(url, filename, self._emit)
+        self._start(worker.run)
 
     def run_installer(self, file_path):
         """Executes the installer based on the platform."""
@@ -91,24 +78,26 @@ class UpdateChecker(QObject):
         except Exception as e:
             self.error_occurred.emit(f"Failed to launch installer: {e}")
 
-    def shutdown(self):
-        """Stops any active worker thread (best-effort)."""
-        self._safe_stop_thread()
-        self._worker_thread = None
-        self._worker = None
+    def shutdown(self, timeout: float = 1.0):
+        """Wait briefly for a running request (best-effort).
+
+        The thread is a daemon and touches no Qt object, so one still waiting
+        on the network after this is harmless: its late result is dropped.
+        """
+        thread, self._thread = self._thread, None
+        if thread is not None and thread.is_alive() and timeout:
+            thread.join(timeout)
 
 
-class UpdateWorker(QObject):
-    update_available = Signal(str, str, str)
-    up_to_date = Signal()
-    error = Signal(str)
-    finished = Signal()
+class UpdateWorker:
+    """Fetches the latest release and reports through ``emit(signal, *args)``
+    — the checker's signals. Deliberately not a QObject (see UpdateChecker)."""
 
-    def __init__(self, owner, repo, current_version):
-        super().__init__()
+    def __init__(self, owner, repo, current_version, emit):
         self.owner = owner
         self.repo = repo
         self.current_version = current_version
+        self.emit = emit
 
     def run(self):
         try:
@@ -119,8 +108,7 @@ class UpdateWorker(QObject):
             
             latest_tag = data.get("tag_name", "").lstrip("v")
             if not latest_tag:
-                 self.error.emit("Could not parse version from release.")
-                 self.finished.emit()
+                 self.emit("error_occurred", "Could not parse version from release.")
                  return
 
             if version.parse(latest_tag) > version.parse(self.current_version):
@@ -139,28 +127,24 @@ class UpdateWorker(QObject):
                             break
                 
                 if asset_url:
-                    self.update_available.emit(latest_tag, data.get("html_url", ""), asset_url)
+                    self.emit("update_available", latest_tag, data.get("html_url", ""), asset_url)
                 else:
-                    self.error.emit(f"New version {latest_tag} available, but no installer found for your OS.")
+                    self.emit("error_occurred", f"New version {latest_tag} available, but no installer found for your OS.")
             else:
-                self.up_to_date.emit()
+                self.emit("up_to_date")
 
         except Exception as e:
-            self.error.emit(str(e))
-        finally:
-            self.finished.emit()
+            self.emit("error_occurred", str(e))
 
 
-class DownloadWorker(QObject):
-    progress = Signal(int)
-    finished_path = Signal(str)
-    error = Signal(str)
-    finished = Signal()
+class DownloadWorker:
+    """Downloads an installer and reports through ``emit(signal, *args)`` —
+    the checker's signals. Deliberately not a QObject (see UpdateChecker)."""
 
-    def __init__(self, url, filename):
-        super().__init__()
+    def __init__(self, url, filename, emit):
         self.url = url
         self.filename = filename
+        self.emit = emit
 
     def run(self):
         try:
@@ -188,11 +172,9 @@ class DownloadWorker(QObject):
                         downloaded_size += len(chunk)
                         if total_size > 0:
                             percent = int((downloaded_size / total_size) * 100)
-                            self.progress.emit(percent)
+                            self.emit("download_progress", percent)
             
-            self.finished_path.emit(save_path)
+            self.emit("download_finished", save_path)
             
         except Exception as e:
-            self.error.emit(str(e))
-        finally:
-            self.finished.emit()
+            self.emit("error_occurred", str(e))
