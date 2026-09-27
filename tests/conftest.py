@@ -10,6 +10,7 @@ Two things have to happen before anything else imports Qt or the app:
   the real user's data.
 """
 
+import gc
 import os
 import sys
 import tempfile
@@ -48,3 +49,26 @@ def sandbox_dir():
     """A fresh empty directory for a test that writes files."""
     with tempfile.TemporaryDirectory() as path:
         yield Path(path)
+
+
+@pytest.fixture(autouse=True)
+def _collect_qt_cycles_on_the_gui_thread():
+    """Collect reference cycles after every test, here, on the GUI thread.
+
+    Many Qt objects a test builds sit in Python reference cycles (an
+    ImageViewer and its managers hold each other), so nothing frees them when
+    the test ends — the cyclic garbage collector does, later, on whichever
+    thread happens to trigger it. When that is a worker thread, the C++
+    destructor runs there too, and a QObject destroyed off the thread that
+    started its timers cannot stop them: the timer stays registered on the GUI
+    thread and fires into freed memory at the next processEvents(). That is how
+    the suite used to die with SIGSEGV in QTimerInfoList::activateTimers:
+    test_render_parity built ImageViewers, a worker thread's garbage
+    collection destroyed them, and test_type_text_tool's first processEvents()
+    fired their scene's index timer. Traced in gdb: ~QGraphicsView on a
+    non-GUI thread, reached from _PyObject_ClearManagedDict. Whether it
+    happened depended only on when collection ran, so adding or removing any
+    one test file moved it.
+    """
+    yield
+    gc.collect()
