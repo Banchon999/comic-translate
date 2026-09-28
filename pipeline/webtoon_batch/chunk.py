@@ -163,6 +163,12 @@ class ChunkMixin:
             self.main_page.image_skipped.emit(image_path, "Translation", err_msg)
             for block in blocks:
                 block.translation = ""
+            return
+        issues = translator.check_glossary(blocks)
+        if issues:
+            self.main_page.glossary_issues_found.emit(
+                image_path, [(i.seen_as or i.source_term, i.expected) for i in issues]
+            )
 
     def _inpaint_image_with_blocks(
         self: WebtoonBatchProcessor,

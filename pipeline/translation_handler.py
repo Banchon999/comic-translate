@@ -31,6 +31,11 @@ class TranslationHandler:
         self.pipeline = pipeline
 
     def translate_image(self, single_block=False):
+        """Translate the page (or the selected block).
+
+        Returns the GlossaryIssues of what was translated, for the caller to
+        show on the GUI thread; an empty list when there is nothing to report.
+        """
         source_lang = to_canonical_language_name(
             self.main_page.s_combo.currentText(),
             self.main_page.lang_mapping,
@@ -59,11 +64,11 @@ class TranslationHandler:
             if single_block:
                 blk = self.pipeline.get_selected_block()
                 if blk is None:
-                    return
+                    return []
                 
                 # Check if block already has translation to avoid redundant processing
                 if hasattr(blk, 'translation') and blk.translation and blk.translation.strip():
-                    return
+                    return []
                 
                 # Check if we have cached translation results for this image/translator/language combination
                 if self.cache_manager._is_translation_cached(translation_cache_key):
@@ -73,7 +78,7 @@ class TranslationHandler:
                         blk.translation = cached_translation
                         logger.info(f"Using cached translation result for block: '{cached_translation}'")
                         set_upper_case([blk], upper_case)
-                        return
+                        return translator.check_glossary([blk])
                     else:
                         logger.info("Block not found in cache or source text changed, processing single block...")
                     
@@ -105,6 +110,7 @@ class TranslationHandler:
                         logger.info(f"Cached translation results and extracted translation for block: {cached_translation}")
                     
                     set_upper_case([blk], upper_case)
+                return translator.check_glossary([blk])
             else:
                 # For full page translation, check if we can use cached results
                 if self.cache_manager._can_serve_all_blocks_from_translation_cache(translation_cache_key, self.main_page.blk_list):
@@ -118,9 +124,14 @@ class TranslationHandler:
                     logger.info("Translation completed and cached for %d blocks", len(self.main_page.blk_list))
                 
                 set_upper_case(self.main_page.blk_list, upper_case)
+                return translator.check_glossary(self.main_page.blk_list)
+        return []
 
     def translate_webtoon_visible_area(self, single_block=False):
-        """Perform translation on the visible area in webtoon mode."""
+        """Perform translation on the visible area in webtoon mode.
+
+        Returns the GlossaryIssues of the translated blocks, like translate_image.
+        """
         source_lang = to_canonical_language_name(
             self.main_page.s_combo.currentText(),
             self.main_page.lang_mapping,
@@ -133,13 +144,13 @@ class TranslationHandler:
         if not (self.main_page.image_viewer.hasPhoto() and 
                 self.main_page.webtoon_mode):
             logger.warning("translate_webtoon_visible_area called but not in webtoon mode")
-            return
+            return []
         
         # Get the visible area image and mapping data
         visible_image, mappings = self.main_page.image_viewer.get_visible_area_image()
         if visible_image is None or not mappings:
             logger.warning("No visible area found for translation")
-            return
+            return []
         
         # Filter blocks to only those in the visible area and convert coordinates
         visible_blocks = filter_and_convert_visible_blocks(
@@ -147,7 +158,7 @@ class TranslationHandler:
         )
         if not visible_blocks:
             logger.info("No blocks found in visible area")
-            return
+            return []
         
         # Perform translation on the visible image with filtered blocks
         settings_page = self.main_page.settings_page
@@ -164,3 +175,4 @@ class TranslationHandler:
         set_upper_case(visible_blocks, upper_case)
         
         logger.info(f"Translation completed for {len(visible_blocks)} blocks in visible area")
+        return translator.check_glossary(visible_blocks)

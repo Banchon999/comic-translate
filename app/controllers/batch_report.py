@@ -42,6 +42,7 @@ class BatchReportController:
             "paths": tracked_paths,
             "path_set": set(tracked_paths),
             "skipped": {},
+            "glossary": {},
         }
 
     def _sanitize_batch_skip_error(self, error: str) -> str:
@@ -233,6 +234,27 @@ class BatchReportController:
         if reason_text and reason_text not in existing["reasons"]:
             existing["reasons"].append(reason_text)
 
+    def register_glossary_issues(self, image_path: str, issues: list):
+        """Record glossary terms a page's translation left out.
+
+        issues is a list of (term as seen in the source, expected translation)
+        pairs. A warning, not a skip: the page was translated and saved.
+        """
+        report = self._current_batch_report
+        if not report or not issues:
+            return
+        if image_path not in report["path_set"]:
+            return
+        entry = report.setdefault("glossary", {}).setdefault(image_path, {
+            "image_path": image_path,
+            "image_name": os.path.basename(image_path),
+            "issues": [],
+        })
+        for seen_as, expected in issues:
+            pair = [str(seen_as), str(expected)]
+            if pair not in entry["issues"]:
+                entry["issues"].append(pair)
+
     def finalize_batch_report(self, was_cancelled: bool):
         report = self._current_batch_report
         self._current_batch_report = None
@@ -245,6 +267,10 @@ class BatchReportController:
             key=lambda entry: entry["image_name"].lower(),
         )
         skipped_count = len(skipped_entries)
+        glossary_entries = sorted(
+            report.get("glossary", {}).values(),
+            key=lambda entry: entry["image_name"].lower(),
+        )
 
         finalized = {
             "started_at": report["started_at"],
@@ -254,6 +280,8 @@ class BatchReportController:
             "skipped_count": skipped_count,
             "completed_count": max(0, total_images - skipped_count),
             "skipped_entries": skipped_entries,
+            "glossary_entries": glossary_entries,
+            "glossary_count": sum(len(e["issues"]) for e in glossary_entries),
         }
         self._latest_batch_report = finalized
         self.refresh_button_state()
@@ -443,8 +471,61 @@ class BatchReportController:
             empty_label.setWordWrap(True)
             layout.addWidget(empty_label)
 
+        glossary_entries = report.get("glossary_entries") or []
+        if glossary_entries:
+            layout.addWidget(self._build_glossary_section(glossary_entries))
+
         layout.addStretch()
         return container
+
+    def _build_glossary_section(self, glossary_entries: list[dict]) -> QtWidgets.QWidget:
+        """Pages whose translation left out glossary terms, one row per page."""
+        section = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(section)
+        layout.setContentsMargins(0, 6, 0, 0)
+        layout.setSpacing(6)
+        count = sum(len(entry["issues"]) for entry in glossary_entries)
+        header = QtWidgets.QLabel(self.main.tr("Glossary Warnings ({0})").format(count))
+        header.setStyleSheet("font-weight: 600;")
+        layout.addWidget(header)
+        hint = QtWidgets.QLabel(self.main.tr(
+            "These pages were translated, but some glossary terms were not "
+            "translated as set. Double-click a row to open that page."
+        ))
+        hint.setWordWrap(True)
+        layout.addWidget(hint)
+
+        table = QtWidgets.QTableWidget(len(glossary_entries), 2)
+        table.setHorizontalHeaderLabels([self.main.tr("Image"), self.main.tr("Terms")])
+        table.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
+        table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
+        table.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.SingleSelection)
+        table.verticalHeader().setVisible(False)
+        table.horizontalHeader().setStretchLastSection(True)
+        table.horizontalHeader().setSectionResizeMode(
+            0, QtWidgets.QHeaderView.ResizeMode.ResizeToContents
+        )
+        table.setWordWrap(False)
+        visible_rows = min(max(len(glossary_entries), 3), 10)
+        table.setMinimumHeight(visible_rows * 28 + 36)
+        table.setMaximumHeight(visible_rows * 28 + 36)
+        should_be = self.main.tr("«{0}» should be «{1}»")
+        for row, entry in enumerate(glossary_entries):
+            image_item = QtWidgets.QTableWidgetItem(entry["image_name"])
+            image_item.setData(QtCore.Qt.ItemDataRole.UserRole, entry["image_path"])
+            image_item.setToolTip(entry["image_path"])
+            table.setItem(row, 0, image_item)
+            terms = "; ".join(should_be.format(seen, expected) for seen, expected in entry["issues"])
+            terms_item = QtWidgets.QTableWidgetItem(terms)
+            terms_item.setToolTip("\n".join(
+                should_be.format(seen, expected) for seen, expected in entry["issues"]
+            ))
+            table.setItem(row, 1, terms_item)
+        table.itemDoubleClicked.connect(
+            lambda item, t=table: self._open_report_row_image(t, item.row())
+        )
+        layout.addWidget(table)
+        return section
 
     def show_latest_batch_report(self):
         report = self._latest_batch_report

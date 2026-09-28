@@ -52,6 +52,8 @@ class ComicTranslate(ComicTranslateUI):
     patches_processed = QtCore.Signal(list, str)
     progress_update = QtCore.Signal(int, int, int, int, bool)
     image_skipped = QtCore.Signal(str, str, str)
+    # (image path, [(term as seen in the source, expected translation), ...])
+    glossary_issues_found = QtCore.Signal(str, object)
     blk_rendered = QtCore.Signal(str, int, object, str)
     render_state_ready = QtCore.Signal(str)
     download_event = QtCore.Signal(str, str)  # status, name
@@ -146,6 +148,7 @@ class ComicTranslate(ComicTranslateUI):
             pass
 
         self.image_skipped.connect(self.image_ctrl.on_image_skipped)
+        self.glossary_issues_found.connect(self.batch_report_ctrl.register_glossary_issues)
         self.image_processed.connect(self.image_ctrl.on_image_processed)
         self.patches_processed.connect(self.image_ctrl.on_inpaint_patches_processed)
         self.progress_update.connect(self.update_progress)
@@ -931,6 +934,8 @@ class ComicTranslate(ComicTranslateUI):
             Messages.show_batch_skipped_summary(self, report["skipped_count"])
         elif not was_cancelled:
             Messages.show_translation_complete(self)
+        if report and report.get("glossary_count"):
+            Messages.show_batch_glossary_summary(self, len(report["glossary_entries"]))
 
         # Drop cached models/sessions after batch to keep RAM bounded.
         try:

@@ -9,6 +9,22 @@ from ...utils.textblock import TextBlock
 from ...utils.translator_utils import get_raw_text, set_texts_from_json
 
 
+def build_user_prompt(raw_text: str, extra_context: str = "") -> str:
+    """The user message for an LLM translation.
+
+    The context (which carries the glossary) comes after the request for
+    natural wording, right before the text: the last instruction the model
+    reads is the one it weighs most, and the glossary has to win when the two
+    disagree. It used to come first, and a term's fixed translation lost to
+    "sound natural" often enough to be the complaint.
+    """
+    parts = ["Make the translation sound as natural as possible."]
+    if extra_context and extra_context.strip():
+        parts.append(extra_context.strip())
+    parts.append(f"Translate this:\n{raw_text}")
+    return "\n\n".join(parts)
+
+
 class BaseLLMTranslation(LLMTranslation):
     """Base class for LLM-based translation engines with shared functionality."""
 
@@ -61,7 +77,7 @@ class BaseLLMTranslation(LLMTranslation):
         """
         entire_raw_text = get_raw_text(blk_list)
         system_prompt = self.get_system_prompt(self.source_lang, self.target_lang)
-        user_prompt = f"{extra_context}\nMake the translation sound as natural as possible.\nTranslate this:\n{entire_raw_text}"
+        user_prompt = build_user_prompt(entire_raw_text, extra_context)
         
         entire_translated_text = self._perform_translation(user_prompt, system_prompt, image)
         set_texts_from_json(blk_list, entire_translated_text)
