@@ -1,8 +1,12 @@
+import logging
+
 import numpy as np
 
 from ..utils.textblock import TextBlock
 from .base import LLMTranslation
 from .factory import TranslationFactory
+
+logger = logging.getLogger(__name__)
 
 
 class Translator:
@@ -101,3 +105,25 @@ class Translator:
         else:
             # Text-based translators only need the text blocks
             return self.engine.translate(blk_list)
+
+    def check_glossary(self, blk_list: list[TextBlock]) -> list:
+        """Glossary terms the translation of blk_list left out, as GlossaryIssues.
+
+        Only for LLM engines — they are the ones handed the glossary; checking
+        a DeepL result against terms it never saw would only produce noise.
+        Run it on the blocks as they finally stand, after any cache hit, so a
+        page served from cache is checked the same as one just translated.
+        """
+        if not self.is_llm_engine:
+            return []
+        try:
+            manager = self.settings.ui.glossary_page.manager
+        except AttributeError:
+            return []
+        issues = manager.check_translation(blk_list)
+        for issue in issues:
+            logger.warning(
+                "Translation ignored glossary: %r (seen as %r) should be %r",
+                issue.source_term, issue.seen_as, issue.expected,
+            )
+        return issues

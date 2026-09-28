@@ -78,6 +78,13 @@ class BatchProcessor:
         logger.info(f"Progress: image_index={index}/{total} step={step}/{steps} ({stage_name}) change_name={change_name}")
         self.main_page.progress_update.emit(index, total, step, steps, change_name)
 
+    def _report_glossary_issues(self, image_path, issues):
+        """Send a page's glossary warnings to the batch report (GUI thread)."""
+        if issues:
+            self.main_page.glossary_issues_found.emit(
+                image_path, [(i.seen_as or i.source_term, i.expected) for i in issues]
+            )
+
     def log_skipped_image(self, directory, timestamp, image_path, reason="", full_traceback=""):
         # Deprecated: skip details are captured by batch reporting/UI signals.
         return
@@ -428,6 +435,8 @@ class BatchProcessor:
                 self.main_page.image_skipped.emit(image_path, "Translator", err_msg)
                 self.log_skipped_image(directory, timestamp, image_path, reason, full_traceback)
                 continue
+
+            self._report_glossary_issues(image_path, translator.check_glossary(blk_list))
 
             if self._is_cancelled():
                 return

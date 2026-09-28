@@ -681,6 +681,12 @@ def _remap_batch_report_paths_for_loaded_project(
         remapped_entries.append(remapped_entry)
 
     remapped_report["skipped_entries"] = remapped_entries
+    if batch_report.get("glossary_entries"):
+        remapped_report["glossary_entries"] = [
+            {**entry, "image_path": path_map.get(entry.get("image_path"), entry.get("image_path"))}
+            if isinstance(entry, dict) else entry
+            for entry in batch_report["glossary_entries"]
+        ]
     return remapped_report
 
 

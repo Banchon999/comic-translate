@@ -136,11 +136,11 @@ class ComicTranslatePipeline:
     # Translation methods (delegate to translation_handler)
     def translate_image(self, single_block=False):
         """Translate image or single block."""
-        self.translation_handler.translate_image(single_block)
+        return self.translation_handler.translate_image(single_block)
 
     def translate_webtoon_visible_area(self, single_block=False):
         """Translate visible area in webtoon mode."""
-        self.translation_handler.translate_webtoon_visible_area(single_block)
+        return self.translation_handler.translate_webtoon_visible_area(single_block)
     
     # Batch processing methods
     def batch_process(self, selected_paths=None):

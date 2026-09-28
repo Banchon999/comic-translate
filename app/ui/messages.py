@@ -254,3 +254,47 @@ class Messages:
             closable=True
         )
 
+
+    @staticmethod
+    def glossary_issues_text(issues, limit: int = 5) -> str:
+        """The warning shown when a translation left out glossary terms."""
+        lines = [
+            QCoreApplication.translate(
+                "Messages",
+                "{0} glossary term(s) were not translated as set in the glossary:"
+            ).format(len(issues))
+        ]
+        line = QCoreApplication.translate("Messages", "«{0}» should be «{1}»")
+        seen = set()
+        for issue in issues:
+            pair = (issue.source_term, issue.expected)
+            if pair in seen:
+                continue
+            seen.add(pair)
+            if len(seen) > limit:
+                lines.append("…")
+                break
+            lines.append(line.format(issue.seen_as or issue.source_term, issue.expected))
+        return "\n".join(lines)
+
+    @staticmethod
+    def show_glossary_issues(parent, issues):
+        """Warn that a translation ignored the glossary (only warns; nothing is changed)."""
+        if not issues:
+            return None
+        return MMessage.warning(
+            text=Messages.glossary_issues_text(issues),
+            parent=parent,
+            duration=None,
+            closable=True
+        )
+
+    @staticmethod
+    def show_batch_glossary_summary(parent, page_count: int):
+        """A batch finished and some pages ignored glossary terms."""
+        text = QCoreApplication.translate(
+            "Messages",
+            "{0} page(s) have translations that do not follow the glossary.\n"
+            "Open Batch Report to see which terms."
+        ).format(page_count)
+        return MMessage.warning(text=text, parent=parent, duration=None, closable=True)

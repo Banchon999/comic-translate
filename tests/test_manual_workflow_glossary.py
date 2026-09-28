@@ -23,6 +23,7 @@ from PySide6.QtGui import QColor
 
 from app.controllers import manual_workflow as manual_workflow_module
 from app.controllers.manual_workflow import ManualWorkflowController
+from modules.translation.processor import Translator
 from modules.utils.glossary import GlossaryEntry
 from modules.utils.textblock import TextBlock
 from pipeline.cache_manager import CacheManager
@@ -33,20 +34,36 @@ class FakeTranslator:
     reaching an LLM, and echoes the source text back as a fake translation."""
 
     calls: list[str] = []
+    # What the fake "LLM" answers per source text; the source echoed otherwise.
+    answers: dict[str, str] = {}
 
     def __init__(self, main_page, source_lang, target_lang):
-        pass
+        self.settings = main_page.settings_page
+        self.is_llm_engine = True
 
     def translate(self, blk_list, image, extra_context):
         FakeTranslator.calls.append(extra_context)
         for blk in blk_list:
-            blk.translation = f"[{blk.text}]"
+            blk.translation = FakeTranslator.answers.get(blk.text, f"[{blk.text}]")
         return blk_list
+
+    # The real post-translation glossary check, run against the fake's output.
+    check_glossary = Translator.check_glossary
+
+
+#: Every glossary warning the controller asked to show, one list per toast.
+shown: list[list] = []
 
 
 @pytest.fixture(autouse=True)
 def stub_heavy_dependencies(monkeypatch):
     FakeTranslator.calls = []
+    FakeTranslator.answers = {}
+    shown.clear()
+    monkeypatch.setattr(
+        manual_workflow_module.Messages, "show_glossary_issues",
+        staticmethod(lambda parent, issues: shown.append(list(issues))),
+    )
     monkeypatch.setattr(manual_workflow_module, "Translator", FakeTranslator)
     monkeypatch.setattr(manual_workflow_module, "validate_translator", lambda *a, **kw: True)
     # The single-page cross-check goes through TranslationHandler, which
@@ -198,3 +215,75 @@ class TestMultiPageTranslateReachesTheGlossary:
         handler.translate_image(single_block=False)
 
         assert "Cheolsu" in FakeTranslator.calls[0]
+
+
+class TestTranslationThatIgnoresTheGlossaryIsReported:
+    """The owner's choice: warn, never re-translate on their behalf."""
+
+    def _states(self):
+        return {
+            "a.png": {"blk_list": [TextBlock(text_bbox=np.array([0, 0, 10, 10]), text="철수가 말했다")]},
+            "b.png": {"blk_list": [TextBlock(text_bbox=np.array([0, 0, 10, 10]), text="hello")]},
+        }
+
+    def test_multi_page_translate_warns_once_with_every_miss(self, settings_page):
+        FakeTranslator.answers = {"철수가 말했다": "เชลซีพูด"}
+        states = self._states()
+        ctrl = ManualWorkflowController(make_main(settings_page, states, ["a.png", "b.png"]))
+        ctrl.translate_image(single_block=False)
+
+        (issues,) = shown
+        assert [(i.source_term, i.expected) for i in issues] == [("철수", "Cheolsu")]
+        # Only a warning: the translation the model gave is kept.
+        assert states["a.png"]["blk_list"][0].translation == "เชลซีพูด"
+
+    def test_a_translation_that_follows_the_glossary_is_silent(self, settings_page):
+        FakeTranslator.answers = {"철수가 말했다": "Cheolsu พูด"}
+        ctrl = ManualWorkflowController(make_main(settings_page, self._states(), ["a.png", "b.png"]))
+        ctrl.translate_image(single_block=False)
+        assert shown == []
+
+    def test_the_single_page_handler_returns_the_misses(self, settings_page):
+        from pipeline.translation_handler import TranslationHandler
+
+        FakeTranslator.answers = {"철수가 말했다": "เชลซีพูด"}
+        main = types.SimpleNamespace()
+        main.settings_page = settings_page
+        main.image_viewer = types.SimpleNamespace(
+            hasPhoto=lambda: True,
+            get_image_array=lambda: np.zeros((10, 10, 3), dtype=np.uint8),
+        )
+        main.blk_list = [TextBlock(text_bbox=np.array([0, 0, 10, 10]), text="철수가 말했다")]
+        main.s_combo = types.SimpleNamespace(currentText=lambda: "English")
+        main.t_combo = types.SimpleNamespace(currentText=lambda: "Thai")
+        main.lang_mapping = {}
+        handler = TranslationHandler(main, CacheManager(), pipeline=types.SimpleNamespace())
+
+        issues = handler.translate_image(single_block=False)
+        assert [i.expected for i in issues] == ["Cheolsu"]
+        # Served from the cache the second time — and still checked.
+        assert [i.expected for i in handler.translate_image(single_block=False)] == ["Cheolsu"]
+        assert len(FakeTranslator.calls) == 1
+
+    def test_the_single_page_warning_reaches_the_user(self, settings_page):
+        main = make_main(settings_page, self._states(), [])
+        issue = types.SimpleNamespace(source_term="철수", expected="Cheolsu", seen_as="철수")
+        main.blk_list = [TextBlock(text_bbox=np.array([0, 0, 10, 10]), text="철수")]
+        main.pipeline = types.SimpleNamespace(translate_image=lambda single_block: [issue])
+        ctrl = ManualWorkflowController(main)
+        ctrl.translate_image(single_block=False)
+        assert shown == [[issue]]
+
+        shown.clear()
+        main.webtoon_mode = True
+        main.pipeline = types.SimpleNamespace(
+            translate_webtoon_visible_area=lambda single_block: [issue]
+        )
+        ctrl.translate_image(single_block=False)
+        assert shown == [[issue]]
+
+        shown.clear()
+        ctrl.report_glossary_issues([issue])
+        ctrl.report_glossary_issues([])
+        ctrl.report_glossary_issues(None)
+        assert shown == [[issue]]

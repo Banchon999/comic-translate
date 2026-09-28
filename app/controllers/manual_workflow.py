@@ -354,6 +354,8 @@ class ManualWorkflowController:
             translator_key = settings_page.get_tool_selection("translator")
             upper_case = settings_page.ui.uppercase_checkbox.isChecked()
 
+            glossary_issues: list = []
+
             def translate_selected_pages() -> dict[str, list[TextBlock]]:
                 cache_manager = self.main.pipeline.cache_manager
                 results: dict[str, list[TextBlock]] = {}
@@ -387,6 +389,7 @@ class ManualWorkflowController:
                         translator.translate(blk_list, image, extra_context)
                         cache_manager._cache_translation_results(cache_key, blk_list)
                     set_upper_case(blk_list, upper_case)
+                    glossary_issues.extend(translator.check_glossary(blk_list))
                     results[file_path] = blk_list
                 return results
 
@@ -405,6 +408,7 @@ class ManualWorkflowController:
 
                 if results:
                     self.main.mark_project_dirty()
+                self.report_glossary_issues(glossary_issues)
 
             self.main.run_threaded(
                 translate_selected_pages,
@@ -425,17 +429,26 @@ class ManualWorkflowController:
         if self.main.webtoon_mode:
             self.main.run_threaded(
                 lambda: self.main.pipeline.translate_webtoon_visible_area(single_block),
-                None,
+                self.report_glossary_issues,
                 self.main.default_error_handler,
                 lambda: self.update_translated_text_items(single_block),
             )
         else:
             self.main.run_threaded(
                 lambda: self.main.pipeline.translate_image(single_block),
-                None,
+                self.report_glossary_issues,
                 self.main.default_error_handler,
                 lambda: self.update_translated_text_items(single_block),
             )
+
+    def report_glossary_issues(self, issues) -> None:
+        """Warn, on the GUI thread, that a translation ignored glossary terms.
+
+        Only a warning, by the owner's choice: re-translating automatically
+        would spend another request and could still come back the same.
+        """
+        if issues:
+            Messages.show_glossary_issues(self.main, issues)
 
     def _get_visible_text_items(self) -> list[TextBlockItem]:
         if not self.main.webtoon_mode:

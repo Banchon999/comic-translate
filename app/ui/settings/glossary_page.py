@@ -1,6 +1,6 @@
 import logging
 
-from PySide6 import QtWidgets, QtCore
+from PySide6 import QtWidgets, QtCore, QtGui
 from PySide6.QtCore import QThreadPool
 
 from app.thread_worker import GenericWorker
@@ -12,7 +12,8 @@ from ..dayu_widgets.combo_box import MComboBox
 from ..dayu_widgets.text_edit import MTextEdit
 
 from modules.utils.glossary import (
-    GlossaryManager, GlossaryEntry, GLOSSARY_PRESET_TYPES, GLOSSARY_GENDERS
+    GlossaryManager, GlossaryEntry, GLOSSARY_PRESET_TYPES, GLOSSARY_GENDERS,
+    collect_source_text,
 )
 
 logger = logging.getLogger(__name__)
@@ -108,6 +109,86 @@ class GlossaryEntryDialog(QtWidgets.QDialog):
             gender=gender,
             note=self.note_input.toPlainText().strip(),
         )
+
+
+# Colour of the mark on a term whose translation contradicts a term inside it.
+OVERLAP_CONFLICT_COLOR = "#d9534f"
+
+
+class GlossaryMatchTestDialog(QtWidgets.QDialog):
+    """Paste OCR text and see which glossary terms reach the translator, and why.
+
+    The question behind "the translation ignored my glossary" is usually
+    whether the term was sent at all; this answers it without translating.
+    """
+
+    def __init__(self, manager: GlossaryManager, text: str = "", parent=None):
+        super().__init__(parent)
+        self.manager = manager
+        self.setWindowTitle(self.tr("Test Glossary Matching"))
+        self.resize(640, 560)
+        layout = QtWidgets.QVBoxLayout(self)
+
+        intro = MLabel(self.tr(
+            "Paste text as OCR read it. Terms are matched ignoring spaces in "
+            "Korean, Japanese, Chinese and Thai, and a term of 3+ letters "
+            "(5+ for Latin script) still matches with one letter wrong."
+        )).secondary()
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+        self.input = MTextEdit()
+        self.input.setPlaceholderText(self.tr("Paste OCR text here"))
+        self.input.setPlainText(text)
+        self.input.setMaximumHeight(140)
+        layout.addWidget(self.input)
+
+        layout.addWidget(MLabel(self.tr("Matched terms")).strong())
+        self.results = QtWidgets.QTextBrowser()
+        layout.addWidget(self.results, 1)
+
+        layout.addWidget(MLabel(self.tr("Sent to the translator")).strong())
+        self.prompt_view = QtWidgets.QPlainTextEdit()
+        self.prompt_view.setReadOnly(True)
+        self.prompt_view.setMaximumHeight(140)
+        layout.addWidget(self.prompt_view)
+
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.StandardButton.Close)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+        self.input.textChanged.connect(self.refresh)
+        self.refresh()
+
+    def refresh(self):
+        text = self.input.toPlainText()
+        report = self.manager.match_report(text) if text.strip() else []
+        rows = []
+        for m in report:
+            e = m.entry
+            src, tgt = _html(e.source), _html(e.target)
+            if m.suppressed_by is not None:
+                rows.append(
+                    "<span style='color:gray'>– " + self.tr(
+                        "{0} → {1}: not sent, it is part of «{2}» here"
+                    ).format(src, tgt, _html(m.suppressed_by.source)) + "</span>"
+                )
+            elif m.fuzzy:
+                rows.append("≈ " + self.tr(
+                    "{0} → {1}: sent, the text has «{2}» (one letter different)"
+                ).format(src, tgt, _html(m.seen_as)))
+            else:
+                rows.append("✓ " + self.tr("{0} → {1}: sent").format(src, tgt))
+        if not rows:
+            rows.append("<span style='color:gray'>" + self.tr("No glossary terms found in this text.") + "</span>")
+        self.results.setHtml("<br>".join(rows))
+        prompt = self.manager.build_prompt(text) if text.strip() else ""
+        if not self.manager.enabled:
+            prompt = self.tr("(The glossary is turned off, so nothing is sent.)")
+        self.prompt_view.setPlainText(prompt)
+
+
+def _html(text: str) -> str:
+    return (text or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 class GlossaryPage(QtWidgets.QWidget):
@@ -265,6 +346,18 @@ class GlossaryPage(QtWidgets.QWidget):
             "most often a Korean name stored twice in different Unicode forms."
         ))
         dedupe_button.clicked.connect(self.merge_duplicates)
+        overlaps_button = MPushButton(self.tr("Check Overlaps")).small()
+        overlaps_button.setToolTip(self.tr(
+            "List terms that contain another term, e.g. «Kim Chulsoo» and «Chulsoo».\n"
+            "Only the longer term is sent where both appear; a red ⚠ marks pairs\n"
+            "whose translations disagree."
+        ))
+        overlaps_button.clicked.connect(self.show_overlaps)
+        test_button = MPushButton(self.tr("Test Matching")).small()
+        test_button.setToolTip(self.tr(
+            "Paste OCR text and see which terms would be sent to the translator."
+        ))
+        test_button.clicked.connect(self.test_matching)
         import_button = MPushButton(self.tr("Import...")).small()
         import_button.clicked.connect(self.import_file)
         export_json_button = MPushButton(self.tr("Export JSON")).small()
@@ -273,6 +366,7 @@ class GlossaryPage(QtWidgets.QWidget):
         export_csv_button.clicked.connect(lambda: self.export_file("csv"))
 
         for b in (add_button, edit_button, delete_button, dedupe_button,
+                  overlaps_button, test_button,
                   import_button, export_json_button, export_csv_button):
             buttons_layout.addWidget(b)
         buttons_layout.addStretch(1)
@@ -580,16 +674,47 @@ class GlossaryPage(QtWidgets.QWidget):
             entries = [e for e in entries if e.type == type_filter]
         return entries
 
+    def _overlap_notes(self) -> dict[str, tuple[bool, list[str]]]:
+        """Per term key: (involved in a conflicting pair, tooltip lines)."""
+        notes: dict[str, tuple[bool, list[str]]] = {}
+
+        def add(key, conflict, line):
+            old_conflict, lines = notes.get(key, (False, []))
+            notes[key] = (old_conflict or conflict, lines + [line])
+
+        for o in self.manager.find_overlaps():
+            if o.consistent:
+                line_short = self.tr("Part of «{0}» ({1}); translations agree.").format(o.long.source, o.long.target)
+                line_long = self.tr("Contains «{0}» ({1}); translations agree.").format(o.short.source, o.short.target)
+            else:
+                line_short = self.tr(
+                    "Part of «{0}» ({1}), but translated differently. "
+                    "Where «{0}» appears only it is sent."
+                ).format(o.long.source, o.long.target)
+                line_long = self.tr(
+                    "Contains «{0}» ({1}), which is translated differently."
+                ).format(o.short.source, o.short.target)
+            add(o.short.key, not o.consistent, line_short)
+            add(o.long.key, not o.consistent, line_long)
+        return notes
+
     def refresh_table(self):
         entries = self._visible_entries()
+        notes = self._overlap_notes()
         self.table.setRowCount(len(entries))
         for row, entry in enumerate(entries):
             values = [entry.source, entry.target, entry.type, entry.gender, entry.note]
+            conflict, overlap_lines = notes.get(entry.key, (False, []))
             for col, value in enumerate(values):
                 item = QtWidgets.QTableWidgetItem(value)
                 if col == 0:
                     # Keep the source key on the row for edit/delete lookups
                     item.setData(QtCore.Qt.ItemDataRole.UserRole, entry.source)
+                    if overlap_lines:
+                        item.setToolTip("\n".join(overlap_lines))
+                    if conflict:
+                        item.setText(f"{value}  ⚠")
+                        item.setForeground(QtGui.QBrush(QtGui.QColor(OVERLAP_CONFLICT_COLOR)))
                 self.table.setItem(row, col, item)
         self.count_label.setText(
             self.tr("{0} of {1} terms").format(len(entries), len(self.manager.entries))
@@ -637,6 +762,47 @@ class GlossaryPage(QtWidgets.QWidget):
             self.manager.remove(sources)
             self._refresh_type_filter()
             self.refresh_table()
+
+    def show_overlaps(self):
+        """List every pair of terms where one contains the other."""
+        overlaps = self.manager.find_overlaps()
+        if not overlaps:
+            QtWidgets.QMessageBox.information(
+                self, self.tr("Glossary"), self.tr("No terms overlap."),
+            )
+            return
+        overlaps.sort(key=lambda o: o.consistent)
+        conflicts = sum(1 for o in overlaps if not o.consistent)
+        lines = []
+        for o in overlaps:
+            mark = "✓" if o.consistent else "⚠"
+            lines.append(
+                f"{mark} {o.short.source} ({o.short.target})  ⊂  {o.long.source} ({o.long.target})"
+            )
+        box = QtWidgets.QMessageBox(self)
+        box.setWindowTitle(self.tr("Glossary"))
+        box.setIcon(
+            QtWidgets.QMessageBox.Icon.Warning if conflicts
+            else QtWidgets.QMessageBox.Icon.Information
+        )
+        box.setText(self.tr(
+            "{0} overlapping pair(s), {1} with different translations.\n"
+            "Where both terms appear, only the longer one is sent to the translator. "
+            "⚠ pairs are worth checking: the shorter term's translation is used "
+            "wherever it appears on its own."
+        ).format(len(overlaps), conflicts))
+        box.setDetailedText("\n".join(lines))
+        box.setInformativeText("\n".join(lines[:12]) + ("\n…" if len(lines) > 12 else ""))
+        box.exec()
+
+    def test_matching(self):
+        """Open the match tester, filled with the current page's OCR text if any."""
+        text = ""
+        main = self._main_window()
+        blk_list = getattr(main, "blk_list", None) if main is not None else None
+        if blk_list:
+            text = collect_source_text(blk_list).replace("\u2029", "\n")
+        GlossaryMatchTestDialog(self.manager, text, parent=self).exec()
 
     def merge_duplicates(self):
         """Clean up a glossary built before terms were normalised."""
