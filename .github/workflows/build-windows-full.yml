@@ -71,7 +71,7 @@ jobs:
       - name: Build app with PyInstaller
         run: |
           pyinstaller --noconfirm --clean --windowed `
-            --name ComicTranslate `
+            --name ToonStudio `
             --icon resources/icons/icon.ico `
             --add-data "resources;resources" `
             --add-data "$env:ICU_DATA_FILE;." `
@@ -86,7 +86,7 @@ jobs:
       - name: Smoke test bundle
         shell: pwsh
         run: |
-          $p = Start-Process -FilePath "dist/ComicTranslate/ComicTranslate.exe" -PassThru
+          $p = Start-Process -FilePath "dist/ToonStudio/ToonStudio.exe" -PassThru
           Start-Sleep -Seconds 30
           if ($p.HasExited) {
             Write-Error "App exited early with code $($p.ExitCode)"
@@ -103,7 +103,7 @@ jobs:
         run: |
           $missing = @()
           foreach ($pkg in @('torch', 'torchvision', 'transformers')) {
-            if (-not (Get-ChildItem -Path dist/ComicTranslate -Recurse -Directory -Filter $pkg -ErrorAction SilentlyContinue)) {
+            if (-not (Get-ChildItem -Path dist/ToonStudio -Recurse -Directory -Filter $pkg -ErrorAction SilentlyContinue)) {
               $missing += $pkg
             }
           }
@@ -135,9 +135,9 @@ jobs:
           # Run the real probe in the built exe — it constructs a font manager,
           # builds and lays out a paragraph and rasterises a surface, which is
           # what the render path actually does.
-          $exe = Get-ChildItem -Path dist -Recurse -File -Filter 'ComicTranslate.exe' |
+          $exe = Get-ChildItem -Path dist -Recurse -File -Filter 'ToonStudio.exe' |
                  Select-Object -First 1
-          if (-not $exe) { Write-Error "no ComicTranslate.exe in dist"; exit 1 }
+          if (-not $exe) { Write-Error "no ToonStudio.exe in dist"; exit 1 }
 
           # Start-Process -Wait, not the call operator. This is a --windowed
           # build, so `& $exe` returns immediately without waiting and leaves
@@ -159,12 +159,12 @@ jobs:
 
       - name: Package zip
         shell: pwsh
-        run: Compress-Archive -Path dist/ComicTranslate -DestinationPath dist/ComicTranslate-Windows-x86_64-full.zip
+        run: Compress-Archive -Path dist/ToonStudio -DestinationPath dist/ToonStudio-Windows-x86_64-full.zip
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v6
         with:
           name: Comic-Translate-Windows-Full
-          path: dist/ComicTranslate-Windows-x86_64-full.zip
+          path: dist/ToonStudio-Windows-x86_64-full.zip
           if-no-files-found: error
           retention-days: 30

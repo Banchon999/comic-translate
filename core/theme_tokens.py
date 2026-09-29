@@ -72,7 +72,12 @@ UI_FONT_FILES = (
     "IBMPlexSansThai-Medium.ttf",
     "IBMPlexSansThai-SemiBold.ttf",
     "IBMPlexSansThai-Bold.ttf",
+    "BricolageGrotesque[opsz,wdth,wght].ttf",
 )
+# Headings and the wordmark (variable font, SIL OFL 1.1). Latin only: a
+# heading holding Thai falls back to the UI face for those characters.
+DISPLAY_FONT_FAMILY = "Bricolage Grotesque"
+BRAND_NAME = "Toon Studio"
 
 # Pairs that must stay readable: (foreground, background, minimum ratio).
 # 4.5:1 is WCAG AA for body text; 3:1 for large text and UI shapes.
