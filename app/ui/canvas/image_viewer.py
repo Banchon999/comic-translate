@@ -12,6 +12,7 @@ from modules.utils.common_utils import new_object_id
 from app.ui.canvas.scene_registry import put_layer, set_item_layer, iter_items
 from app.ui.canvas.layer_apply import apply_layer_state
 from core.layers import DocumentLayers
+from core import theme_tokens
 from .rotate_cursor import RotateHandleCursors
 from .drawing_manager import DrawingManager
 from .webtoons.webtoon_manager import LazyWebtoonManager
@@ -56,7 +57,8 @@ class ImageViewer(QGraphicsView):
         self.setResizeAnchor(QGraphicsView.AnchorUnderMouse)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.setBackgroundBrush(QtGui.QBrush(QtGui.QColor(30, 30, 30)))
+        # Behind the page: the theme's ground; window.apply_theme repaints it.
+        self.setBackgroundBrush(QtGui.QBrush(QtGui.QColor(theme_tokens.DARK["ground"])))
         self.setFrameShape(QtWidgets.QFrame.NoFrame)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.viewport().setAttribute(Qt.WidgetAttribute.WA_AcceptTouchEvents, True)

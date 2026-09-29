@@ -3,6 +3,8 @@ from __future__ import annotations
 from PySide6 import QtCore, QtWidgets
 from PySide6.QtCore import Qt
 
+from app.ui.dayu_widgets import dayu_theme
+from core import theme_tokens
 from app.ui.dayu_widgets.combo_box import MComboBox
 from app.ui.dayu_widgets.expanding_text_edit import MExpandingTextEdit
 from app.ui.dayu_widgets.tool_button import MToolButton
@@ -34,6 +36,7 @@ class SearchReplacePanel(QtWidgets.QWidget):
         self._live_timer.setInterval(250)
         self._live_timer.timeout.connect(self.search_requested)
         self._build_ui()
+        self.apply_theme(dayu_theme.is_dark)
 
     def _apply_latching_toggle_style(self, btn: QtWidgets.QToolButton):
         # Ensure check state is visually persistent (VS Code-like "latched" toggles).
@@ -69,7 +72,7 @@ class SearchReplacePanel(QtWidgets.QWidget):
         header_row.setSpacing(2)
 
         title_lbl = QtWidgets.QLabel(self.tr("Search"))
-        title_lbl.setStyleSheet("font-weight: bold; color: #BBBBBB;")
+        self._title_lbl = title_lbl
         header_row.addWidget(title_lbl)
         header_row.addStretch()
 
@@ -171,7 +174,6 @@ class SearchReplacePanel(QtWidgets.QWidget):
 
         self.summary_label = QtWidgets.QLabel(self.tr("0 results"))
         self.summary_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        self.summary_label.setStyleSheet("color: #999999;")
 
         # ─── REPLACE ROW ────────────────────────────────────────────────────
         replace_row = QtWidgets.QHBoxLayout()
@@ -269,7 +271,6 @@ class SearchReplacePanel(QtWidgets.QWidget):
         layout.addLayout(meta_row)
 
         self.status_label = QtWidgets.QLabel(self.tr("Ready"))
-        self.status_label.setStyleSheet("color: #999999;")
         self.status_label.setContentsMargins(6, 0, 6, 0)
         layout.addWidget(self.status_label)
 
@@ -282,21 +283,6 @@ class SearchReplacePanel(QtWidgets.QWidget):
         self.results_tree.itemActivated.connect(self._emit_activated)
         self.results_tree.itemClicked.connect(self._emit_activated)
         self.results_tree.setMinimumHeight(90)
-        self.results_tree.setStyleSheet("""
-            QTreeWidget {
-                outline: none;
-            }
-            QTreeWidget::item {
-                border: none;
-                outline: none;
-            }
-            QTreeWidget::item:hover:!selected {
-                background-color: rgba(59, 130, 246, 0.2);
-            }
-            QTreeWidget::item:selected {
-                background-color: rgba(59, 130, 246, 0.4);
-            }
-        """)
         layout.addWidget(self.results_tree, 1)
 
         # Make combos wide enough for their longest entries.
@@ -361,3 +347,26 @@ class SearchReplacePanel(QtWidgets.QWidget):
         m = item.data(0, Qt.ItemDataRole.UserRole)
         if m is not None:
             self.result_activated.emit(m)
+
+    def apply_theme(self, is_dark: bool) -> None:
+        """Colours that follow the theme; called again whenever it changes."""
+        t = theme_tokens.palette(dark=is_dark)
+        self._title_lbl.setStyleSheet(f"font-weight: bold; color: {t['text_2']};")
+        self.summary_label.setStyleSheet(f"color: {t['text_3']};")
+        self.status_label.setStyleSheet(f"color: {t['text_3']};")
+        self.results_tree.setStyleSheet(f"""
+            QTreeWidget {{
+                outline: none;
+            }}
+            QTreeWidget::item {{
+                border: none;
+                outline: none;
+            }}
+            QTreeWidget::item:hover:!selected {{
+                background-color: {theme_tokens.rgba(t['accent'], 0.14)};
+            }}
+            QTreeWidget::item:selected {{
+                background-color: {theme_tokens.rgba(t['accent'], 0.28)};
+                color: {t['text_1']};
+            }}
+        """)

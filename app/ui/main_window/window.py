@@ -8,7 +8,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from app.ui.canvas.image_viewer import ImageViewer
 from app.ui.dayu_widgets import dayu_theme
 from app.ui.dayu_widgets.divider import MDivider
-from app.ui.dayu_widgets.theme import MTheme
+from core import theme_tokens
 from app.ui.list_view import PageListView
 from app.ui.settings.settings_page import SettingsPage
 from app.ui.startup_home import StartupHomeScreen
@@ -141,7 +141,9 @@ class ComicTranslateUI(
             QtCore.Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
         )
         self._settings_resize_preview.setScaledContents(True)
-        self._settings_resize_preview.setStyleSheet("background-color: #323232;")
+        self._settings_resize_preview.setStyleSheet(
+            f"background-color: {theme_tokens.DARK['panel']};"
+        )
         self._settings_resize_preview.hide()
         self._settings_resize_active = False
         self._settings_resize_settle_timer = QtCore.QTimer(self)
@@ -411,25 +413,25 @@ class ComicTranslateUI(
         if not hasattr(self, "title_bar"):
             return
         light = (theme == self.settings_page.ui.tr("Light")) if hasattr(self, "settings_page") else False
-        if light:
-            self.title_bar.apply_style(bg="#f0f0f0", fg="#1a1a1a", hover="rgba(0,0,0,25)")
-        else:
-            self.title_bar.apply_style(bg="#2b2b2b", fg="#e8e8e8", hover="rgba(255,255,255,30)")
+        t = theme_tokens.palette(dark=not light)
+        self.title_bar.apply_style(bg=t["panel"], fg=t["text_1"], hover=t["hover"])
 
     def apply_theme(self, theme: str):
-        if theme == self.settings_page.ui.tr("Light"):
-            dayu_theme.set_primary_color(MTheme.blue)
-            dayu_theme.set_theme("light")
-            is_dark = False
-        else:
-            dayu_theme.set_primary_color(MTheme.yellow)
-            dayu_theme.set_theme("dark")
-            is_dark = True
+        is_dark = theme != self.settings_page.ui.tr("Light")
+        tokens = theme_tokens.palette(dark=is_dark)
+        dayu_theme.set_primary_color(tokens["accent"])
+        dayu_theme.set_theme("dark" if is_dark else "light")
 
         dayu_theme.apply(self)
         self._apply_title_bar_style(theme)
 
         if self.startup_home:
             self.startup_home.apply_theme(is_dark)
+        viewer = getattr(self, "image_viewer", None)
+        if viewer is not None:
+            viewer.setBackgroundBrush(QtGui.QBrush(QtGui.QColor(tokens["ground"])))
+        search_panel = getattr(self, "search_panel", None)
+        if search_panel is not None:
+            search_panel.apply_theme(is_dark)
 
         self.repaint()

@@ -11,6 +11,7 @@ if sys.platform == "win32":
 
 from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtCore import Qt
+from core import theme_tokens
 from .dayu_widgets import dayu_theme
 from .dayu_widgets.qt import MIcon
 from .dayu_widgets.switch import MSwitch
@@ -424,20 +425,17 @@ class _ProjectDetailsPopup(QtWidgets.QFrame):
         self._bg = QtGui.QColor(bg)
         self._fg = QtGui.QColor(fg)
         is_light_theme = self._fg.lightness() < 128
-        if is_light_theme:
-            panel_bg = "#ffffff"
-            input_bg = "#ffffff"
-            border = "rgba(0,0,0,28)"
-            border_color = QtGui.QColor(0, 0, 0, 28)
-            muted = "#5f6368"
-            browse_bg = "#f5f6f7"
-        else:
-            panel_bg = "#313131"
-            input_bg = "#262626"
-            border = "rgba(255,255,255,34)"
-            border_color = QtGui.QColor(255, 255, 255, 34)
-            muted = "#b7b7b7"
-            browse_bg = "#3a3a3a"
+        t = theme_tokens.palette(dark=not is_light_theme)
+        panel_bg = t["raised"]
+        input_bg = t["panel"]
+        border = t["line_strong"]
+        border_color = QtGui.QColor(t["line_strong"])
+        muted = t["text_2"]
+        browse_bg = t["hover"]
+        accent = t["accent"]
+        accent_hover = t["accent"]
+        on_accent = t["on_accent"]
+        selection = theme_tokens.rgba(t["accent"], 0.35)
 
         self._bg = QtGui.QColor(panel_bg)
         self._border = border_color
@@ -468,10 +466,10 @@ class _ProjectDetailsPopup(QtWidgets.QFrame):
                 border: 1px solid {border};
                 background: {input_bg};
                 color: {fg};
-                selection-background-color: rgba(24, 144, 255, 90);
+                selection-background-color: {selection};
             }}
             QLineEdit#projectPopupLineEdit:focus {{
-                border: 1px solid #1677ff;
+                border: 1px solid {accent};
             }}
             QPushButton#projectPopupBrowseButton {{
                 min-height: 34px;
@@ -482,7 +480,7 @@ class _ProjectDetailsPopup(QtWidgets.QFrame):
                 color: {fg};
             }}
             QPushButton#projectPopupBrowseButton:hover {{
-                border: 1px solid #1677ff;
+                border: 1px solid {accent};
             }}
             QPushButton#projectPopupApplyButton {{
                 min-width: 88px;
@@ -490,12 +488,12 @@ class _ProjectDetailsPopup(QtWidgets.QFrame):
                 padding: 0 12px;
                 border: none;
                 border-radius: 10px;
-                background: #1677ff;
-                color: white;
+                background: {accent};
+                color: {on_accent};
                 font-weight: 600;
             }}
             QPushButton#projectPopupApplyButton:hover {{
-                background: #2a85ff;
+                background: {accent_hover};
             }}
         """)
         self.update()
@@ -840,12 +838,10 @@ class CustomTitleBar(QtWidgets.QWidget):
         switch_width = int(getattr(dayu_theme, "switch_width_small", 28))
         switch_height = int(getattr(dayu_theme, "switch_height_small", 14))
         # Keep the unchecked switch visible against both light and dark bars.
-        if fg_color.lightness() >= 128:
-            switch_off_bg = "#6a6a6a"
-            switch_off_border = "rgba(255,255,255,45)"
-        else:
-            switch_off_bg = "#d0d0d0"
-            switch_off_border = "rgba(0,0,0,25)"
+        t = theme_tokens.palette(dark=fg_color.lightness() >= 128)
+        switch_off_bg = t["line_strong"]
+        switch_off_border = t["line_strong"]
+        switch_on_bg = t["accent"]
 
         for btn in (self.minimize_btn, self.maximize_btn, self.close_btn):
             btn.set_colors(fg_color, hover_color)
@@ -896,7 +892,7 @@ class CustomTitleBar(QtWidgets.QWidget):
                 border: 1px solid {switch_off_border};
             }}
             MSwitch#titleBarAutosaveSwitch::indicator:checked {{
-                background-color: #1890ff;
+                background-color: {switch_on_bg};
             }}
             MToolButton,
             MToolButton:hover,

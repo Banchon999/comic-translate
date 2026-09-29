@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from PySide6 import QtCore, QtWidgets
 
+from app.ui.dayu_widgets import dayu_theme
 from app.ui.dayu_widgets.drawer import MDrawer
 from app.ui.dayu_widgets.message import MMessage
 from app.ui.dayu_widgets.push_button import MPushButton
@@ -368,7 +369,8 @@ class BatchReportController:
         meta_label = QtWidgets.QLabel(
             self.main.tr("{0}  |  Updated {1}").format(status_text, finished)
         )
-        meta_label.setStyleSheet("color: rgba(130,130,130,0.95);")
+        tokens = dayu_theme.tokens
+        meta_label.setStyleSheet(f"color: {tokens['text_3']};")
         layout.addWidget(meta_label)
 
         stats_layout = QtWidgets.QHBoxLayout()
@@ -398,9 +400,9 @@ class BatchReportController:
         layout.addLayout(stats_layout)
 
         container.setStyleSheet(
-            "QFrame#batchStatCard { border: 1px solid rgba(128,128,128,0.35); border-radius: 8px; }"
+            f"QFrame#batchStatCard {{ border: 1px solid {tokens['line']}; border-radius: 10px; }}"
             "QLabel#batchStatValue { font-size: 18px; font-weight: 600; }"
-            "QLabel#batchStatLabel { color: rgba(140,140,140,0.95); font-size: 11px; }"
+            f"QLabel#batchStatLabel {{ color: {tokens['text_3']}; font-size: 11px; }}"
         )
 
         header_label = QtWidgets.QLabel(

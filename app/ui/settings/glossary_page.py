@@ -4,6 +4,7 @@ from PySide6 import QtWidgets, QtCore, QtGui
 from PySide6.QtCore import QThreadPool
 
 from app.thread_worker import GenericWorker
+from ..dayu_widgets import dayu_theme
 from ..dayu_widgets.label import MLabel
 from ..dayu_widgets.line_edit import MLineEdit
 from ..dayu_widgets.check_box import MCheckBox
@@ -109,10 +110,6 @@ class GlossaryEntryDialog(QtWidgets.QDialog):
             gender=gender,
             note=self.note_input.toPlainText().strip(),
         )
-
-
-# Colour of the mark on a term whose translation contradicts a term inside it.
-OVERLAP_CONFLICT_COLOR = "#d9534f"
 
 
 class GlossaryMatchTestDialog(QtWidgets.QDialog):
@@ -714,7 +711,7 @@ class GlossaryPage(QtWidgets.QWidget):
                         item.setToolTip("\n".join(overlap_lines))
                     if conflict:
                         item.setText(f"{value}  ⚠")
-                        item.setForeground(QtGui.QBrush(QtGui.QColor(OVERLAP_CONFLICT_COLOR)))
+                        item.setForeground(QtGui.QBrush(QtGui.QColor(dayu_theme.tokens["danger"])))
                 self.table.setItem(row, col, item)
         self.count_label.setText(
             self.tr("{0} of {1} terms").format(len(entries), len(self.manager.entries))
