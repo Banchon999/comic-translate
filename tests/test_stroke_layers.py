@@ -228,3 +228,19 @@ def test_the_shadow_opacity_control_sets_the_alpha(qapp):
     finally:
         win._skip_close_prompt = True
         win.close()
+
+
+def test_the_handles_are_hit_where_they_are_drawn(item):
+    """Handles are painted on text_rect(); stroke layers grow boundingRect()
+    for repaint only, so hit-testing must not use it."""
+    from app.ui.canvas import handles
+    from app.ui.canvas.image_viewer import ImageViewer
+
+    viewer = ImageViewer(None)
+    viewer._scene.addItem(item)
+    item.set_stroke_layers([("#ff000000", 12)])
+    rect = item.text_rect()
+    centre = handles.handle_centres(rect)["top_left"]
+    assert viewer.interaction_manager.get_resize_handle(item, centre) == "top_left"
+    grown = handles.handle_centres(item.boundingRect())["top_left"]
+    assert viewer.interaction_manager.get_resize_handle(item, grown) is None
