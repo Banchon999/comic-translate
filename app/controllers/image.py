@@ -1221,9 +1221,11 @@ class ImageStateController:
                 # Regular mode - display single image
                 self.main.central_stack.setCurrentWidget(self.main.image_viewer)
 
-            # If the outer stack is still on the home screen, transition to the editor
+            # If the outer stack is still on the home screen (or the Stitch page,
+            # whose "Open as New Project" lands here), transition to the editor
             try:
-                if self.main._center_stack.currentWidget() is self.main.startup_home:
+                current = self.main._center_stack.currentWidget()
+                if current is self.main.startup_home or current is getattr(self.main, "stitch_page", None):
                     self.main.show_main_page()
             except Exception:
                 pass
