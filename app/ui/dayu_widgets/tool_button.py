@@ -64,8 +64,10 @@ class MToolButton(QtWidgets.QToolButton):
 
     def enterEvent(self, event):
         """Override enter event to highlight the icon"""
-        if self._dayu_svg and self.isEnabled():
-            self.setIcon(MIcon(self._dayu_svg, dayu_theme.primary_color))
+        # Hover brightens the icon to body text; the accent is reserved for
+        # the selected tool (see _polish_icon), so hover never looks selected.
+        if self._dayu_svg and self.isEnabled() and not (self.isCheckable() and self.isChecked()):
+            self.setIcon(MIcon(self._dayu_svg, dayu_theme.primary_text_color))
         return super(MToolButton, self).enterEvent(event)
 
     def leaveEvent(self, event):

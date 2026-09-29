@@ -387,12 +387,18 @@ MToolButton {
     border: none;
     padding: 0;
     background-color: transparent;
+    border-radius: @border_radius_base@unit;
 }
 MToolButton:hover{
     color: @primary_5;
+    background-color: @hover_color;
+}
+MToolButton:checked{
+    background-color: @primary_soft;
 }
 MToolButton:pressed{
     color: @primary_7;
+    background-color: @pressed_color;
 }
 
 MTaobaoButton{
