@@ -1235,6 +1235,10 @@ class ImageStateController:
                 self.main.image_viewer.fitInView()
                 self.main.displayed_images.add(file_path)  # Mark this image as displayed
 
+            refresh_step_bar = getattr(self.main, "refresh_step_bar", None)
+            if refresh_step_bar is not None:
+                refresh_step_bar()
+
     def force_default_view_on_next_image_load(self):
         self._force_default_view_once = True
 

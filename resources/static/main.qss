@@ -714,8 +714,8 @@ MFontComboBox[combine=vertical][position=bottom]{
 
 MPushButton:disabled{
     color: @disable_color;
-    border: 2px dashed @disable_color;
-    background-color: @background_color;
+    background-color: @background_in_color;
+    border: 1px solid @border_color;
 }
 
 MPushButton::menu-indicator {
@@ -1374,4 +1374,85 @@ MMeta {
 MSizeGrip {
     background-color: transparent;
     image: url(@icon_size_grip);
+}
+
+/* Toon Studio editor chrome (builders/workspace.py, main_window/editor_chrome.py) */
+QWidget#toonTopBar {
+    background-color: @background_color;
+    border-bottom: 1px solid @border_color;
+}
+QWidget#toonToolRail {
+    background-color: @background_color;
+    border-right: 1px solid @border_color;
+}
+QFrame#toonRailDivider {
+    background-color: @border_color;
+    margin: 4px 0;
+}
+QWidget#toonOptionsBar {
+    background-color: @background_color;
+    border-bottom: 1px solid @border_color;
+}
+QWidget#toonStatusBar {
+    background-color: @background_color;
+    border-top: 1px solid @border_color;
+}
+QLabel#toonOptionLabel,
+QLabel#toonStatusText {
+    color: @secondary_text_color;
+    background: transparent;
+}
+QWidget#toonModeSwitch {
+    background-color: @background_in_color;
+    border: 1px solid @border_color;
+    border-radius: @border_radius_large@unit;
+}
+MPushButton#toonStep {
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: @border_radius_large@unit;
+    padding: 0 10px;
+}
+MPushButton#toonStep:hover {
+    background-color: @hover_color;
+    border-color: @hover_color;
+}
+MPushButton#toonStep[toon_step="done"] {
+    border-color: @border_color;
+}
+MPushButton#toonStep:disabled {
+    color: @disable_color;
+}
+MPushButton#toonRunButton {
+    padding: 0 14px;
+    font-weight: 600;
+}
+QTabWidget#toonInspector::pane {
+    border: none;
+    border-top: 1px solid @border_color;
+}
+QTabWidget#toonInspector QTabBar::tab {
+    background: transparent;
+    color: @secondary_text_color;
+    padding: 8px 14px;
+    border: none;
+    border-bottom: 2px solid transparent;
+}
+QTabWidget#toonInspector QTabBar::tab:selected {
+    color: @primary_text_color;
+    border-bottom: 2px solid @primary_color;
+}
+QTabWidget#toonInspector QTabBar::tab:hover {
+    color: @primary_text_color;
+}
+QLabel#toonSectionLabel {
+    color: @secondary_text_color;
+    font-weight: 600;
+    background: transparent;
+}
+QTextBrowser#toonGlossaryRows {
+    background-color: @background_in_color;
+    border: 1px solid @border_color;
+    border-radius: @border_radius_large@unit;
+    padding: 6px;
 }

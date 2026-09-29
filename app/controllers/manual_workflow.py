@@ -447,6 +447,8 @@ class ManualWorkflowController:
         Only a warning, by the owner's choice: re-translating automatically
         would spend another request and could still come back the same.
         """
+        # Kept for the editor's Glossary tab, which shows the last warning.
+        self.main.last_glossary_issues = list(issues or [])
         if issues:
             Messages.show_glossary_issues(self.main, issues)
 
