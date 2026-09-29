@@ -31,3 +31,4 @@ scripts/*
 !scripts/check_headless.py
 !scripts/check_psd_in_photopea.py
 !scripts/build_icons.py
+!scripts/build_brand.py

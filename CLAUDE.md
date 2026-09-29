@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Comic Translate is a PySide6 (Qt) desktop GUI application that automatically translates comics/manga/manhwa/webtoons. The pipeline: detect speech bubbles & text → OCR → translate (LLM or traditional) → inpaint (clean) the original text → render translated text back onto the image. It also supports a browser extension and PSD/CBZ/PDF/EPUB import-export, but the desktop app (`comic.py`) is the primary surface developed here.
+Toon Studio (formerly Comic Translate; the code, package and class names still say ComicTranslate) is a PySide6 (Qt) desktop GUI application that automatically translates comics/manga/manhwa/webtoons. The pipeline: detect speech bubbles & text → OCR → translate (LLM or traditional) → inpaint (clean) the original text → render translated text back onto the image. It also supports a browser extension and PSD/CBZ/PDF/EPUB import-export, but the desktop app (`comic.py`) is the primary surface developed here.
 
 There is a test suite (`tests/`, pytest) and a linter (`ruff.toml`), both run by `.github/workflows/test.yml` on every push and pull request. They cover pure logic and Qt-free-ish widget behaviour; anything involving a model, a network call or how a page actually *looks* still has to be checked by running the app (see "Verification" below).
 
@@ -43,8 +43,8 @@ python scripts/build_translations.py --compile               # recompile every l
 
 Build a distributable (PyInstaller, mirrors `.github/workflows/build-*.yml`):
 ```bash
-pyinstaller --noconfirm --clean --name ComicTranslate --add-data "resources:resources" comic.py   # Linux
-pyinstaller --noconfirm --clean --windowed --name ComicTranslate --icon resources/icons/icon.ico --add-data "resources;resources" comic.py   # Windows (PowerShell `;` separator)
+pyinstaller --noconfirm --clean --name ToonStudio --add-data "resources:resources" comic.py   # Linux
+pyinstaller --noconfirm --clean --windowed --name ToonStudio --icon resources/icons/icon.ico --add-data "resources;resources" comic.py   # Windows (PowerShell `;` separator)
 ```
 
 Every **build** workflow is `workflow_dispatch` only — nothing builds automatically on push or PR; `test.yml` is the one exception and is deliberately the opposite, since a gate only matters if it runs unasked. `build-windows-full.yml` is the same Windows build plus the PyTorch stack (`--collect-all torch torchvision transformers`), which is what makes PaddleOCR-VL reachable in a frozen bundle; it is separate because torch takes the download from a few hundred megabytes to several gigabytes, and its final step asserts the three packages actually landed in `dist/` rather than trusting `--collect-all`.
@@ -218,6 +218,16 @@ Every UI colour comes from `core/theme_tokens.py` (Qt-free): two palettes, `DARK
 Two traps. **Text on the accent is `on_accent` (dark ink in dark mode), never white** — white on the dark-mode pink is 3:1. Qt's stylesheet `selection-color` puts that ink into the palette's `highlightedText`, so a delegate that paints a *tinted* selection (the page strip) must draw ordinary text colour, not `highlightedText`, or the text vanishes (1.8:1 — caught in a screenshot, pinned by `test_the_selected_page_row_keeps_its_text_readable`). Icons are the Toon Studio line set, generated from one table by `scripts/build_icons.py` into `resources/static/` under the file names the code already uses (24 grid, 1.75 stroke). **Every themed icon must draw in `#555555`**: that is the literal `MIcon` replaces with the theme, hover or accent colour; three old icons did not, so the Type tool rendered black on the dark theme. `tests/test_icons.py` checks that every `.svg` the code names exists and carries that colour (a short allow-list covers fixed-colour images such as the stylesheet's checkbox marks), and that the files match the table (`--check`). Tool buttons: hover = raised fill and body-text icon, checked = accent tint and accent icon — hover never borrows the accent, so it cannot look selected.
 
 The UI face, IBM Plex Sans Thai (OFL, `resources/fonts/ui/`), is registered by `app/ui/fonts.load_ui_fonts()` right after the QApplication exists; the theme's `font_family` lists it first and falls back to platform faces if it did not load.
+
+### Editor layout (Toon Studio)
+
+`builders/workspace.py` arranges the editor as: a top bar (`toonTopBar`) with the pipeline as a **step bar** (`hbutton_group`, restyled — same buttons, same handlers) and the mode switch plus the accent "Translate All" (`translate_button`, now `PrimaryType`); a vertical **tool rail** (`toonToolRail`) holding every `tool_buttons` entry plus delete/clear, the folder-tree, layers and webtoon toggles; an **options bar** above the canvas (block size, brush size); a tabbed **inspector** (`inspector_tabs`: Text · Layers · Glossary) on the right; and a **status bar** (`editor_status_bar`). Every widget kept its attribute name, so controllers and shortcuts did not change — when moving a widget, move it, don't rename it.
+
+Three behaviours came with it, in `app/ui/main_window/editor_chrome.py`. The step bar marks each step the current page has been through; the evidence is read, never stored (`core/editor_state.step_flags`: blocks, OCR text, translations, strokes, patches, text items), and `refresh_step_bar()` runs from `enable_hbutton_group` (every operation ends there) and `display_image`. The Layers panel lives in the Layers tab: `layers_button` switches to it and the tab change keeps the button in step (`_on_inspector_tab_changed`). The Glossary tab shows `match_report` for the page on screen plus `main.last_glossary_issues` (set by `report_glossary_issues`). Icons painted at build time — step marks, the run icon — are recoloured in `apply_theme`, or they keep the old mode's colour.
+
+### Name and storage identity
+
+What users see is **Toon Studio**: the window title (`theme_tokens.BRAND_NAME`), the splash, the app icon and the built executable (`--name ToonStudio` in every build workflow). The bubble mark, `icon.ico`/`.icns`/`.png` and `splash.png` in `resources/icons/` are all rendered by `scripts/build_brand.py` from one drawing — regenerate, never hand-edit. **What stores data keeps its old name on purpose**, because renaming it silently resets every existing user: `QSettings("ComicLabs", "ComicTranslate")`, `get_user_data_dir("ComicTranslate")` (glossaries, prompts, workspaces, models), the `.ctpr` extension, the single-instance server name and the Windows AppUserModelID. `tests/test_brand.py` pins them. The account strings ("Sign in to Comic Translate") also stay: they name the hosted service, which is still Comic Translate's.
 
 ### Caching
 

@@ -12,6 +12,7 @@ from PySide6.QtGui import QUndoGroup, QUndoStack, QIcon
 
 from app.ui.dayu_widgets.qt import MPixmap
 from app.ui.main_window import ComicTranslateUI
+from app.ui.main_window.editor_chrome import apply_step_states
 from app.ui.messages import Messages
 from app.ui.dayu_widgets.message import MMessage
 
@@ -140,7 +141,8 @@ class ComicTranslate(ComicTranslateUI):
         self.manual_workflow_ctrl = ManualWorkflowController(self)
         self.layer_ctrl = LayerController(self)
         self.layers_panel.bind(self.layer_ctrl)
-        self.layers_button.toggled.connect(self.layers_panel.setVisible)
+        self.layers_button.toggled.connect(self.show_layers_tab)
+        self.editor_status_bar.bind(self)
         try:
             if self._memlogger is not None:
                 self._memlogger.emit("after_controllers_init")
@@ -957,6 +959,17 @@ class ComicTranslate(ComicTranslateUI):
     def enable_hbutton_group(self):
         for button in self.hbutton_group.get_button_group().buttons():
             button.setEnabled(True)
+        # Every operation ends here, so the step bar's marks follow it.
+        self.refresh_step_bar()
+
+    def refresh_step_bar(self):
+        """Mark the steps the current page has been through (Toon Studio step bar)."""
+        try:
+            apply_step_states(self)
+        except Exception:  # decoration only: never let it break an operation's finish
+            logging.getLogger(__name__).exception("Step bar refresh failed")
+        if self.inspector_tabs.currentWidget() is self.glossary_peek:
+            self.glossary_peek.refresh(self)
 
     def block_detect(self, load_rects: bool = True):
         self.manual_workflow_ctrl.block_detect(load_rects)

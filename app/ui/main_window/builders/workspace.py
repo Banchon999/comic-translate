@@ -21,6 +21,8 @@ from app.ui.file_tree_panel import FileTreePanel
 from app.ui.layers_panel import LayersPanel
 from app.ui.search_replace_panel import SearchReplacePanel
 from app.ui.main_window.constants import supported_source_languages, supported_target_languages
+from app.ui.main_window.editor_chrome import EditorStatusBar, GlossaryPeekPanel, style_step_buttons
+from app.ui.dayu_widgets.qt import MIcon
 
 
 class WorkspaceMixin:
@@ -95,15 +97,27 @@ class WorkspaceMixin:
         self.file_tree_button.setToolTip(self.tr("Group the pages by the folder they came from"))
         self.file_tree_button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
 
+        # Top bar: the pipeline as a step bar (each step shows whether this
+        # page has been through it), then mode and the batch run.
+        style_step_buttons(self.hbutton_group)
+        self.hbutton_group.setObjectName("toonStepBar")
+        self.translate_button.set_dayu_type(MPushButton.PrimaryType)
+        self.translate_button.setIcon(MIcon("run.svg", dayu_theme.on_primary_color))
+        self.translate_button.setObjectName("toonRunButton")
+        mode_switch = QtWidgets.QWidget()
+        mode_switch.setObjectName("toonModeSwitch")
+        mode_layout = QtWidgets.QHBoxLayout(mode_switch)
+        mode_layout.setContentsMargins(8, 2, 8, 2)
+        mode_layout.setSpacing(10)
+        mode_layout.addWidget(self.manual_radio)
+        mode_layout.addWidget(self.automatic_radio)
+
+        header_layout.setContentsMargins(12, 6, 12, 6)
+        header_layout.setSpacing(8)
         header_layout.addWidget(self.hbutton_group)
         header_layout.addWidget(self.loading)
-        header_layout.addSpacing(15)
-        header_layout.addWidget(self.file_tree_button)
-        header_layout.addWidget(self.layers_button)
         header_layout.addStretch()
-        header_layout.addWidget(self.webtoon_toggle)
-        header_layout.addWidget(self.manual_radio)
-        header_layout.addWidget(self.automatic_radio)
+        header_layout.addWidget(mode_switch)
         header_layout.addWidget(self.translate_button)
         header_layout.addWidget(self.cancel_button)
         header_layout.addWidget(self.batch_report_button)
@@ -112,7 +126,7 @@ class WorkspaceMixin:
         self.search_panel.setVisible(False)
 
         left_layout = QtWidgets.QVBoxLayout()
-        left_layout.addWidget(MDivider())
+        left_layout.setContentsMargins(0, 0, 0, 0)
 
         self.image_card_layout = QtWidgets.QVBoxLayout()
         self.image_card_layout.addStretch(1)
@@ -122,18 +136,17 @@ class WorkspaceMixin:
         self.file_tree_panel = FileTreePanel()
         self.file_tree_panel.setVisible(False)
 
+        # The Layers panel lives in the inspector's Layers tab (below); the
+        # layers button switches to that tab.
         self.layers_panel = LayersPanel()
-        self.layers_panel.setVisible(False)
 
-        # Pages, the folder tree and the layers share the column; a splitter
-        # lets whichever the user is working in take the space.
+        # Pages and the folder tree share the column; a splitter lets
+        # whichever the user is working in take the space.
         left_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
         left_splitter.addWidget(self.file_tree_panel)
         left_splitter.addWidget(self.page_list)
-        left_splitter.addWidget(self.layers_panel)
         left_splitter.setStretchFactor(0, 2)
         left_splitter.setStretchFactor(1, 2)
-        left_splitter.setStretchFactor(2, 2)
 
         left_layout.addWidget(left_splitter)
         left_layout.addWidget(self.search_panel)
@@ -173,9 +186,6 @@ class WorkspaceMixin:
         central_layout = QtWidgets.QVBoxLayout(central_widget)
         central_layout.addWidget(self.central_stack)
         central_layout.setContentsMargins(10, 10, 10, 10)
-
-        right_layout = QtWidgets.QVBoxLayout()
-        right_layout.addWidget(MDivider())
 
         input_layout = QtWidgets.QHBoxLayout()
 
@@ -242,13 +252,17 @@ class WorkspaceMixin:
         self.letter_spacing_dropdown.setFixedWidth(60)
         self.letter_spacing_dropdown.set_editable(True)
 
-        font_settings_layout.addWidget(self.font_dropdown)
+        # Two rows, so the controls fit the one-column inspector: the face,
+        # then its metrics.
+        self.font_dropdown.setMinimumWidth(120)
+        font_settings_layout.addWidget(self.font_dropdown, 1)
         font_settings_layout.addWidget(self.font_favourite_toggle)
         font_settings_layout.addWidget(self.font_favourites_button)
-        font_settings_layout.addWidget(self.font_size_dropdown)
-        font_settings_layout.addWidget(self.line_spacing_dropdown)
-        font_settings_layout.addWidget(self.letter_spacing_dropdown)
-        font_settings_layout.addStretch()
+        font_metrics_layout = QtWidgets.QHBoxLayout()
+        font_metrics_layout.addWidget(self.font_size_dropdown)
+        font_metrics_layout.addWidget(self.line_spacing_dropdown)
+        font_metrics_layout.addWidget(self.letter_spacing_dropdown)
+        font_metrics_layout.addStretch()
 
         main_text_settings_layout = QtWidgets.QHBoxLayout()
 
@@ -385,24 +399,21 @@ class WorkspaceMixin:
         effects_settings_layout.addWidget(self.gradient_checkbox)
         effects_settings_layout.addWidget(self.gradient_color_button)
         effects_settings_layout.addWidget(self.gradient_angle_dropdown)
-        effects_settings_layout.addWidget(curve_label)
-        effects_settings_layout.addWidget(self.curvature_dropdown)
         effects_settings_layout.addStretch()
+        curve_layout = QtWidgets.QHBoxLayout()
+        curve_layout.addWidget(curve_label)
+        curve_layout.addWidget(self.curvature_dropdown)
+        curve_layout.addStretch()
 
         rendering_divider_top = MDivider()
-        rendering_divider_bottom = MDivider()
         text_render_layout.addWidget(rendering_divider_top)
         text_render_layout.addLayout(font_settings_layout)
+        text_render_layout.addLayout(font_metrics_layout)
         text_render_layout.addLayout(main_text_settings_layout)
         text_render_layout.addLayout(outline_settings_layout)
         text_render_layout.addLayout(shadow_settings_layout)
         text_render_layout.addLayout(effects_settings_layout)
-        text_render_layout.addWidget(rendering_divider_bottom)
-
-        tools_widget = QtWidgets.QWidget()
-        tools_layout = QtWidgets.QVBoxLayout()
-
-        misc_lay = QtWidgets.QHBoxLayout()
+        text_render_layout.addLayout(curve_layout)
 
         self.pan_button = self.create_tool_button(svg="pan_tool.svg", checkable=True)
         self.pan_button.setToolTip(self.tr("Pan Image"))
@@ -414,11 +425,6 @@ class WorkspaceMixin:
             self.tr("Sets the Source and Target Language on the current page for all pages")
         )
 
-        misc_lay.addWidget(self.pan_button)
-        misc_lay.addWidget(self.set_all_button)
-        misc_lay.addStretch()
-
-        box_tools_lay = QtWidgets.QHBoxLayout()
 
         self.box_button = self.create_tool_button(svg="select.svg", checkable=True)
         self.box_button.setToolTip(self.tr("Draw or Select Text Boxes"))
@@ -446,11 +452,6 @@ class WorkspaceMixin:
             )
         )
 
-        box_tools_lay.addWidget(self.box_button)
-        box_tools_lay.addWidget(self.type_text_button)
-        box_tools_lay.addWidget(self.delete_button)
-        box_tools_lay.addWidget(self.clear_rectangles_button)
-        box_tools_lay.addWidget(self.draw_blklist_blks)
 
         self.change_all_blocks_size_dec = self.create_tool_button(svg="minus_line.svg")
         self.change_all_blocks_size_dec.setToolTip(self.tr("Reduce the size of all blocks"))
@@ -466,13 +467,6 @@ class WorkspaceMixin:
         self.change_all_blocks_size_inc = self.create_tool_button(svg="add_line.svg")
         self.change_all_blocks_size_inc.setToolTip(self.tr("Increase the size of all blocks"))
 
-        box_tools_lay.addStretch()
-        box_tools_lay.addWidget(self.change_all_blocks_size_dec)
-        box_tools_lay.addWidget(self.change_all_blocks_size_diff)
-        box_tools_lay.addWidget(self.change_all_blocks_size_inc)
-        box_tools_lay.addStretch()
-
-        inp_tools_lay = QtWidgets.QHBoxLayout()
 
         self.brush_button = self.create_tool_button(svg="brush-fill.svg", checkable=True)
         self.brush_button.setToolTip(self.tr("Draw Brush Strokes for Cleaning Image"))
@@ -505,12 +499,6 @@ class WorkspaceMixin:
         self.clear_brush_strokes_button = self.create_tool_button(svg="clear-outlined.svg")
         self.clear_brush_strokes_button.setToolTip(self.tr("Remove all the brush strokes on the Image"))
 
-        inp_tools_lay.addWidget(self.brush_button)
-        inp_tools_lay.addWidget(self.eraser_button)
-        inp_tools_lay.addWidget(self.wand_button)
-        inp_tools_lay.addWidget(self.lasso_button)
-        inp_tools_lay.addWidget(self.clear_brush_strokes_button)
-        inp_tools_lay.addStretch()
 
         self.brush_eraser_slider = MSlider()
         self.brush_eraser_slider.setMinimum(1)
@@ -519,55 +507,142 @@ class WorkspaceMixin:
         self.brush_eraser_slider.setToolTip(self.tr("Brush/Eraser Size Slider"))
         self.brush_eraser_slider.valueChanged.connect(self.set_brush_eraser_size)
 
-        tools_layout.addLayout(misc_lay)
-        box_div = MDivider(self.tr("Box Drawing"))
-        tools_layout.addWidget(box_div)
-        tools_layout.addLayout(box_tools_lay)
+        # --- Tool rail: every canvas tool, grouped, down the left edge. ---
+        tool_rail = QtWidgets.QWidget()
+        tool_rail.setObjectName("toonToolRail")
+        rail = QtWidgets.QVBoxLayout(tool_rail)
+        rail.setContentsMargins(6, 8, 6, 8)
+        rail.setSpacing(4)
+        groups = (
+            (self.pan_button, self.box_button, self.type_text_button),
+            (self.brush_button, self.eraser_button, self.wand_button, self.lasso_button),
+            (self.delete_button, self.clear_rectangles_button, self.draw_blklist_blks,
+             self.clear_brush_strokes_button),
+        )
+        for index, group in enumerate(groups):
+            if index:
+                rail.addWidget(_rail_divider())
+            for button in group:
+                _rail_button(button)
+                rail.addWidget(button, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
+        rail.addStretch(1)
+        for button in (self.file_tree_button, self.layers_button, self.webtoon_toggle):
+            _rail_button(button)
+            rail.addWidget(button, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
+        tool_rail.setFixedWidth(52)
 
-        inp_div = MDivider(self.tr("Inpainting"))
-        tools_layout.addWidget(inp_div)
-        tools_layout.addLayout(inp_tools_lay)
-        tools_layout.addWidget(self.brush_eraser_slider)
-        tools_layout.addStretch()
-        tools_widget.setLayout(tools_layout)
+        # --- Options bar above the canvas: the settings of the active tools. ---
+        options_bar = QtWidgets.QWidget()
+        options_bar.setObjectName("toonOptionsBar")
+        options = QtWidgets.QHBoxLayout(options_bar)
+        options.setContentsMargins(12, 4, 12, 4)
+        options.setSpacing(8)
+        box_label = MLabel(self.tr("Box size"))
+        box_label.setObjectName("toonOptionLabel")
+        options.addWidget(box_label)
+        options.addWidget(self.change_all_blocks_size_dec)
+        options.addWidget(self.change_all_blocks_size_diff)
+        options.addWidget(self.change_all_blocks_size_inc)
+        options.addSpacing(18)
+        brush_label = MLabel(self.tr("Brush size"))
+        brush_label.setObjectName("toonOptionLabel")
+        options.addWidget(brush_label)
+        self.brush_eraser_slider.setFixedWidth(180)
+        options.addWidget(self.brush_eraser_slider)
+        options.addStretch(1)
+        central_layout.insertWidget(0, options_bar)
+        central_layout.setContentsMargins(0, 0, 0, 0)
+        central_layout.setSpacing(0)
 
-        tools_scroll = QtWidgets.QScrollArea()
-        tools_scroll.setWidgetResizable(True)
-        tools_scroll.setWidget(tools_widget)
-        tools_scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        tools_scroll.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        tools_scroll.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+        # --- Inspector: Text · Layers · Glossary tabs on the right. ---
+        text_tab = QtWidgets.QWidget()
+        text_tab_layout = QtWidgets.QVBoxLayout(text_tab)
+        text_tab_layout.setContentsMargins(10, 10, 10, 10)
+        # Source over target: the inspector is one column wide.
+        input_layout.setDirection(QtWidgets.QBoxLayout.Direction.TopToBottom)
+        self.s_text_edit.setFixedHeight(84)
+        self.t_text_edit.setFixedHeight(84)
+        text_tab_layout.addLayout(input_layout)
+        set_all_row = QtWidgets.QHBoxLayout()
+        set_all_row.addStretch(1)
+        set_all_row.addWidget(self.set_all_button)
+        text_tab_layout.addLayout(set_all_row)
+        text_tab_layout.addLayout(text_render_layout)
+        text_tab_layout.addStretch(1)
+        text_scroll = QtWidgets.QScrollArea()
+        text_scroll.setWidgetResizable(True)
+        text_scroll.setWidget(text_tab)
+        text_scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        text_scroll.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        text_scroll.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
 
-        right_layout.addLayout(input_layout)
-        right_layout.addLayout(text_render_layout)
-        right_layout.addWidget(tools_scroll, 1)
+        self.glossary_peek = GlossaryPeekPanel()
+        self.glossary_peek.open_glossary.connect(self.show_glossary_dialog)
 
-        right_widget = QtWidgets.QWidget()
-        right_widget.setLayout(right_layout)
+        self.inspector_tabs = QtWidgets.QTabWidget()
+        self.inspector_tabs.setObjectName("toonInspector")
+        self.inspector_tabs.setDocumentMode(True)
+        self.inspector_tabs.addTab(text_scroll, self.tr("Text"))
+        if self.layers_panel.layout() is not None:
+            self.layers_panel.layout().setContentsMargins(10, 8, 10, 8)
+        self.inspector_tabs.addTab(self.layers_panel, self.tr("Layers"))
+        self.inspector_tabs.addTab(self.glossary_peek, self.tr("Glossary"))
+        self.inspector_tabs.currentChanged.connect(self._on_inspector_tab_changed)
+
+        right_widget = self.inspector_tabs
 
         splitter = QtWidgets.QSplitter()
         splitter.addWidget(left_widget)
         splitter.addWidget(central_widget)
         splitter.addWidget(right_widget)
 
-        right_widget.setMinimumWidth(240)
+        right_widget.setMinimumWidth(340)
+        left_widget.setMinimumWidth(170)
 
-        splitter.setStretchFactor(0, 40)
+        splitter.setStretchFactor(0, 20)
         splitter.setStretchFactor(1, 80)
         splitter.setStretchFactor(2, 10)
+        splitter.setSizes([210, 890, 340])
+
+        body = QtWidgets.QHBoxLayout()
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(0)
+        body.addWidget(tool_rail)
+        body.addWidget(splitter, 1)
+
+        top_bar = QtWidgets.QWidget()
+        top_bar.setObjectName("toonTopBar")
+        top_bar.setLayout(header_layout)
+
+        self.editor_status_bar = EditorStatusBar()
 
         content_layout = QtWidgets.QVBoxLayout()
-        content_layout.addLayout(header_layout)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(0)
+        content_layout.addWidget(top_bar)
         content_layout.addWidget(self.progress_bar)
-        content_layout.addWidget(splitter)
-
-        content_layout.setStretchFactor(header_layout, 0)
-        content_layout.setStretchFactor(splitter, 1)
+        content_layout.addLayout(body, 1)
+        content_layout.addWidget(self.editor_status_bar)
 
         content_widget.setLayout(content_layout)
 
         return content_widget
 
+    def _on_inspector_tab_changed(self, index: int) -> None:
+        """Keep the layers button in step with the Layers tab, refresh the Glossary tab."""
+        tabs = self.inspector_tabs
+        on_layers = tabs.widget(index) is self.layers_panel
+        if self.layers_button.isChecked() != on_layers:
+            self.layers_button.blockSignals(True)
+            self.layers_button.setChecked(on_layers)
+            self.layers_button.blockSignals(False)
+        if tabs.widget(index) is self.glossary_peek:
+            self.glossary_peek.refresh(self)
+
+    def show_layers_tab(self, show: bool) -> None:
+        """The layers button: open the Layers tab, or go back to Text."""
+        target = self.layers_panel if show else self.inspector_tabs.widget(0)
+        self.inspector_tabs.setCurrentWidget(target)
     def create_tool_button(self, text: str = "", svg: str = "", checkable: bool = False):
         if text:
             button = MToolButton().svg(svg).text_beside_icon()
@@ -578,3 +653,17 @@ class WorkspaceMixin:
         button.setCheckable(True) if checkable else button.setCheckable(False)
 
         return button
+
+
+def _rail_button(button) -> None:
+    """A tool rail button: 40 px square, 22 px icon (touch-sized, 4 px apart)."""
+    button.setFixedSize(40, 40)
+    button.setIconSize(QtCore.QSize(22, 22))
+    button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+
+
+def _rail_divider() -> QtWidgets.QFrame:
+    line = QtWidgets.QFrame()
+    line.setObjectName("toonRailDivider")
+    line.setFixedSize(24, 1)
+    return line

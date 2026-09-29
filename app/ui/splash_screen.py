@@ -2,6 +2,8 @@ from PySide6.QtWidgets import QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLa
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPixmap, QPainter, QColor
 
+from core import theme_tokens
+
 
 class SplashScreen(QWidget):
     """Custom splash screen with minimize and cancel buttons."""
@@ -63,36 +65,36 @@ class SplashScreen(QWidget):
         
         main_layout.addWidget(container)
         
-        # Apply styling
-        self.setStyleSheet("""
-            #splashContainer {
-                background-color: white;
-                border: 2px solid #cccccc;
-                border-radius: 8px;
-            }
-            #titleBar {
-                background-color: #f0f0f0;
-                border-top-left-radius: 6px;
-                border-top-right-radius: 6px;
-            }
-            QPushButton {
+        # Styled from the dark tokens: the splash shows before settings (and so
+        # the user's theme) are loaded, and the splash image itself is dark.
+        t = theme_tokens.DARK
+        self.setStyleSheet(f"""
+            #splashContainer {{
+                background-color: {t['ground']};
+                border: 1px solid {t['line']};
+                border-radius: 10px;
+            }}
+            #titleBar {{
+                background-color: {t['ground']};
+                border-top-left-radius: 9px;
+                border-top-right-radius: 9px;
+            }}
+            QPushButton {{
                 background-color: transparent;
                 border: none;
-                border-radius: 4px;
-                color: #333333;
+                border-radius: 6px;
+                color: {t['text_2']};
                 font-size: 14px;
                 font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #e0e0e0;
-            }
-            #cancelBtn:hover {
-                background-color: #ff5555;
-                color: white;
-            }
-            #minimizeBtn:hover {
-                background-color: #cccccc;
-            }
+            }}
+            QPushButton:hover {{
+                background-color: {t['hover']};
+                color: {t['text_1']};
+            }}
+            #cancelBtn:hover {{
+                background-color: {t['danger']};
+                color: {t['on_accent']};
+            }}
         """)
         
         # Adjust size to fit content
