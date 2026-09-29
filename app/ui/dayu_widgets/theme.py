@@ -312,6 +312,10 @@ class MTheme(object):
         self.background_out_color = t["header"]
         self.mask_color = utils.fade_color(self.background_color, "90%")
         self.toast_color = t["toast"]
+        # Tool buttons: a raised fill on hover, a darker one while pressed
+        # (the checked fill is primary_soft, set with the primary colour).
+        self.hover_color = t["hover"]
+        self.pressed_color = t["pressed"]
         # Text on an accent fill. Not white: white on the dark-mode pink is 3:1.
         self.on_primary_color = t["on_accent"]
 
