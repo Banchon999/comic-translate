@@ -156,6 +156,12 @@ class NavRailMixin:
                 "clicked": self.show_main_page,
             },
             {
+                "svg": "nav-stitch.svg",
+                "checkable": True,
+                "tooltip": self.tr("Stitch webtoon slices"),
+                "clicked": self.show_stitch_page,
+            },
+            {
                 "svg": "settings.svg",
                 "checkable": True,
                 "tooltip": self.tr("Settings"),
@@ -167,7 +173,8 @@ class NavRailMixin:
         self.nav_tool_group = nav_tool_group
         self.startup_nav_button = nav_buttons[0]
         self.home_nav_button = nav_buttons[1]
-        self.settings_nav_button = nav_buttons[2]
+        self.stitch_nav_button = nav_buttons[2]
+        self.settings_nav_button = nav_buttons[3]
         self.startup_nav_button.setChecked(True)
 
         self.search_sidebar_button = MToolButton()

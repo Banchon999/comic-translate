@@ -85,6 +85,8 @@ STROKED = {
     "nav-shortcuts": "M3.5 7h17v10h-17zM7 10.5h.01M10.5 10.5h.01M14 10.5h.01M17 10.5h.01M8 14h8",
     "nav-advanced": "M4 7h9M17 7h3M4 17h3M11 17h9M15 5v4M9 15v4",
     "nav-about": "M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17zM12 11v5M12 8h.01",
+    # Stitch page (main nav rail): two slices with a dashed cut between them
+    "nav-stitch": "M5 3.5h14v6H5zM5 14.5h14v6H5zM3 12h2M8 12h2M13 12h2M18 12h3",
     # Pipeline steps (the editor's step bar)
     "detect": "M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8.5 8.5h7A1.5 1.5 0 0 1 17 10v3a1.5 1.5 0 0 1-1.5 1.5H12l-2.5 2v-2h-1A1.5 1.5 0 0 1 7 13v-3a1.5 1.5 0 0 1 1.5-1.5z",
     "ocr": "M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8 9h8M12 9v7M10 16h4",

@@ -183,6 +183,7 @@ class ComicTranslateUI(
         self._center_stack.addWidget(self.startup_home)
         self._center_stack.addWidget(self.main_content_widget)
         self._center_stack.addWidget(self.settings_page)
+        self.stitch_page = None  # built on first visit
 
         self._center_stack.setCurrentWidget(self.startup_home)
         self._set_document_tools_visible(False)
@@ -212,6 +213,7 @@ class ComicTranslateUI(
         page_to_button = {
             "startup": getattr(self, "startup_nav_button", None),
             "home": getattr(self, "home_nav_button", None),
+            "stitch": getattr(self, "stitch_nav_button", None),
             "settings": getattr(self, "settings_nav_button", None),
         }
         for name, button in page_to_button.items():
@@ -242,6 +244,19 @@ class ComicTranslateUI(
         self._finish_settings_resize_preview()
         self._center_stack.setCurrentWidget(self.settings_page)
         self._set_active_nav_button("settings")
+
+    def show_stitch_page(self) -> None:
+        if self.stitch_page is None:
+            from ..stitch_page import StitchPage
+
+            self.stitch_page = StitchPage(main=self)
+            self.stitch_page.apply_theme(dayu_theme.is_dark)
+            self.stitch_page.open_pages.connect(self._guarded_thread_load_images)
+            self._center_stack.addWidget(self.stitch_page)
+        self._finish_settings_resize_preview()
+        self._set_document_tools_visible(False)
+        self._center_stack.setCurrentWidget(self.stitch_page)
+        self._set_active_nav_button("stitch")
 
     def show_main_page(self):
         self._finish_settings_resize_preview()
@@ -428,6 +443,8 @@ class ComicTranslateUI(
 
         if self.startup_home:
             self.startup_home.apply_theme(is_dark)
+        if getattr(self, "stitch_page", None) is not None:
+            self.stitch_page.apply_theme(is_dark)
         # Icons coloured at build time follow the new mode: the step bar's
         # (forced to recolour by clearing their state) and the run button's.
         if hasattr(self, "hbutton_group") and hasattr(self, "refresh_step_bar"):
