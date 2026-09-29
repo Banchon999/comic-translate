@@ -5,7 +5,7 @@ import copy
 import numpy as np
 from typing import TYPE_CHECKING
 
-from PySide6 import QtCore
+from PySide6 import QtCore, QtWidgets
 from PySide6.QtGui import QColor, QTextCursor
 
 from app.ui.commands.textformat import TextFormatCommand
@@ -46,6 +46,7 @@ class TextController:
             self.main.shadow_offset_x_dropdown,
             self.main.shadow_offset_y_dropdown,
             self.main.shadow_blur_dropdown,
+            self.main.shadow_opacity_dropdown,
             self.main.gradient_checkbox,
             self.main.gradient_color_button,
             self.main.gradient_angle_dropdown,
@@ -693,8 +694,12 @@ class TextController:
             except (TypeError, ValueError):
                 return fallback
 
+        color = QColor(self.main.shadow_color_button.property('selected_color'))
+        # The colour button holds an opaque colour; the opacity is its own control.
+        opacity = min(100.0, max(0.0, value(self.main.shadow_opacity_dropdown, 63.0)))
+        color.setAlphaF(opacity / 100.0)
         return (
-            QColor(self.main.shadow_color_button.property('selected_color')),
+            color,
             (value(self.main.shadow_offset_x_dropdown), value(self.main.shadow_offset_y_dropdown)),
             max(0.0, value(self.main.shadow_blur_dropdown)),
         )
@@ -708,6 +713,27 @@ class TextController:
         item.set_shadow(self.main.shadow_checkbox.isChecked(), color, offset, blur)
         command.finalize_new_state()
         self.main.push_command(command)
+
+    def edit_stroke_layers(self, *_):
+        item = self.main.curr_tblock_item
+        if not item:
+            return
+        from app.ui.stroke_layers_dialog import StrokeLayersDialog
+
+        dialog = StrokeLayersDialog(getattr(item, 'stroke_layers', []), self.main)
+        if dialog.exec() != QtWidgets.QDialog.DialogCode.Accepted:
+            return
+        command = TextFormatCommand(self.main.image_viewer, item)
+        item.set_stroke_layers(dialog.layers())
+        command.finalize_new_state()
+        self.main.push_command(command)
+        self._show_stroke_layer_count(item)
+
+    def _show_stroke_layer_count(self, item):
+        count = len(getattr(item, 'stroke_layers', []) or []) if item else 0
+        self.main.stroke_layers_button.setText(
+            self.main.tr("+ Strokes") if not count else self.main.tr("Strokes: {0}").format(count)
+        )
 
     def apply_gradient_settings(self, *_):
         if not self.main.curr_tblock_item:
@@ -845,6 +871,8 @@ class TextController:
             self.main.shadow_offset_x_dropdown.setCurrentText(str(offset_x))
             self.main.shadow_offset_y_dropdown.setCurrentText(str(offset_y))
             self.main.shadow_blur_dropdown.setCurrentText(str(getattr(text_item, 'shadow_blur', 0.0)))
+            self.main.shadow_opacity_dropdown.setCurrentText(str(round(shadow_color.alphaF() * 100)))
+            self._show_stroke_layer_count(text_item)
             self.main.shadow_checkbox.setChecked(bool(getattr(text_item, 'shadow_enabled', False)))
 
             gradient_color = getattr(text_item, 'gradient_color', None) or QColor(255, 255, 255)

@@ -5,6 +5,7 @@ from PySide6.QtCore import Qt
 from app.ui.canvas.text_item import OutlineType
 from modules.utils.common_utils import new_object_id
 from core.layers import layer_dict
+from core.text_style import stroke_layers_from, stroke_layers_payload
 from app.ui.canvas.scene_registry import get_item_layer
 
 @dataclass
@@ -46,6 +47,8 @@ class TextItemProperties:
     gradient_color: Optional[QColor] = None
     gradient_angle: float = 90.0
     curvature: float = 0.0
+    # Extra strokes outside the outline (core.text_style.StrokeLayer), innermost first.
+    stroke_layers: list = field(default_factory=list)
 
     # Advanced properties
     selection_outlines: list = field(default_factory=list)
@@ -141,6 +144,7 @@ class TextItemProperties:
                 props.gradient_color = QColor(data['gradient_color'])
         props.gradient_angle = float(data.get('gradient_angle', 90.0))
         props.curvature = float(data.get('curvature', 0.0))
+        props.stroke_layers = stroke_layers_from(data.get('stroke_layers'))
 
         # Advanced
         props.selection_outlines = data.get('selection_outlines', [])
@@ -198,6 +202,7 @@ class TextItemProperties:
         props.gradient_color = getattr(item, 'gradient_color', None)
         props.gradient_angle = getattr(item, 'gradient_angle', 90.0)
         props.curvature = getattr(item, 'curvature', 0.0)
+        props.stroke_layers = list(getattr(item, 'stroke_layers', []) or [])
 
         # Advanced properties
         props.selection_outlines = getattr(item, 'selection_outlines', []).copy()
@@ -242,6 +247,8 @@ class TextItemProperties:
         # Only when non-default, so untouched text serialises as before.
         if self.layer:
             out['layer'] = self.layer
+        if self.stroke_layers:
+            out['stroke_layers'] = stroke_layers_payload(self.stroke_layers)
         return out
 
 

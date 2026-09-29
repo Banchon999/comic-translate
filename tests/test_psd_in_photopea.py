@@ -292,3 +292,44 @@ def test_photopea_draws_each_text_layer_in_its_own_place(tmp_path, sandbox_dir, 
     )
     for name in ("Text 1", "Text 2", "Hidden note", "Text 4"):
         assert f"layer renders its own pixels: {name!r}" in result.stdout, name
+
+
+def test_photopea_shows_stacked_strokes_and_a_bent_rich_range(tmp_path, sandbox_dir, qapp):
+    """Stroke layers and a curve are carried by the type layer's cached raster
+    (the first outline is also editable stroke data). The composite must match
+    the app's flattened render, rings and per-range colour included."""
+    art = np.full((HEIGHT, WIDTH, 3), 225, dtype=np.uint8)
+    art[150:220, 40:280] = (40, 70, 190)
+    page = psd_exporter.PsdPageData(
+        file_path="005.png", rgb_image=art,
+        viewer_state={"text_items_state": [
+            _text("BOOM", 30.0, 20.0, font_size=34.0, text_color="#FF3B6B",
+                  outline_color="#FFFFFF", outline_width=2.0, outline=True,
+                  stroke_layers=[{"color": "#FF111111", "width": 4.0},
+                                 {"color": "#FFFFD400", "width": 3.0}]),
+            _text("WHOOSH", 40.0, 150.0, font_size=28.0, text_color="#FFFFFF",
+                  curvature=0.4, stroke_layers=[{"color": "#FF000000", "width": 3.0}]),
+        ]},
+        patches=[],
+    )
+    psd = Path(psd_exporter.export_psd_pages(str(sandbox_dir), [page], "strokes"))
+    reference = tmp_path / "flat.png"
+    _save_flat(page, reference)
+
+    out = tmp_path / "report-strokes"
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), str(psd), "--out", str(out), "--compare", str(reference)],
+        capture_output=True,
+        text=True,
+        cwd=str(REPO_ROOT),
+    )
+
+    if result.returncode == 2:
+        pytest.skip(f"the harness could not start: {result.stderr.strip()[:200]}")
+
+    if result.returncode != 0 and out.exists():
+        shutil.copytree(out, tmp_path / "failed-report-strokes", dirs_exist_ok=True)
+
+    assert result.returncode == 0, (
+        "Photopea did not render the stroked text as ComicTranslate does:\n" + result.stdout + result.stderr
+    )
