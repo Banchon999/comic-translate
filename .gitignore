@@ -30,3 +30,4 @@ scripts/*
 !scripts/build_translations.py
 !scripts/check_headless.py
 !scripts/check_psd_in_photopea.py
+!scripts/build_icons.py
