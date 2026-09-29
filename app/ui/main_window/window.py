@@ -8,6 +8,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from app.ui.canvas.image_viewer import ImageViewer
 from app.ui.dayu_widgets import dayu_theme
 from app.ui.dayu_widgets.divider import MDivider
+from app.ui.dayu_widgets.qt import MIcon
 from core import theme_tokens
 from app.ui.list_view import PageListView
 from app.ui.settings.settings_page import SettingsPage
@@ -427,6 +428,14 @@ class ComicTranslateUI(
 
         if self.startup_home:
             self.startup_home.apply_theme(is_dark)
+        # Icons coloured at build time follow the new mode: the step bar's
+        # (forced to recolour by clearing their state) and the run button's.
+        if hasattr(self, "hbutton_group") and hasattr(self, "refresh_step_bar"):
+            for button in self.hbutton_group.get_button_group().buttons():
+                button.setProperty("toon_step", None)
+            self.refresh_step_bar()
+        if hasattr(self, "translate_button"):
+            self.translate_button.setIcon(MIcon("run.svg", dayu_theme.on_primary_color))
         viewer = getattr(self, "image_viewer", None)
         if viewer is not None:
             viewer.setBackgroundBrush(QtGui.QBrush(QtGui.QColor(tokens["ground"])))
