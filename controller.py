@@ -172,6 +172,7 @@ class ComicTranslate(ComicTranslateUI):
 
         # Populate the home screen with any previously-saved recent projects
         self.startup_home.populate(self.project_ctrl.get_recent_projects())
+        self.refresh_home_summary()
         
         # Check for updates in background
         self.settings_page.check_for_updates(is_background=True)
@@ -544,6 +545,28 @@ class ComicTranslate(ComicTranslateUI):
                 self.apply_workspace(active)
         self.image_ctrl.refresh_file_tree()
 
+    def refresh_home_summary(self):
+        """Tell the home screen which workspace (series) is active and what it sets."""
+        home = getattr(self, "startup_home", None)
+        panel = getattr(self, "file_tree_panel", None)
+        if home is None or panel is None:
+            return
+        try:
+            workspace = panel.workspaces.active()
+        except Exception:
+            workspace = None
+        if workspace is None:
+            home.set_workspace_summary("")
+            return
+        parts = []
+        if workspace.source_language and workspace.target_language:
+            parts.append(f"{self.tr(workspace.source_language)} → {self.tr(workspace.target_language)}")
+        profile = workspace.glossary_profile or workspace.name
+        parts.append(self.tr("Glossary: {0}").format(profile))
+        if workspace.prompt_preset:
+            parts.append(self.tr("Style: {0}").format(workspace.prompt_preset))
+        home.set_workspace_summary(workspace.name, "  ·  ".join(parts))
+
     def apply_workspace(self, name: str):
         """Switch every per-series setting over to this workspace at once.
 
@@ -580,6 +603,7 @@ class ComicTranslate(ComicTranslateUI):
             self.s_combo.setCurrentText(workspace.source_language)
         if workspace.target_language:
             self.t_combo.setCurrentText(workspace.target_language)
+        self.refresh_home_summary()
 
     def capture_workspace_state(self):
         """Store the current language and preset choices on the active workspace."""

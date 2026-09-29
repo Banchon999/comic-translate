@@ -327,11 +327,11 @@ class GlossaryPage(QtWidgets.QWidget):
         self.table.setColumnWidth(3, 70)
         self.table.setMinimumHeight(280)
         self.table.doubleClicked.connect(lambda _: self.edit_selected())
-        layout.addWidget(self.table, 1)
 
         # Action buttons
         buttons_layout = QtWidgets.QHBoxLayout()
         add_button = MPushButton(self.tr("Add")).small()
+        add_button.set_dayu_type(MPushButton.PrimaryType)
         add_button.clicked.connect(self.add_entry)
         edit_button = MPushButton(self.tr("Edit")).small()
         edit_button.clicked.connect(self.edit_selected)
@@ -350,6 +350,7 @@ class GlossaryPage(QtWidgets.QWidget):
             "whose translations disagree."
         ))
         overlaps_button.clicked.connect(self.show_overlaps)
+        self.overlaps_button = overlaps_button
         test_button = MPushButton(self.tr("Test Matching")).small()
         test_button.setToolTip(self.tr(
             "Paste OCR text and see which terms would be sent to the translator."
@@ -362,12 +363,18 @@ class GlossaryPage(QtWidgets.QWidget):
         export_csv_button = MPushButton(self.tr("Export CSV")).small()
         export_csv_button.clicked.connect(lambda: self.export_file("csv"))
 
-        for b in (add_button, edit_button, delete_button, dedupe_button,
-                  overlaps_button, test_button,
-                  import_button, export_json_button, export_csv_button):
+        # Toolbar above the table: editing on the left, checks in the middle,
+        # files on the right — the actions in the order they are reached for.
+        for b in (add_button, edit_button, delete_button):
+            buttons_layout.addWidget(b)
+        buttons_layout.addSpacing(12)
+        for b in (overlaps_button, test_button, dedupe_button):
             buttons_layout.addWidget(b)
         buttons_layout.addStretch(1)
+        for b in (import_button, export_json_button, export_csv_button):
+            buttons_layout.addWidget(b)
         layout.addLayout(buttons_layout)
+        layout.addWidget(self.table, 1)
 
         self._refresh_profiles()
         self._refresh_type_filter()
@@ -698,6 +705,14 @@ class GlossaryPage(QtWidgets.QWidget):
     def refresh_table(self):
         entries = self._visible_entries()
         notes = self._overlap_notes()
+        conflicts = sum(1 for conflict, _ in notes.values() if conflict)
+        # The count is of terms involved in a conflicting pair; zero hides it.
+        self.overlaps_button.setText(
+            self.tr("Check Overlaps · {0}").format(conflicts) if conflicts else self.tr("Check Overlaps")
+        )
+        self.overlaps_button.set_dayu_type(
+            MPushButton.DangerType if conflicts else MPushButton.DefaultType
+        )
         self.table.setRowCount(len(entries))
         for row, entry in enumerate(entries):
             values = [entry.source, entry.target, entry.type, entry.gender, entry.note]
