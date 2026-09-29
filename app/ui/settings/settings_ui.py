@@ -3,7 +3,7 @@ import importlib.util
 from PySide6 import QtWidgets
 from PySide6 import QtCore
 
-from ..dayu_widgets.clickable_card import ClickMeta
+from ..dayu_widgets.tool_button import MToolButton
 from ..dayu_widgets.divider import MDivider
 from ..dayu_widgets.qt import MPixmap
 
@@ -353,40 +353,50 @@ class SettingsPageUI(QtWidgets.QWidget):
 
         self.setLayout(settings_layout)
 
+    # Section icons for the navbar, in stacked_widget order (resources/static,
+    # drawn by scripts/build_icons.py).
+    NAV_ICONS = (
+        "nav-personalize.svg", "nav-account.svg", "nav-tools.svg", "nav-llm.svg",
+        "nav-text.svg", "nav-project.svg", "nav-export.svg", "nav-shortcuts.svg",
+        "nav-advanced.svg", "nav-about.svg",
+    )
+
     def _create_navbar_widget(self):
-        """Create the navbar as a widget that can be scrolled."""
+        """The section list: icon buttons that share the tool buttons' states
+        (hover = raised fill, selected = accent tint and accent icon)."""
         navbar_widget = QtWidgets.QWidget()
         navbar_layout = QtWidgets.QVBoxLayout(navbar_widget)
-        navbar_layout.setContentsMargins(5, 5, 5, 5)
+        navbar_layout.setContentsMargins(8, 12, 8, 12)
+        navbar_layout.setSpacing(2)
 
-        for index, setting in enumerate([
-            {"title": self.tr("Personalization"), "avatar": MPixmap(".svg")},
-            {"title": self.tr("Account"), "avatar": MPixmap(".svg")},
-            {"title": self.tr("Tools"), "avatar": MPixmap(".svg")},
-            {"title": self.tr("LLMs"), "avatar": MPixmap(".svg")},
-            {"title": self.tr("Text Rendering"), "avatar": MPixmap(".svg")},
-            {"title": self.tr("Project"), "avatar": MPixmap(".svg")},
-            {"title": self.tr("Export"), "avatar": MPixmap(".svg")},
-            {"title": self.tr("Shortcuts"), "avatar": MPixmap(".svg")},
-            {"title": self.tr("Advanced"), "avatar": MPixmap(".svg")},
-            {"title": self.tr("About"), "avatar": MPixmap(".svg")},
-        ]):
-            nav_card = ClickMeta(extra=False)
-            nav_card.setup_data(setting)
-            nav_card.clicked.connect(lambda i=index, c=nav_card: self.on_nav_clicked(i, c))
-            navbar_layout.addWidget(nav_card)
-            self.nav_cards.append(nav_card)
+        titles = [
+            self.tr("Personalization"), self.tr("Account"), self.tr("Tools"), self.tr("LLMs"),
+            self.tr("Text Rendering"), self.tr("Project"), self.tr("Export"), self.tr("Shortcuts"),
+            self.tr("Advanced"), self.tr("About"),
+        ]
+        self._nav_group = QtWidgets.QButtonGroup(self)
+        self._nav_group.setExclusive(True)
+        for index, (title, icon) in enumerate(zip(titles, self.NAV_ICONS)):
+            nav_button = MToolButton().svg(icon).text_beside_icon()
+            nav_button.setText("  " + title)
+            nav_button.setObjectName("toonSettingsNav")
+            nav_button.setCheckable(True)
+            nav_button.setIconSize(QtCore.QSize(18, 18))
+            nav_button.setFixedHeight(38)
+            nav_button.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
+            nav_button.clicked.connect(lambda _=False, i=index, b=nav_button: self.on_nav_clicked(i, b))
+            self._nav_group.addButton(nav_button, index)
+            navbar_layout.addWidget(nav_button)
+            self.nav_cards.append(nav_button)
 
         navbar_layout.addStretch(1)
+        if self.nav_cards:
+            self.nav_cards[0].setChecked(True)
+            self.current_highlighted_nav = self.nav_cards[0]
         return navbar_widget
 
-    def on_nav_clicked(self, index: int, clicked_nav: ClickMeta):
-        # Remove highlight from the previously highlighted nav item
-        if self.current_highlighted_nav:
-            self.current_highlighted_nav.set_highlight(False)
-
-        # Highlight the clicked nav item
-        clicked_nav.set_highlight(True)
+    def on_nav_clicked(self, index: int, clicked_nav):
+        clicked_nav.setChecked(True)
         self.current_highlighted_nav = clicked_nav
 
         # Set the current index of the stacked widget

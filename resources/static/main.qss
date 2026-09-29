@@ -1456,3 +1456,18 @@ QTextBrowser#toonGlossaryRows {
     border-radius: @border_radius_large@unit;
     padding: 6px;
 }
+
+/* Settings section list (settings_ui._create_navbar_widget) */
+MToolButton#toonSettingsNav {
+    color: @secondary_text_color;
+    padding: 0 10px;
+    text-align: left;
+    font-size: @font_size_base@font_unit;
+}
+MToolButton#toonSettingsNav:hover {
+    color: @primary_text_color;
+}
+MToolButton#toonSettingsNav:checked {
+    color: @primary_color;
+    font-weight: 600;
+}

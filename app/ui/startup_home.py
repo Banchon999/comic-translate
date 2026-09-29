@@ -10,6 +10,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from send2trash import send2trash
 
 from core import theme_tokens
+from .dayu_widgets.qt import MPixmap
 
 if TYPE_CHECKING:
     pass
@@ -26,34 +27,44 @@ IMPORT_EXTS = {
 # "New" card  (big clickable tile like Word's "Blank document")
 
 class _NewCard(QtWidgets.QFrame):
+    """A home-screen action: an icon tile, a title and one line of detail.
+
+    ``primary`` draws it in the accent (the one action the screen leads with).
+    """
+
     clicked = QtCore.Signal()
 
-    def __init__(self, icon_text: str, label: str, parent=None):
+    def __init__(self, icon_svg: str, label: str, detail: str = "", primary: bool = False, parent=None):
         super().__init__(parent)
         self.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
-        self.setFixedSize(140, 150)
         self.setObjectName("NewCard")
+        self.setMinimumWidth(260)
+        self.setFixedHeight(96)
+        self._icon_svg = icon_svg
+        self._primary = primary
 
-        lay = QtWidgets.QVBoxLayout(self)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(0)
+        lay = QtWidgets.QHBoxLayout(self)
+        lay.setContentsMargins(18, 0, 18, 0)
+        lay.setSpacing(14)
 
-        # Preview area
-        self._preview = QtWidgets.QLabel(icon_text)
-        self._preview.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self._preview = QtWidgets.QLabel()
         self._preview.setObjectName("CardPreview")
-        self._preview.setFixedHeight(110)
-        self._preview.setStyleSheet("font-size: 36px;")
-
-        # Label bar
-        self._label = QtWidgets.QLabel(label)
-        self._label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self._label.setObjectName("CardLabel")
-        self._label.setWordWrap(True)
-        self._label.setFixedHeight(40)
-
+        self._preview.setFixedSize(48, 48)
+        self._preview.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(self._preview)
-        lay.addWidget(self._label)
+
+        text = QtWidgets.QVBoxLayout()
+        text.setSpacing(2)
+        text.addStretch(1)
+        self._label = QtWidgets.QLabel(label)
+        self._label.setObjectName("CardLabel")
+        text.addWidget(self._label)
+        self._detail = QtWidgets.QLabel(detail)
+        self._detail.setObjectName("CardDetail")
+        self._detail.setVisible(bool(detail))
+        text.addWidget(self._detail)
+        text.addStretch(1)
+        lay.addLayout(text, 1)
 
     def mousePressEvent(self, event):
         if event.button() == QtCore.Qt.MouseButton.LeftButton:
@@ -62,35 +73,40 @@ class _NewCard(QtWidgets.QFrame):
 
     def apply_theme(self, is_dark: bool):
         t = theme_tokens.palette(dark=is_dark)
-        border   = t["line"]
-        bg       = t["raised"]
-        bg_prev  = t["raised"]
-        bg_lbl   = t["header"]
-        fg_lbl   = t["text_1"]
-        hover_b  = t["accent"]
-
+        if self._primary:
+            bg, fg, detail, border, tile = t["accent"], t["on_accent"], t["on_accent"], t["accent"], theme_tokens.rgba(t["on_accent"], 0.14)
+            hover = t["accent"]
+        else:
+            bg, fg, detail, border, tile = t["panel"], t["text_1"], t["text_2"], t["line"], t["raised"]
+            hover = t["accent"]
+        icon_colour = fg if self._primary else t["text_2"]
+        pix = MPixmap(self._icon_svg, icon_colour).scaled(
+            26, 26, QtCore.Qt.AspectRatioMode.KeepAspectRatio, QtCore.Qt.TransformationMode.SmoothTransformation
+        )
+        self._preview.setPixmap(pix)
         self.setStyleSheet(f"""
             QFrame#NewCard {{
                 border: 1px solid {border};
-                border-radius: 4px;
+                border-radius: 14px;
                 background: {bg};
             }}
             QFrame#NewCard:hover {{
-                border: 2px solid {hover_b};
+                border: 1px solid {hover};
             }}
             QLabel#CardPreview {{
-                background: {bg_prev};
-                border-top-left-radius: 4px;
-                border-top-right-radius: 4px;
-                border-bottom: 1px solid {border};
+                background: {tile};
+                border-radius: 12px;
             }}
             QLabel#CardLabel {{
-                background: {bg_lbl};
-                color: {fg_lbl};
-                font-size: 11px;
-                font-weight: 500;
-                border-bottom-left-radius: 4px;
-                border-bottom-right-radius: 4px;
+                background: transparent;
+                color: {fg};
+                font-size: 15px;
+                font-weight: 700;
+            }}
+            QLabel#CardDetail {{
+                background: transparent;
+                color: {detail};
+                font-size: 12px;
             }}
         """)
 
@@ -427,38 +443,44 @@ class StartupHomeScreen(QtWidgets.QWidget):
         scroll.setWidget(content)
         self._vlay = vlay
 
-        # "New" section
-        new_hdr = QtWidgets.QLabel(self.tr("New"))
-        new_hdr.setStyleSheet(
-            "font-size: 15px; font-weight: 600; background: transparent; border: none;"
-        )
+        # Header: the active workspace (set_workspace_summary), or a plain
+        # heading when there is none.
+        new_hdr = QtWidgets.QLabel(self.tr("Start translating"))
         vlay.addWidget(new_hdr)
-        vlay.addSpacing(10)
         self._new_hdr = new_hdr
+        self._summary = QtWidgets.QLabel()
+        self._summary.setVisible(False)
+        vlay.addSpacing(4)
+        vlay.addWidget(self._summary)
+        vlay.addSpacing(22)
 
         cards_row = QtWidgets.QHBoxLayout()
         cards_row.setSpacing(12)
         cards_row.setContentsMargins(0, 0, 0, 0)
 
-        self._card_new  = _NewCard("＋", self.tr("New Project"))
-        self._card_open = _NewCard("📂", self.tr("Open Files"))
+        self._card_new  = _NewCard(
+            "add_line.svg", self.tr("New Project"),
+            self.tr("Start from images, a folder or a comic file"), primary=True,
+        )
+        self._card_open = _NewCard(
+            "folder-open.svg", self.tr("Open Files"),
+            self.tr("Projects (.ctpr), PSD, PDF, EPUB, CBZ"),
+        )
 
         self._card_new.clicked.connect(self._on_new_project)
         self._card_open.clicked.connect(self._on_browse)
 
-        cards_row.addWidget(self._card_new)
-        cards_row.addWidget(self._card_open)
-        cards_row.addStretch()
+        cards_row.addWidget(self._card_new, 1)
+        cards_row.addWidget(self._card_open, 1)
         vlay.addLayout(cards_row)
         self._drop_hint = QtWidgets.QLabel(
             self.tr("Drag and drop files anywhere on this page to open them.")
         )
-        self._drop_hint.setStyleSheet(
-            "font-size: 11px; background: transparent; border: none;"
-        )
-        vlay.addSpacing(8)
-        vlay.addWidget(self._drop_hint)
+        self._drop_hint.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self._drop_hint.setFixedHeight(56)
         vlay.addSpacing(16)
+        vlay.addWidget(self._drop_hint)
+        vlay.addSpacing(24)
 
         # Divider 
         self._div1 = QtWidgets.QFrame()
@@ -545,6 +567,12 @@ class StartupHomeScreen(QtWidgets.QWidget):
     def apply_theme(self, is_dark: bool) -> None:
         self._is_dark = is_dark
         self._refresh_theme()
+
+    def set_workspace_summary(self, name: str, detail: str = "") -> None:
+        """Lead with the active workspace (series) and what it sets."""
+        self._new_hdr.setText(name or self.tr("Start translating"))
+        self._summary.setText(detail)
+        self._summary.setVisible(bool(name and detail))
 
     # Internal 
 
@@ -641,11 +669,15 @@ class StartupHomeScreen(QtWidgets.QWidget):
         sb_brd   = t["line"]
 
         self._new_hdr.setStyleSheet(
-            f"font-size: 15px; font-weight: 600; color: {fg}; "
-            "background: transparent; border: none;"
+            f"font-family: '{theme_tokens.DISPLAY_FONT_FAMILY}', '{theme_tokens.UI_FONT_FAMILY}';"
+            f"font-size: 28px; font-weight: 800; color: {fg}; background: transparent; border: none;"
+        )
+        self._summary.setStyleSheet(
+            f"font-size: 13px; color: {t['text_2']}; background: transparent; border: none;"
         )
         self._drop_hint.setStyleSheet(
-            f"font-size: 11px; color: {fg_sub}; background: transparent; border: none;"
+            f"font-size: 13px; color: {fg_sub}; background: transparent;"
+            f"border: 1.5px dashed {t['line_strong']}; border-radius: 12px;"
         )
         self._div1.setStyleSheet(f"background: {div}; border: none;")
         self._div2.setStyleSheet(f"background: {div}; border: none;")
