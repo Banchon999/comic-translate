@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from PySide6 import QtCore, QtGui, QtWidgets
 from send2trash import send2trash
 
-from .dayu_widgets import dayu_theme
+from core import theme_tokens
 
 if TYPE_CHECKING:
     pass
@@ -61,20 +61,13 @@ class _NewCard(QtWidgets.QFrame):
         super().mousePressEvent(event)
 
     def apply_theme(self, is_dark: bool):
-        if is_dark:
-            border   = "#484848"
-            bg       = "#3a3a3a"
-            bg_prev  = "#424242"
-            bg_lbl   = "#333333"
-            fg_lbl   = "#c0c0c0"
-            hover_b  = dayu_theme.primary_color or "#1890ff"
-        else:
-            border   = "#d0d0d0"
-            bg       = "#ffffff"
-            bg_prev  = "#f0f0f0"
-            bg_lbl   = "#f5f5f5"
-            fg_lbl   = "#333333"
-            hover_b  = dayu_theme.primary_color or "#1890ff"
+        t = theme_tokens.palette(dark=is_dark)
+        border   = t["line"]
+        bg       = t["raised"]
+        bg_prev  = t["raised"]
+        bg_lbl   = t["header"]
+        fg_lbl   = t["text_1"]
+        hover_b  = t["accent"]
 
         self.setStyleSheet(f"""
             QFrame#NewCard {{
@@ -194,20 +187,13 @@ class _RecentRow(QtWidgets.QFrame):
     # styling
     def apply_theme(self, is_dark: bool):
         self._is_dark = is_dark
-        if is_dark:
-            self._fg       = "#d0d0d0"
-            self._fg_sub   = "#777"
-            self._date_fg  = "#666"
-            self._hover    = "rgba(255,255,255,0.06)"
-            self._normal   = "transparent"
-            self._accent   = dayu_theme.primary_color or "#1890ff"
-        else:
-            self._fg       = "#1a1a1a"
-            self._fg_sub   = "#666"
-            self._date_fg  = "#888"
-            self._hover    = "rgba(0,0,0,0.04)"
-            self._normal   = "transparent"
-            self._accent   = dayu_theme.primary_color or "#1890ff"
+        t = theme_tokens.palette(dark=is_dark)
+        self._fg       = t["text_1"]
+        self._fg_sub   = t["text_3"]
+        self._date_fg  = t["text_3"]
+        self._hover    = t["hover"]
+        self._normal   = "transparent"
+        self._accent   = t["accent"]
         self._set_normal()
 
     def _set_normal(self):
@@ -258,18 +244,12 @@ class _RecentRow(QtWidgets.QFrame):
     def _ctx(self, gpos):
         menu = QtWidgets.QMenu(self)
         is_dark = bool(getattr(self, "_is_dark", True))
-        if is_dark:
-            menu_bg = "#2f2f2f"
-            menu_border = "#4a4a4a"
-            item_fg = "#dddddd"
-            item_hover = "rgba(255,255,255,0.10)"
-            sep = "#4a4a4a"
-        else:
-            menu_bg = "#ffffff"
-            menu_border = "#d9d9d9"
-            item_fg = "#222222"
-            item_hover = "rgba(0,0,0,0.08)"
-            sep = "#e5e5e5"
+        t = theme_tokens.palette(dark=is_dark)
+        menu_bg = t["raised"]
+        menu_border = t["line_strong"]
+        item_fg = t["text_1"]
+        item_hover = t["hover"]
+        sep = t["line"]
 
         menu.setStyleSheet(f"""
             QMenu {{
@@ -380,18 +360,12 @@ class _PillButton(QtWidgets.QPushButton):
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
 
     def apply_theme(self, is_dark: bool):
-        if is_dark:
-            normal_bg   = "transparent"
-            normal_fg   = "#a0a0a0"
-            checked_bg  = "#1890ff"
-            checked_fg  = "#ffffff"
-            hover_bg    = "rgba(255,255,255,0.08)"
-        else:
-            normal_bg   = "transparent"
-            normal_fg   = "#595959"
-            checked_bg  = "#1890ff"
-            checked_fg  = "#ffffff"
-            hover_bg    = "rgba(0,0,0,0.06)"
+        t = theme_tokens.palette(dark=is_dark)
+        normal_bg   = "transparent"
+        normal_fg   = t["text_2"]
+        checked_bg  = t["text_1"]
+        checked_fg  = t["panel"]
+        hover_bg    = t["hover"]
         self.setStyleSheet(f"""
             QPushButton {{
                 background: {normal_bg};
@@ -656,24 +630,15 @@ class StartupHomeScreen(QtWidgets.QWidget):
 
     def _refresh_theme(self):
         d = self._is_dark
-        if d:
-            fg       = "#d9d9d9"
-            fg_sub   = "#888"
-            hdr_fg   = "#a0a0a0"
-            div      = "#3a3a3a"
-            sb_bg    = "#3a3a3a"
-            sb_fg    = "#d0d0d0"
-            sb_ph    = "#666"
-            sb_brd   = "#505050"
-        else:
-            fg       = "#262626"
-            fg_sub   = "#666"
-            hdr_fg   = "#8c8c8c"
-            div      = "#e0e0e0"
-            sb_bg    = "#ffffff"
-            sb_fg    = "#262626"
-            sb_ph    = "#aaa"
-            sb_brd   = "#d0d0d0"
+        t = theme_tokens.palette(dark=d)
+        fg       = t["text_1"]
+        fg_sub   = t["text_3"]
+        hdr_fg   = t["text_3"]
+        div      = t["line"]
+        sb_bg    = t["raised"]
+        sb_fg    = t["text_1"]
+        sb_ph    = t["text_3"]
+        sb_brd   = t["line"]
 
         self._new_hdr.setStyleSheet(
             f"font-size: 15px; font-weight: 600; color: {fg}; "

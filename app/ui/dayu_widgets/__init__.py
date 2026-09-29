@@ -28,7 +28,9 @@ else:
 from .theme import MTheme
 
 
-dayu_theme = MTheme("dark", primary_color=MTheme.orange)
+from core.theme_tokens import DARK as _DARK_TOKENS  # noqa: E402
+
+dayu_theme = MTheme("dark", primary_color=_DARK_TOKENS["accent"])
 # dayu_theme.default_size = dayu_theme.small
 # dayu_theme = MTheme('light')
 

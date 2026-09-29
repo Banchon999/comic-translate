@@ -56,10 +56,7 @@ class PageListItemDelegate(QStyledItemDelegate):
         metrics = painter.fontMetrics()
         text = metrics.elidedText(str(text), Qt.TextElideMode.ElideMiddle, text_rect.width())
 
-        pen_color = option.palette.highlightedText().color() if selected else option.palette.text().color()
-        if strike_out and not selected:
-            pen_color = option.palette.mid().color()
-        painter.setPen(pen_color)
+        painter.setPen(self._text_color(option, selected, strike_out))
         painter.drawText(text_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, text)
 
         if strike_out:
@@ -68,13 +65,24 @@ class PageListItemDelegate(QStyledItemDelegate):
 
         painter.restore()
 
+    @staticmethod
+    def _text_color(option, selected: bool, strike_out: bool) -> QColor:
+        # The selected fill is a tint of the accent under body text, not a
+        # solid accent, so the text stays the ordinary text colour. (The
+        # palette's highlightedText is ink meant for a solid accent fill.)
+        if selected:
+            return QColor(dayu_theme.primary_text_color)
+        if strike_out:
+            return option.palette.mid().color()
+        return option.palette.text().color()
+
     def sizeHint(self, option, index):
         return QSize(self.THUMB_SIZE.width() + 120, self.ROW_HEIGHT)
 
     def _background_color(self, option) -> QColor:
         base = QColor(dayu_theme.background_color)
         if option.state & QStyle.StateFlag.State_Selected:
-            return QColor(dayu_theme.background_selected_color)
+            return self._blend_colors(base, QColor(dayu_theme.primary_color), 0.22)
         if option.state & QStyle.StateFlag.State_MouseOver:
             return self._blend_colors(base, QColor(dayu_theme.background_selected_color), 0.18)
         return base

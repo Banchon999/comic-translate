@@ -1,4 +1,5 @@
 from PySide6 import QtWidgets, QtCore
+from ..dayu_widgets import dayu_theme
 from ..dayu_widgets.label import MLabel
 from ..dayu_widgets.push_button import MPushButton
 from app.account.config import FRONTEND_BASE_URL
@@ -41,7 +42,7 @@ class AccountPage(QtWidgets.QWidget):
         
         # Link to credits costs (logged out)
         link_text = self.tr("See model credit costs")
-        self.view_costs_link_out = MLabel(f'<a href="{FRONTEND_BASE_URL}/pricing/credits/" style="color: #4da6ff; text-decoration: underline; font-size: 11px;">{link_text}</a>')
+        self.view_costs_link_out = MLabel(f'<a href="{FRONTEND_BASE_URL}/pricing/credits/" style="color: {dayu_theme.tokens["info"]}; text-decoration: underline; font-size: 11px;">{link_text}</a>')
         self.view_costs_link_out.setOpenExternalLinks(True)
         self.view_costs_link_out.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
         self.view_costs_link_out.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
@@ -83,7 +84,7 @@ class AccountPage(QtWidgets.QWidget):
         # Link to credits costs (logged in) - below info block
         # Link to credits costs (logged in) - below info block
         link_text_in = self.tr("See model credit costs")
-        self.view_costs_link_in = MLabel(f'<a href="{FRONTEND_BASE_URL}/pricing/credits/" style="color: #4da6ff; text-decoration: underline; font-size: 11px;">{link_text_in}</a>')
+        self.view_costs_link_in = MLabel(f'<a href="{FRONTEND_BASE_URL}/pricing/credits/" style="color: {dayu_theme.tokens["info"]}; text-decoration: underline; font-size: 11px;">{link_text_in}</a>')
         self.view_costs_link_in.setOpenExternalLinks(True)
         self.view_costs_link_in.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
         self.view_costs_link_in.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)

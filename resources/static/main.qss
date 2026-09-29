@@ -5,8 +5,8 @@
     color: @primary_text_color;
     background-color: @background_color;
     font-size: @font_size_base@font_unit;
-    selection-color: @text_color_inverse;
-    selection-background-color: #3b82f6;
+    selection-color: @on_primary_color;
+    selection-background-color: @primary_color;
 }
 MDateTimeEdit::drop-down,
 MDateEdit::drop-down,
@@ -594,7 +594,7 @@ MPushButton[dayu_type=default]:pressed{
 
 MPushButton[dayu_type=primary]{
     border: none;
-    color: @text_color_inverse;
+    color: @on_primary_color;
     background-color: @primary_color;
 }
 MPushButton[dayu_type=primary]:hover{
@@ -607,7 +607,7 @@ MPushButton[dayu_type=primary]:pressed{
 
 MPushButton[dayu_type=success]{
     border: none;
-    color: @text_color_inverse;
+    color: @on_primary_color;
     background-color: @success_6;
 }
 MPushButton[dayu_type=success]:hover{
@@ -620,7 +620,7 @@ MPushButton[dayu_type=success]:pressed{
 
 MPushButton[dayu_type=warning]{
     border: none;
-    color: @text_color_inverse;
+    color: @on_primary_color;
     background-color: @warning_6;
 }
 MPushButton[dayu_type=warning]:hover{
@@ -633,7 +633,7 @@ MPushButton[dayu_type=warning]:pressed{
 
 MPushButton[dayu_type=danger]{
     border: none;
-    color: white;
+    color: @on_primary_color;
     background-color: @error_6;
 }
 MPushButton[dayu_type=danger]:hover{
@@ -1082,8 +1082,8 @@ MListView::item:hover,
 MTreeView::item:hover,
 MColumnView::item:hover,
 MTableView::item:hover{
-    color: @text_color_inverse;
-    background-color: @primary_5;
+    color: @primary_text_color;
+    background-color: @background_selected_color;
 }
 
 MBigView::item:selected,
@@ -1091,8 +1091,8 @@ MListView::item:selected,
 MTreeView::item:selected,
 MColumnView::item:selected,
 MTableView::item:selected{
-    background-color: @primary_color;
-    color: @text_color_inverse;
+    background-color: @primary_soft;
+    color: @primary_text_color;
 }
 
 MTableView QTableCornerButton::section {

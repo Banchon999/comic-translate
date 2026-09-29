@@ -152,6 +152,10 @@ def main():
     # Create QApplication directly instead of using the context manager
     app = QApplication(sys.argv)
 
+    # The bundled UI typeface, before any widget is styled.
+    from app.ui.fonts import load_ui_fonts
+    load_ui_fonts()
+
     router = OpenRequestRouter()
     file_open_event_filter = FileOpenEventFilter(router)
     app.installEventFilter(file_open_event_filter)

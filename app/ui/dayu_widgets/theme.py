@@ -14,6 +14,7 @@ from __future__ import print_function
 import string
 
 # Import local modules
+from core import theme_tokens
 from . import DEFAULT_STATIC_FOLDER
 from . import utils
 from .qt import get_scale_factor
@@ -22,9 +23,10 @@ from .qt import get_scale_factor
 def get_theme_size():
     scale_factor_x, scale_factor_y = get_scale_factor()
     return {
-        "border_radius_large": int(6 * scale_factor_x),
-        "border_radius_base": int(4 * scale_factor_x),
-        "border_radius_small": int(2 * scale_factor_x),
+        # Toon Studio radii (core/theme_tokens.RADIUS): softer than dayu's 6/4/2.
+        "border_radius_large": int(theme_tokens.RADIUS["large"] * scale_factor_x),
+        "border_radius_base": int(theme_tokens.RADIUS["base"] * scale_factor_x),
+        "border_radius_small": int(theme_tokens.RADIUS["small"] * scale_factor_x),
         "huge": int(48 * scale_factor_x),
         "large": int(40 * scale_factor_x),
         "medium": int(32 * scale_factor_x),
@@ -150,15 +152,22 @@ class MTheme(object):
         self.font_unit = "pt"
 
         self.text_error_color = self.error_7
-        self.text_color_inverse = "#fff"
+        self.text_color_inverse = self.tokens["on_toast"]
         self.text_warning_color = self.warning_7
 
     def set_theme(self, theme):
+        self.mode = "light" if theme == "light" else "dark"
+        self.tokens = theme_tokens.palette(dark=self.mode == "dark")
         if theme == "light":
             self._light()
         else:
             self._dark()
+        self._init_color()
         self._init_icon(theme)
+
+    @property
+    def is_dark(self):
+        return getattr(self, "mode", "dark") == "dark"
 
     def set_primary_color(self, color):
         self.primary_color = color
@@ -172,6 +181,8 @@ class MTheme(object):
         self.primary_8 = utils.generate_color(color, 8)
         self.primary_9 = utils.generate_color(color, 9)
         self.primary_10 = utils.generate_color(color, 10)
+        # Selection fill: the accent at low opacity, readable under body text.
+        self.primary_soft = utils.fade_color(color, "22%")
         # item
         self.item_hover_bg = self.primary_1
         # rich text hyperlink style
@@ -207,11 +218,14 @@ class MTheme(object):
         self.icon_sphere = url_prefix_2.format("sphere")
 
     def _init_color(self):
-        self.info_color = self.blue
-        self.success_color = self.green
-        self.processing_color = self.blue
-        self.error_color = self.red
-        self.warning_color = self.gold
+        # Status colours follow the Toon Studio tokens of the current mode;
+        # before a mode is set, the dark ones.
+        tokens = getattr(self, "tokens", None) or theme_tokens.palette(dark=True)
+        self.info_color = tokens["info"]
+        self.success_color = tokens["ok"]
+        self.processing_color = tokens["info"]
+        self.error_color = tokens["danger"]
+        self.warning_color = tokens["warn"]
 
         self.info_1 = utils.fade_color(self.info_color, "15%")
         self.info_2 = utils.generate_color(self.info_color, 2)
@@ -259,7 +273,10 @@ class MTheme(object):
 
     def _init_font(self):
         # font
+        # The bundled UI face first (loaded by app.ui.fonts at startup); the
+        # rest are the old stack, used for any script it does not cover.
         self.font_family = (
+            '"' + theme_tokens.UI_FONT_FAMILY + '",'
             'BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",'
             '"Helvetica Neue",Helvetica,Arial,sans-serif'
         )
@@ -277,39 +294,32 @@ class MTheme(object):
         except AttributeError:
             return get_theme_size().get(item, 0)
 
-    def _dark(self):
-        self.title_color = "#ffffff"
-        self.primary_text_color = "#d9d9d9"
-        self.secondary_text_color = "#a6a6a6"
-        self.disable_color = "#737373"
-        self.border_color = "#1e1e1e"
-        self.divider_color = "#262626"
-        self.header_color = "#0a0a0a"
-        self.icon_color = "#a6a6a6"
+    def _apply_tokens(self):
+        """Map the Toon Studio tokens onto dayu's colour names (core/theme_tokens.py)."""
+        t = self.tokens
+        self.title_color = t["text_1"]
+        self.primary_text_color = t["text_1"]
+        self.secondary_text_color = t["text_2"]
+        self.disable_color = t["disabled"]
+        self.border_color = t["line"]
+        self.divider_color = t["line"]
+        self.header_color = t["ground"]
+        self.icon_color = t["text_2"]
 
-        self.background_color = "#323232"
-        self.background_selected_color = "#292929"
-        self.background_in_color = "#3a3a3a"
-        self.background_out_color = "#494949"
+        self.background_color = t["panel"]
+        self.background_selected_color = t["line_strong"]
+        self.background_in_color = t["raised"]
+        self.background_out_color = t["header"]
         self.mask_color = utils.fade_color(self.background_color, "90%")
-        self.toast_color = "#555555"
+        self.toast_color = t["toast"]
+        # Text on an accent fill. Not white: white on the dark-mode pink is 3:1.
+        self.on_primary_color = t["on_accent"]
+
+    def _dark(self):
+        self._apply_tokens()
 
     def _light(self):
-        self.title_color = "#262626"
-        self.primary_text_color = "#595959"
-        self.secondary_text_color = "#8c8c8c"
-        self.disable_color = "#e5e5e5"
-        self.border_color = "#d9d9d9"
-        self.divider_color = "#e8e8e8"
-        self.header_color = "#fafafa"
-        self.icon_color = "#8c8c8c"
-
-        self.background_color = "#f8f8f9"
-        self.background_selected_color = "#bfbfbf"
-        self.background_in_color = "#ffffff"
-        self.background_out_color = "#eeeeee"
-        self.mask_color = utils.fade_color(self.background_color, "90%")
-        self.toast_color = "#333333"
+        self._apply_tokens()
 
     def apply(self, widget):
         size_dict = get_theme_size()

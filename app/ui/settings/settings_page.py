@@ -9,6 +9,7 @@ from PySide6 import QtWidgets, QtGui
 from PySide6.QtCore import Signal, QSettings, QUrl, QTimer, Qt
 from PySide6.QtGui import QFont, QFontDatabase, QDesktopServices
 
+from app.ui.dayu_widgets import dayu_theme
 from app.shortcuts import get_default_shortcuts
 from .settings_ui import SettingsPageUI
 from modules.utils.device import is_gpu_available
@@ -1068,7 +1069,7 @@ class SettingsPage(QtWidgets.QWidget):
         msg_box.setTextInteractionFlags(Qt.TextBrowserInteraction)
         msg_box.setText(self.tr("A new version {version} is available.").format(version=version))
         link_text = self.tr("Release Notes")
-        msg_box.setInformativeText(f'<a href="{release_url}" style="color: #4da6ff;">{link_text}</a>')
+        msg_box.setInformativeText(f'<a href="{release_url}" style="color: {dayu_theme.tokens["info"]};">{link_text}</a>')
         
         download_btn = msg_box.addButton(self.tr("Yes"), QtWidgets.QMessageBox.ButtonRole.AcceptRole)
         cancel_btn = msg_box.addButton(self.tr("No"), QtWidgets.QMessageBox.ButtonRole.RejectRole)
