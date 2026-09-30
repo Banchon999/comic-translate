@@ -796,6 +796,68 @@ class InpaintingHandler:
         region[inside] = cleaned[inside]
         return self.get_inpainted_patches(mask, result, mappings=mappings, denoise=False)
 
+    #: How far inside a bubble's outline the white-balloon fill may reach.
+    #: Smaller than the Clean step's fast-fill inset: lettering often runs
+    #: close to the outline, and the bubble mask already follows its shape.
+    WHITE_BALLOON_INSET = 3
+
+    def clean_white_balloons(self, image: np.ndarray, blocks: list, mappings: list[dict] | None = None,
+                             page_text_mask: np.ndarray | None = None):
+        """Paint the lettering of every white, flat speech bubble in `blocks`
+        over with the bubble's own colour — no model.
+
+        Each bubble is judged by `core.balloons.plan_balloon` from its
+        background around the lettering; a bubble that is not light, not
+        flat, or shows too little background is left exactly as it is and
+        reported. Returns ``(patches, cleaned, skipped)``, where `skipped` is a
+        list of reasons, one per refused bubble. Outside the filled lettering
+        nothing changes (patches are cut with ``denoise=False``).
+        """
+        from core import balloons
+
+        if image is None:
+            return [], 0, []
+        result = image.copy()
+        changed = np.zeros(image.shape[:2], bool)
+        cleaned, skipped = 0, []
+        for block in blocks or []:
+            if getattr(block, "text_class", None) != "text_bubble" or getattr(block, "bubble_xyxy", None) is None:
+                continue
+            try:
+                mask, bounds = build_block_mask_data(
+                    image, block, require_text_or_translation=False, clip_to_bubble=True,
+                    page_text_mask=page_text_mask,
+                )
+                if mask is None or bounds is None:
+                    skipped.append(balloons.NO_TEXT)
+                    continue
+                x1, y1, x2, y2 = bounds
+                bubble = build_bubble_clip_mask(
+                    mask.shape[:2], bounds, block.bubble_xyxy,
+                    inset=self.WHITE_BALLOON_INSET, image=image, seed_bbox=block.xyxy,
+                )
+                if bubble is None:
+                    skipped.append(balloons.TOO_LITTLE)
+                    continue
+                crop = result[y1:y2, x1:x2]
+                plan = balloons.plan_balloon(crop, mask, bubble)
+                if not plan.ok:
+                    skipped.append(plan.reason)
+                    continue
+                filled = balloons.fill_balloon(crop, mask, bubble, plan.colour, protect=plan.protect)
+                diff = np.any(filled != crop, axis=2) if filled.ndim == 3 else filled != crop
+                result[y1:y2, x1:x2] = filled
+                changed[y1:y2, x1:x2] |= diff
+                cleaned += 1
+            except Exception:
+                # One odd bubble must not stop the rest of the page.
+                logger.exception("White balloon clean failed for %s", self._format_block_debug_label(block))
+                skipped.append("error")
+        if not changed.any():
+            return [], cleaned, skipped
+        patches = self.get_inpainted_patches(changed.astype(np.uint8) * 255, result, mappings=mappings, denoise=False)
+        return patches, cleaned, skipped
+
     def apply_patch_list(self, patch_list):
         """Put inpainted patches onto their pages (as undoable patch commands)."""
         if self.main_page.webtoon_mode:
