@@ -257,6 +257,13 @@ class LazyImageLoader:
                     if item_y >= threshold_y - 10:
                         current_pos = item.pos()
                         item.setPos(current_pos.x(), current_pos.y() + height_diff)
+
+        # The canvas selection is a path in scene coordinates, not an item
+        # with a position: move it with the pages it lies on.
+        viewer = getattr(self, "viewer", None)
+        selection = getattr(viewer, "selection", None)
+        if selection is not None:
+            selection.shift_below(threshold_y - 10, height_diff)
     
     def update_loaded_pages(self):
         """Update which pages should be loaded based on current viewport."""

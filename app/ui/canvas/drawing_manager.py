@@ -25,6 +25,13 @@ from modules.utils.flood_select import (
 
 logger = logging.getLogger(__name__)
 
+#: DrawingManager.region_output values.
+REGION_SELECTION = "selection"
+REGION_MASK = "mask"
+
+#: Below this much movement a marquee press is a click, which deselects.
+MARQUEE_CLICK_THRESHOLD = 3.0
+
 
 class DrawingManager:
     """Manages all drawing-related tools and state."""
@@ -46,6 +53,18 @@ class DrawingManager:
         self.lasso_preview = None
         self._lasso_dragged = False
         self._lasso_press_pos = None
+        self._lasso_modifiers = Qt.KeyboardModifier.NoModifier
+
+        # Where the wand and the lasso send what they pick: into the canvas
+        # selection (marching ants, which an action then uses), or straight
+        # onto the page as a red mask stroke for the Clean step, as before
+        # selections existed. The options bar switches it.
+        self.region_output = REGION_SELECTION
+
+        # Rectangle marquee in progress (scene coordinates).
+        self._marquee_start: QPointF | None = None
+        self._marquee_modifiers = Qt.KeyboardModifier.NoModifier
+        self.marquee_preview = None
         
         self.brush_cursor = self.create_inpaint_cursor('brush', self.brush_size)
         self.eraser_cursor = self.create_inpaint_cursor('eraser', self.eraser_size)
@@ -61,12 +80,14 @@ class DrawingManager:
         window = self.viewer.window()
         return getattr(window, "settings_page", None)
 
-    def flood_fill_at(self, scene_pos: QPointF, contiguous: bool = True):
-        """Select the region under the cursor and add it as a stroke.
+    def flood_fill_at(self, scene_pos: QPointF, contiguous: bool = True, modifiers=None):
+        """Pick the region under the cursor.
 
-        The result is an ordinary filled path item — the same thing the brush
-        produces — so mask generation, undo, the Layers panel and saving all
-        treat it exactly like a hand-drawn stroke and needed no changes.
+        In mask mode the result is an ordinary filled path item — the same
+        thing the brush produces — so mask generation, undo, the Layers panel
+        and saving treat it exactly like a hand-drawn stroke. In selection mode
+        it joins the canvas selection the way `modifiers` ask (Shift adds, Alt
+        subtracts).
         """
         image = self.viewer.get_image_array(include_patches=True)
         if image is None:
@@ -102,7 +123,23 @@ class DrawingManager:
                 path.lineTo(float(x + offset_x), float(y + offset_y))
             path.closeSubpath()
 
-        return self.add_region_stroke(path)
+        return self.commit_region(path, modifiers, "Magic Wand")
+
+    def commit_region(self, path: QPainterPath, modifiers=None, text: str = "Selection"):
+        """Send a picked region wherever `region_output` says.
+
+        Returns the stroke item in mask mode, the path in selection mode (so a
+        caller can tell something was picked), or None.
+        """
+        if path is None or path.isEmpty():
+            return None
+        if self.region_output == REGION_MASK:
+            return self.add_region_stroke(path)
+        from .selection import mode_for_modifiers
+
+        mode = mode_for_modifiers(modifiers if modifiers is not None else Qt.KeyboardModifier.NoModifier)
+        self.viewer.selection.combine(path, mode, text)
+        return path
 
     def add_region_stroke(self, path: QPainterPath):
         """Put a filled region on the canvas as an undoable stroke.
@@ -136,10 +173,14 @@ class DrawingManager:
     #: Below this much movement a press counts as a click, not a drag.
     LASSO_DRAG_THRESHOLD = 4.0
 
-    def lasso_press(self, scene_pos: QPointF):
+    def lasso_press(self, scene_pos: QPointF, modifiers=None):
         self._lasso_press_pos = scene_pos
         self._lasso_dragged = False
         if not self.lasso_points:
+            # The modifiers held when an outline is *started* decide how it
+            # combines with the selection; by the time a polygon is closed with
+            # a double-click or Enter the user has long let go of them.
+            self._lasso_modifiers = modifiers if modifiers is not None else Qt.KeyboardModifier.NoModifier
             self.lasso_points = [scene_pos]
         self._update_lasso_preview()
 
@@ -188,7 +229,7 @@ class DrawingManager:
         for point in points[1:]:
             path.lineTo(point)
         path.closeSubpath()
-        return self.add_region_stroke(path)
+        return self.commit_region(path, self._lasso_modifiers, "Lasso")
 
     def lasso_cancel(self):
         self._clear_lasso_preview()
@@ -225,6 +266,65 @@ class DrawingManager:
             self.lasso_preview.setZValue(1.0)
         else:
             self.lasso_preview.setPath(path)
+
+    # Rectangle marquee: always a selection, never a mask stroke.
+
+    def marquee_press(self, scene_pos: QPointF, modifiers=None):
+        self._marquee_start = scene_pos
+        self._marquee_modifiers = modifiers if modifiers is not None else Qt.KeyboardModifier.NoModifier
+
+    def marquee_move(self, scene_pos: QPointF):
+        if self._marquee_start is None:
+            return
+        rect = QtCore.QRectF(self._marquee_start, scene_pos).normalized()
+        path = QPainterPath()
+        path.addRect(rect)
+        if self.marquee_preview is None:
+            # The same marching-ants item the selection uses: not a path item,
+            # so no code that treats path items as mask strokes can pick it up.
+            from .selection import SelectionOverlay
+
+            self.marquee_preview = SelectionOverlay(path)
+            self._scene.addItem(self.marquee_preview)
+        else:
+            try:
+                self.marquee_preview.set_path(path)
+            except RuntimeError:
+                # The scene was cleared (page switch) mid-drag.
+                self.marquee_preview = None
+                self.marquee_move(scene_pos)
+
+    def marquee_release(self, scene_pos: QPointF):
+        start, self._marquee_start = self._marquee_start, None
+        self._clear_marquee_preview()
+        if start is None:
+            return None
+        delta = scene_pos - start
+        if max(abs(delta.x()), abs(delta.y())) < MARQUEE_CLICK_THRESHOLD:
+            # A click without a drag drops the selection, as in image editors —
+            # unless a modifier says the user meant to add or take away.
+            if self._marquee_modifiers == Qt.KeyboardModifier.NoModifier:
+                self.viewer.selection.deselect()
+            return None
+        path = QPainterPath()
+        path.addRect(QtCore.QRectF(start, scene_pos).normalized())
+        from .selection import mode_for_modifiers
+
+        self.viewer.selection.combine(path, mode_for_modifiers(self._marquee_modifiers), "Rectangle Select")
+        return path
+
+    def marquee_cancel(self):
+        self._marquee_start = None
+        self._clear_marquee_preview()
+
+    def _clear_marquee_preview(self):
+        if self.marquee_preview is not None:
+            try:
+                if self.marquee_preview.scene() is not None:
+                    self._scene.removeItem(self.marquee_preview)
+            except RuntimeError:
+                pass
+            self.marquee_preview = None
 
     def _visible_area_offset(self) -> tuple[int, int]:
         """Where get_image_array's top-left sits in scene coordinates."""

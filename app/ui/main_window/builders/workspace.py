@@ -529,11 +529,20 @@ class WorkspaceMixin:
         self.eraser_button.clicked.connect(self.toggle_eraser_tool)
         self.tool_buttons["eraser"] = self.eraser_button
 
+        self.marquee_button = self.create_tool_button(svg="select-rect.svg", checkable=True)
+        self.marquee_button.setToolTip(self.tr(
+            "Select a rectangle: drag across the area.\n"
+            "Shift adds to the selection, Alt takes away; a click without dragging deselects."
+        ))
+        self.marquee_button.clicked.connect(self.toggle_marquee_tool)
+        self.tool_buttons["marquee"] = self.marquee_button
+
         self.wand_button = self.create_tool_button(svg="wand.svg", checkable=True)
         self.wand_button.setToolTip(self.tr(
             "Select a whole region with one click — the inside of a bubble, a "
             "panel gutter, a flat area behind a sound effect.\n"
-            "Hold Ctrl to take every region of that colour on the page at once."
+            "Hold Ctrl to take every region of that colour on the page at once;\n"
+            "Shift adds to the selection, Alt takes away."
         ))
         self.wand_button.clicked.connect(self.toggle_wand_tool)
         self.tool_buttons["wand"] = self.wand_button
@@ -542,7 +551,8 @@ class WorkspaceMixin:
         self.lasso_button.setToolTip(self.tr(
             "Draw around an irregular shape a round brush cannot follow.\n"
             "Drag to trace it freehand, or click corner to corner for straight edges.\n"
-            "Double-click or press Enter to close it; Escape to start over."
+            "Double-click or press Enter to close it; Escape to start over.\n"
+            "Shift adds to the selection, Alt takes away."
         ))
         self.lasso_button.clicked.connect(self.toggle_lasso_tool)
         self.tool_buttons["lasso"] = self.lasso_button
@@ -566,7 +576,8 @@ class WorkspaceMixin:
         rail.setSpacing(4)
         groups = (
             (self.pan_button, self.box_button, self.type_text_button),
-            (self.brush_button, self.eraser_button, self.wand_button, self.lasso_button),
+            (self.brush_button, self.eraser_button),
+            (self.marquee_button, self.wand_button, self.lasso_button),
             (self.delete_button, self.clear_rectangles_button, self.draw_blklist_blks,
              self.clear_brush_strokes_button),
         )
@@ -585,6 +596,9 @@ class WorkspaceMixin:
         # --- Options bar above the canvas: the settings of the active tools. ---
         options_bar = QtWidgets.QWidget()
         options_bar.setObjectName("toonOptionsBar")
+        # Never let the bar's contents set the window's minimum width: on a
+        # narrow screen it is clipped, rather than the window growing off-screen.
+        options_bar.setSizePolicy(QtWidgets.QSizePolicy.Policy.Ignored, QtWidgets.QSizePolicy.Policy.Fixed)
         options = QtWidgets.QHBoxLayout(options_bar)
         options.setContentsMargins(12, 4, 12, 4)
         options.setSpacing(8)
@@ -595,12 +609,28 @@ class WorkspaceMixin:
         options.addWidget(self.change_all_blocks_size_diff)
         options.addWidget(self.change_all_blocks_size_inc)
         options.addSpacing(18)
+        # The rest of the bar follows the active tool: the brush size for the
+        # brush and eraser, the selection controls for the selection tools (or
+        # while something is selected). Everything at once is wider than the
+        # canvas column, and a layout that cannot fit widens the whole window.
+        self.brush_options = QtWidgets.QWidget()
+        brush_row = QtWidgets.QHBoxLayout(self.brush_options)
+        brush_row.setContentsMargins(0, 0, 0, 0)
+        brush_row.setSpacing(8)
         brush_label = MLabel(self.tr("Brush size"))
         brush_label.setObjectName("toonOptionLabel")
-        options.addWidget(brush_label)
+        brush_row.addWidget(brush_label)
         self.brush_eraser_slider.setFixedWidth(180)
-        options.addWidget(self.brush_eraser_slider)
+        brush_row.addWidget(self.brush_eraser_slider)
+        options.addWidget(self.brush_options)
+        self.selection_options = QtWidgets.QWidget()
+        selection_row = QtWidgets.QHBoxLayout(self.selection_options)
+        selection_row.setContentsMargins(0, 0, 0, 0)
+        selection_row.setSpacing(6)
+        self._build_selection_options(selection_row)
+        options.addWidget(self.selection_options)
         options.addStretch(1)
+        self.refresh_options_bar()
         central_layout.insertWidget(0, options_bar)
         central_layout.setContentsMargins(0, 0, 0, 0)
         central_layout.setSpacing(0)
@@ -689,6 +719,72 @@ class WorkspaceMixin:
             self.layers_button.blockSignals(False)
         if tabs.widget(index) is self.glossary_peek:
             self.glossary_peek.refresh(self)
+
+    def _build_selection_options(self, options: QtWidgets.QHBoxLayout) -> None:
+        """The selection part of the options bar.
+
+        "Pick into" decides where the wand and the lasso send what they pick:
+        the selection (marching ants, which one of the actions beside it then
+        uses) or a red mask stroke for the Clean step, as before selections
+        existed. The actions are enabled only while something is selected.
+        """
+        label = MLabel(self.tr("Pick into"))
+        label.setObjectName("toonOptionLabel")
+        options.addWidget(label)
+        self.region_output_group = QtWidgets.QButtonGroup(self)
+        self.region_output_group.setExclusive(True)
+        self.region_to_selection_button = MToolButton().text_only().small()
+        self.region_to_selection_button.setText(self.tr("Selection"))
+        self.region_to_selection_button.setToolTip(self.tr(
+            "The magic wand and the lasso make a selection (marching ants); "
+            "choose what to do with it from the buttons beside."
+        ))
+        self.region_to_mask_button = MToolButton().text_only().small()
+        self.region_to_mask_button.setText(self.tr("Mask"))
+        self.region_to_mask_button.setToolTip(self.tr(
+            "The magic wand and the lasso paint a red mask straight onto the page, "
+            "for the Clean step."
+        ))
+        for button in (self.region_to_selection_button, self.region_to_mask_button):
+            button.setCheckable(True)
+            button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+            self.region_output_group.addButton(button)
+            options.addWidget(button)
+        self.region_to_selection_button.setChecked(True)
+
+        options.addSpacing(10)
+        self.clean_selection_button = MPushButton(self.tr("Clean Selection")).small()
+        self.clean_selection_button.setToolTip(self.tr(
+            "Inpaint what is inside the selection with the current inpainter. "
+            "Mask strokes on the page are left alone."
+        ))
+        self.selection_to_mask_button = MPushButton(self.tr("To Mask")).small()
+        self.selection_to_mask_button.setToolTip(self.tr(
+            "Turn the selection into a red mask stroke for the Clean step."
+        ))
+        self.invert_selection_button = MPushButton(self.tr("Invert")).small()
+        self.invert_selection_button.setToolTip(self.tr("Select everything that is not selected (Ctrl+Shift+I)."))
+        self.deselect_button = MPushButton(self.tr("Deselect")).small()
+        self.deselect_button.setToolTip(self.tr("Drop the selection (Ctrl+Shift+A)."))
+        self.selection_action_buttons = (
+            self.clean_selection_button, self.selection_to_mask_button,
+            self.invert_selection_button, self.deselect_button,
+        )
+        for button in self.selection_action_buttons:
+            button.setEnabled(False)
+            button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+            options.addWidget(button)
+
+    SELECTION_TOOLS = ("marquee", "wand", "lasso")
+
+    def refresh_options_bar(self, *_args) -> None:
+        """Show the options that belong to the active tool."""
+        viewer = getattr(self, "image_viewer", None)
+        tool = getattr(viewer, "current_tool", None)
+        has_selection = viewer is not None and not viewer.selection.is_empty()
+        show_selection = tool in self.SELECTION_TOOLS or has_selection
+        self.selection_options.setVisible(show_selection)
+        self.brush_options.setVisible(tool in ("brush", "eraser") or not show_selection)
 
     def show_layers_tab(self, show: bool) -> None:
         """The layers button: open the Layers tab, or go back to Text."""

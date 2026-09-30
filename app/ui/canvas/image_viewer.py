@@ -18,6 +18,7 @@ from .drawing_manager import DrawingManager
 from .webtoons.webtoon_manager import LazyWebtoonManager
 from .interaction_manager import InteractionManager
 from .event_handler import EventHandler
+from .selection import SelectionManager
 
 
 class ImageViewer(QGraphicsView):
@@ -35,6 +36,8 @@ class ImageViewer(QGraphicsView):
     add_text_requested = Signal(QPointF)
     page_changed = Signal(int)
     clear_text_edits = Signal()
+    # The canvas selection became non-empty (True) or empty (False).
+    selection_changed = Signal(bool)
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -51,6 +54,7 @@ class ImageViewer(QGraphicsView):
         self.webtoon_manager = LazyWebtoonManager(self)
         self.interaction_manager = InteractionManager(self)
         self.event_handler = EventHandler(self)
+        self.selection = SelectionManager(self)
 
         # Viewer Properties
         self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
@@ -170,6 +174,8 @@ class ImageViewer(QGraphicsView):
             # An outline half-drawn when the user reaches for another tool is
             # abandoned, not left floating on the canvas with no way to finish it.
             self.drawing_manager.lasso_cancel()
+        if self.current_tool == 'marquee' and tool != 'marquee':
+            self.drawing_manager.marquee_cancel()
         self.current_tool = tool
         if tool == 'pan':
             self.setDragMode(QGraphicsView.ScrollHandDrag)
@@ -179,6 +185,9 @@ class ImageViewer(QGraphicsView):
             # Keys only reach a view that can take focus, and Enter/Escape are
             # how a clicked polygon gets closed or abandoned.
             self.setFocus()
+        elif tool == 'marquee':
+            self.setDragMode(QGraphicsView.NoDrag)
+            self.setCursor(QtGui.QCursor(Qt.CursorShape.CrossCursor))
         elif tool == 'wand':
             # A crosshair, because what matters is the single pixel under the
             # cursor: that pixel's colour is what the whole selection grows from.
@@ -377,6 +386,9 @@ class ImageViewer(QGraphicsView):
         self.setPhoto(pixmap, fit=fit)
 
     def clear_scene(self):
+        # The selection belongs to the page being cleared away; drop it (and
+        # its overlay) before the scene deletes the overlay out from under it.
+        self.selection.forget()
         self.webtoon_manager.clear() 
         self._scene.clear()
         self.rectangles.clear()

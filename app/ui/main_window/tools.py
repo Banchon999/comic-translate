@@ -53,6 +53,12 @@ class ToolStateMixin:
         else:
             self.set_tool(None)
 
+    def toggle_marquee_tool(self):
+        if self.marquee_button.isChecked():
+            self.set_tool("marquee")
+        else:
+            self.set_tool(None)
+
     def set_slider_size(self, size: int):
         self.brush_eraser_slider.blockSignals(True)
         self.brush_eraser_slider.setValue(size)
@@ -72,6 +78,7 @@ class ToolStateMixin:
             for button in self.tool_buttons.values():
                 button.setChecked(False)
             self.image_viewer.setDragMode(QtWidgets.QGraphicsView.DragMode.NoDrag)
+        self.refresh_options_bar()
 
     def set_brush_eraser_size(self, size: int):
         try:

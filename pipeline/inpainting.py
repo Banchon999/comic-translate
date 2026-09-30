@@ -718,8 +718,47 @@ class InpaintingHandler:
         inpainted = imk.convert_scale_abs(inpainted)
         return self._get_regular_patches(mask, inpainted)
 
-    def inpaint_complete(self, patch_list):
-        # Handle webtoon mode vs regular mode
+    def inpaint_selection(self, image: np.ndarray, alpha: np.ndarray, mappings: list[dict] | None = None):
+        """Clean what a canvas selection covers, and nothing else.
+
+        `alpha` is the selection as 0..1 (feathered) over `image`.
+        `core.selection.plan_clean` decides what inside it to touch: on a flat
+        area (a bubble the wand selected whole) only the lettering, painted in
+        the background colour or inpainted; on artwork, all of it. The JPEG
+        tidy-up then runs on the result, and the result is mixed back by the
+        alpha, which restores the original exactly wherever the selection is 0
+        — the tidy-up smooths a ring *around* its mask, and outside a selection
+        is exactly where the user said not to touch. Patches are cut without
+        tidying again for the same reason. No text blocks are passed: fast
+        bubble fills act on whole blocks, and a selection is precisely not a
+        whole block.
+
+        `mappings` are the webtoon visible-area mappings, read by the caller on
+        the GUI thread.
+        """
+        from core.selection import blend, plan_clean
+
+        if image is None:
+            return []
+        plan = plan_clean(image, alpha)
+        mask = plan["mask"]
+        if plan["mode"] == "none" or not mask.any():
+            return []
+        if plan["mode"] == "solid":
+            cleaned = image.copy()
+            cleaned[mask > 0, :3] = plan["colour"]
+        else:
+            config = get_config(self.main_page.settings_page)
+            cleaned = self.inpaint_image(image, mask, config, blk_list=None)
+            cleaned = imk.convert_scale_abs(cleaned)
+            if cleaned.ndim == 3 and image.ndim == 3 and cleaned.shape[2] != image.shape[2]:
+                cleaned = cleaned[..., :image.shape[2]]
+        cleaned = self._denoise_cleaned(mask, cleaned)
+        mixed = blend(image, cleaned, alpha)
+        return self.get_inpainted_patches(mask, mixed, mappings=mappings, denoise=False)
+
+    def apply_patch_list(self, patch_list):
+        """Put inpainted patches onto their pages (as undoable patch commands)."""
         if self.main_page.webtoon_mode:
             # In webtoon mode, group patches by page and apply them
             patches_by_page = {}
@@ -747,13 +786,17 @@ class InpaintingHandler:
         else:
             # Regular mode - original behavior
             self.main_page.apply_inpaint_patches(patch_list)
-        
+
+    def inpaint_complete(self, patch_list):
+        self.apply_patch_list(patch_list)
         self.main_page.image_viewer.clear_brush_strokes() 
         self.main_page.undo_group.activeStack().endMacro()  
         # get_best_render_area(self.main_page.blk_list, original_image, inpainted)    
 
-    def get_inpainted_patches(self, mask: np.ndarray, inpainted_image: np.ndarray):
-        inpainted_image = self._denoise_cleaned(mask, inpainted_image)
+    def get_inpainted_patches(self, mask: np.ndarray, inpainted_image: np.ndarray,
+                              mappings: list[dict] | None = None, denoise: bool = True):
+        if denoise:
+            inpainted_image = self._denoise_cleaned(mask, inpainted_image)
 
         # slice mask into bounding boxes
         contours, _ = imk.find_contours(mask)
@@ -761,8 +804,11 @@ class InpaintingHandler:
         # Handle webtoon mode vs regular mode
         if self.main_page.webtoon_mode:
             # In webtoon mode, we need to map patches back to their respective pages
-            visible_image, mappings = self.main_page.image_viewer.get_visible_area_image()
-            if visible_image is None or not mappings:
+            if mappings is None:
+                visible_image, mappings = self.main_page.image_viewer.get_visible_area_image()
+                if visible_image is None:
+                    return patches
+            if not mappings:
                 return patches
                 
             for i, c in enumerate(contours):

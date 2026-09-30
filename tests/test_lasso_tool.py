@@ -21,6 +21,9 @@ def viewer(qapp):
     view.resize(400, 300)
     view.display_image_array(np.full((120, 200, 3), 200, dtype=np.uint8))
     view.set_tool('lasso')
+    # These tests are about the mask the tool paints for the Clean step; the
+    # selection it makes by default is covered by tests/test_selection.py.
+    view.drawing_manager.region_output = "mask"
     yield view
     view.close()
 

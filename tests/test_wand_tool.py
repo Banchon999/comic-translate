@@ -23,6 +23,9 @@ def viewer(qapp):
     page[20:70, 20:100] = 0      # bubble outline
     page[24:66, 24:96] = 255     # bubble interior
     view.display_image_array(page)
+    # These tests are about the mask the tool paints for the Clean step; the
+    # selection it makes by default is covered by tests/test_selection.py.
+    view.drawing_manager.region_output = "mask"
     yield view
     view.close()
 
@@ -88,6 +91,7 @@ def test_lettering_inside_the_bubble_is_covered_rather_than_left_as_a_hole(qapp)
     page[10:90, 10:150] = 255    # bubble interior
     page[40:60, 30:130] = 30     # lettering inside it
     view.display_image_array(page)
+    view.drawing_manager.region_output = "mask"
 
     view.drawing_manager.flood_fill_at(QPointF(20, 20))
     mask = view.get_mask_for_inpainting()
@@ -125,6 +129,7 @@ def test_non_contiguous_reaches_a_separate_region(qapp):
     page[10:40, 10:60] = 255
     page[60:90, 120:180] = 255
     view.display_image_array(page)
+    view.drawing_manager.region_output = "mask"
 
     view.drawing_manager.flood_fill_at(QPointF(30, 25), contiguous=False)
     path = stroke_items(view)[0].path()

@@ -57,6 +57,9 @@ class ShortcutController:
             "delete_selected_box": self._delete_selected_box,
             "restore_text_blocks": self._restore_text_blocks,
             "toggle_brush_strokes": self._toggle_brush_strokes,
+            "select_all": lambda: self._selection("select_all"),
+            "deselect": lambda: self._selection("deselect"),
+            "invert_selection": lambda: self._selection("invert"),
         }
         handler = handlers.get(shortcut_id)
         if handler is not None:
@@ -117,3 +120,22 @@ class ShortcutController:
         if not self._workspace_is_active() or self._is_text_input_focused():
             return
         self.main.brush_button.click()
+
+    def _selection(self, action: str) -> None:
+        # Ctrl+A in a text field, or while typing into a text box on the
+        # canvas, selects text — not the page.
+        if not self._workspace_is_active() or self._is_text_input_focused():
+            return
+        if self._canvas_text_is_being_edited():
+            return
+        getattr(self.main.selection_ctrl, action)()
+
+    def _canvas_text_is_being_edited(self) -> bool:
+        # Not scene.focusItem(): a scene whose view is inactive reports no focus
+        # item even while a text box is open for typing.
+        from app.ui.canvas.text_item import TextBlockItem
+
+        return any(
+            isinstance(item, TextBlockItem) and item.editing_mode
+            for item in self.main.image_viewer.scene().items()
+        )
