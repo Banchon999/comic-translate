@@ -126,6 +126,13 @@ class EventHandler:
                 )
                 return
 
+        if self.viewer.current_tool == 'balloon' and self.viewer.hasPhoto():
+            if self._is_on_image(scene_pos) and event.button() == Qt.MouseButton.LeftButton:
+                reason = self.viewer.drawing_manager.balloon_at(scene_pos, event.modifiers())
+                if reason != "ok":
+                    self.viewer.balloon_refused.emit(reason)
+                return
+
         if self.viewer.current_tool == 'marquee' and self.viewer.hasPhoto():
             if event.button() == Qt.MouseButton.LeftButton:
                 self.viewer.drawing_manager.marquee_press(scene_pos, event.modifiers())

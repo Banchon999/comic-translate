@@ -20,7 +20,7 @@ from modules.utils.text_segmentation import peek_page_mask
 from modules.utils.textblock import adjust_text_line_coordinates
 from modules.detection.utils.content import detect_content_mask_in_bbox
 from modules.utils.flood_select import (
-    DEFAULT_FEATHER, DEFAULT_TOLERANCE, flood_select, mask_to_polygons,
+    DEFAULT_FEATHER, DEFAULT_TOLERANCE, balloon_select, flood_select, mask_to_polygons,
 )
 
 logger = logging.getLogger(__name__)
@@ -124,6 +124,77 @@ class DrawingManager:
             path.closeSubpath()
 
         return self.commit_region(path, modifiers, "Magic Wand")
+
+    def balloon_at(self, scene_pos: QPointF, modifiers=None):
+        """Select the speech bubble under the cursor. Returns the reason string
+        from `balloon_select` ("ok", "outside", "not-light", "leak") so the
+        caller can say why nothing was selected."""
+        image = self.viewer.get_image_array(include_patches=True)
+        if image is None:
+            return "outside"
+        offset_x, offset_y = self._visible_area_offset()
+        seed_x = int(round(scene_pos.x())) - offset_x
+        seed_y = int(round(scene_pos.y())) - offset_y
+        bound = self._bubble_bound_at(seed_x, seed_y)
+        mask, reason = balloon_select(image, seed_x, seed_y, bound=bound)
+        if mask is None:
+            return reason
+        path = QPainterPath()
+        path.setFillRule(Qt.FillRule.WindingFill)
+        for points in mask_to_polygons(mask):
+            path.moveTo(float(points[0][0] + offset_x), float(points[0][1] + offset_y))
+            for x, y in points[1:]:
+                path.lineTo(float(x + offset_x), float(y + offset_y))
+            path.closeSubpath()
+        if path.isEmpty():
+            return "outside"
+        self.commit_region(path, modifiers, "Select Balloon")
+        return "ok"
+
+    def _bubble_bound_at(self, x: int, y: int):
+        """The detected bubble box containing (x, y), in get_image_array's
+        coordinates, or None. Detection tightened those boxes to the bubble
+        detector's masks, so they hold a flood inside the real bubble even
+        when its outline has a gap."""
+        main = self.viewer.window()
+        blocks = list(getattr(main, "blk_list", None) or [])
+        if not blocks:
+            return None
+        try:
+            if self.viewer.webtoon_mode:
+                from pipeline.webtoon_utils import filter_and_convert_visible_blocks
+
+                _, mappings = self.viewer.get_visible_area_image()
+                if not mappings:
+                    return None
+                blocks = filter_and_convert_visible_blocks(main, main.pipeline, mappings)
+            best = None
+            for blk in blocks:
+                box = blk.bubble_xyxy if blk.bubble_xyxy is not None else (
+                    blk.xyxy if getattr(blk, "text_class", "") == "text_bubble" else None
+                )
+                if box is None:
+                    continue
+                x1, y1, x2, y2 = (float(v) for v in box)
+                if x1 <= x < x2 and y1 <= y < y2:
+                    area = (x2 - x1) * (y2 - y1)
+                    # Nested boxes: the smallest one around the click is the bubble.
+                    if best is None or area < best[0]:
+                        best = (area, (x1, y1, x2, y2))
+            return best[1] if best else None
+        except Exception:
+            logger.exception("Could not read detected bubbles; selecting without a bound")
+            return None
+        finally:
+            # The conversion edits the blocks in place. Restore every block it
+            # touched — not just the list it returned, which is never assigned
+            # if it raises halfway — or main.blk_list is left in slice
+            # coordinates.
+            touched = [blk for blk in (getattr(main, "blk_list", None) or []) if hasattr(blk, "_original_xyxy")]
+            if touched:
+                from pipeline.webtoon_utils import restore_original_block_coordinates
+
+                restore_original_block_coordinates(touched)
 
     def commit_region(self, path: QPainterPath, modifiers=None, text: str = "Selection"):
         """Send a picked region wherever `region_output` says.

@@ -53,6 +53,12 @@ class ToolStateMixin:
         else:
             self.set_tool(None)
 
+    def toggle_balloon_tool(self):
+        if self.balloon_button.isChecked():
+            self.set_tool("balloon")
+        else:
+            self.set_tool(None)
+
     def toggle_marquee_tool(self):
         if self.marquee_button.isChecked():
             self.set_tool("marquee")
