@@ -51,19 +51,23 @@ def win(qapp):
 def test_the_layout_holds_every_old_widget_in_its_new_place(win):
     rail_tools = ("pan", "box", "type", "brush", "eraser", "paint", "fill", "aibrush", "restore", "eyedropper",
                   "marquee", "balloon", "wand", "lasso")
-    for key in rail_tools:
-        assert win.tool_buttons[key].parentWidget().objectName() == "toonToolRail", key
-    for button in (win.delete_button, win.clear_rectangles_button, win.clear_brush_strokes_button,
-                   win.file_tree_button, win.layers_button, win.webtoon_toggle):
-        assert button.parentWidget().objectName() == "toonToolRail"
-    def in_options_bar(widget):
-        # The bar groups its tool-specific parts (brush, selection) in their
-        # own rows, so ask whether the bar holds the widget, not its parent.
+    def inside(widget, name):
+        # Bars group their parts in rows (and the rail scrolls its tools), so
+        # ask whether the bar holds the widget, not whether it is the parent.
         while widget is not None:
-            if widget.objectName() == "toonOptionsBar":
+            if widget.objectName() == name:
                 return True
             widget = widget.parentWidget()
         return False
+
+    for key in rail_tools:
+        assert inside(win.tool_buttons[key], "toonToolRail"), key
+    for button in (win.delete_button, win.clear_rectangles_button, win.clear_brush_strokes_button,
+                   win.file_tree_button, win.layers_button, win.webtoon_toggle):
+        assert inside(button, "toonToolRail")
+
+    def in_options_bar(widget):
+        return inside(widget, "toonOptionsBar")
 
     assert in_options_bar(win.brush_eraser_slider)
     assert in_options_bar(win.change_all_blocks_size_diff)
@@ -186,6 +190,28 @@ def test_the_options_bar_never_sets_the_window_width(win):
     # width and the window's minimum 1529 px.
     assert bar.parentWidget().minimumSizeHint().width() < bar.sizeHint().width()
     assert win.minimumSizeHint().width() <= 1280
+
+
+def test_the_tool_rail_never_sets_the_window_height(win):
+    """Every tool on the rail must not make the window taller than a laptop
+    screen: the tools scroll instead, and none of them is lost."""
+    from PySide6.QtWidgets import QApplication
+
+    win.show()
+    win.show_main_page()
+    QApplication.processEvents()
+    # Measured before the fix: 932 px, taller than a 1366×768 screen.
+    assert win.minimumSizeHint().height() <= 700
+    win.resize(1280, 640)
+    QApplication.processEvents()
+    scroll = win.tool_rail_scroll
+    assert scroll.verticalScrollBar().maximum() > 0, "the tools scroll when short"
+    # The panel toggles stay reachable without scrolling.
+    for button in (win.file_tree_button, win.layers_button, win.webtoon_toggle):
+        assert not scroll.isAncestorOf(button)
+    # Every tool button still fits the rail's width next to the scroll bar.
+    tools = scroll.widget()
+    assert tools.minimumSizeHint().width() <= scroll.viewport().width()
 
 
 @pytest.mark.parametrize("tool", ["wand", "brush", "paint", "fill", "aibrush", "restore", "eyedropper", None])

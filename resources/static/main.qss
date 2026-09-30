@@ -1385,6 +1385,14 @@ QWidget#toonToolRail {
     background-color: @background_color;
     border-right: 1px solid @border_color;
 }
+QScrollArea#toonToolRailScroll, QWidget#toonToolRailTools {
+    background-color: transparent;
+    border: none;
+}
+QScrollArea#toonToolRailScroll QScrollBar:vertical {
+    width: 5px;
+    background: transparent;
+}
 QFrame#toonRailDivider {
     background-color: @border_color;
     margin: 4px 0;

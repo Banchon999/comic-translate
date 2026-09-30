@@ -614,11 +614,29 @@ class WorkspaceMixin:
         self.brush_eraser_slider.valueChanged.connect(self.set_brush_eraser_size)
 
         # --- Tool rail: every canvas tool, grouped, down the left edge. ---
+        # The tools scroll when the window is shorter than they are; the panel
+        # toggles at the bottom stay put. Without the scroll area the rail's
+        # height alone set the window's minimum height (over 900 px), so the
+        # window could not fit a laptop screen.
         tool_rail = QtWidgets.QWidget()
         tool_rail.setObjectName("toonToolRail")
-        rail = QtWidgets.QVBoxLayout(tool_rail)
-        rail.setContentsMargins(6, 8, 6, 8)
+        rail_frame = QtWidgets.QVBoxLayout(tool_rail)
+        rail_frame.setContentsMargins(0, 0, 0, 8)
+        rail_frame.setSpacing(4)
+        rail_tools = QtWidgets.QWidget()
+        rail_tools.setObjectName("toonToolRailTools")
+        rail = QtWidgets.QVBoxLayout(rail_tools)
+        # Narrow side margins leave room for a scroll bar inside 52 px.
+        rail.setContentsMargins(3, 8, 3, 4)
         rail.setSpacing(4)
+        rail_scroll = self.tool_rail_scroll = QtWidgets.QScrollArea()
+        rail_scroll.setObjectName("toonToolRailScroll")
+        rail_scroll.setWidgetResizable(True)
+        rail_scroll.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        rail_scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        rail_scroll.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        rail_scroll.setWidget(rail_tools)
+        rail_frame.addWidget(rail_scroll, 1)
         groups = (
             (self.pan_button, self.box_button, self.type_text_button),
             (self.brush_button, self.eraser_button),
@@ -635,9 +653,10 @@ class WorkspaceMixin:
                 _rail_button(button)
                 rail.addWidget(button, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
         rail.addStretch(1)
+        rail_frame.addWidget(_rail_divider(), 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
         for button in (self.file_tree_button, self.layers_button, self.webtoon_toggle):
             _rail_button(button)
-            rail.addWidget(button, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
+            rail_frame.addWidget(button, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
         tool_rail.setFixedWidth(52)
 
         # --- Options bar above the canvas: the settings of the active tools. ---

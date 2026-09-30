@@ -353,6 +353,13 @@ def test_in_webtoon_mode_a_fill_on_page_two_lands_on_page_two(qapp, tmp_path):
         viewer = win.image_viewer
         assert _pump_until(qapp, lambda: viewer.webtoon_mode and len(viewer.webtoon_manager.loaded_pages) == 2)
         top = viewer.webtoon_manager.layout_manager.image_positions[1]
+        # The view scrolls the whole strip only once the first page has
+        # loaded and fitted it; until then its scene rect is still page one's.
+        layout = viewer.webtoon_manager.layout_manager
+        assert _pump_until(qapp, lambda: viewer.sceneRect().bottom() >= layout.total_height - 1)
+        # Actual size, so enough of page two is on screen whatever the
+        # window's height (the fit-to-width zoom depends on it).
+        viewer.resetTransform()
         viewer.centerOn(120, top + 60)
         qapp.processEvents()
         _, mappings = viewer.get_visible_area_image()
