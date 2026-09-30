@@ -38,6 +38,9 @@ class PaintController:
         main.paint_pressure_size_check.toggled.connect(self._on_pressure_size)
         main.paint_pressure_flow_check.toggled.connect(self._on_pressure_flow)
         main.fill_tolerance_spin.valueChanged.connect(self._on_fill_tolerance)
+        main.clone_aligned_check.toggled.connect(self._on_clone_aligned)
+        main.clone_lock_check.toggled.connect(self._on_clone_lock)
+        main.image_viewer.clone_source_missing.connect(self.say_no_source)
 
     # -- strokes ------------------------------------------------------------
     def apply_edit(self, edit) -> bool:
@@ -78,6 +81,14 @@ class PaintController:
             parent=self.main,
         )
 
+    def say_no_source(self) -> None:
+        MMessage.info(
+            text=QCoreApplication.translate(
+                "PaintController", "Alt+click the page first, to choose where to copy from."
+            ),
+            parent=self.main,
+        )
+
     def _push(self, patches, mode: str) -> bool:
         if not patches:
             return False
@@ -85,6 +96,8 @@ class PaintController:
             "restore": QCoreApplication.translate("PaintController", "Restore"),
             "fill": QCoreApplication.translate("PaintController", "Fill"),
             "aibrush": QCoreApplication.translate("PaintController", "AI Inpaint"),
+            "clone": QCoreApplication.translate("PaintController", "Clone Stamp"),
+            "heal": QCoreApplication.translate("PaintController", "Healing Brush"),
         }
         label = labels.get(mode, QCoreApplication.translate("PaintController", "Paint"))
         inpainting = self.main.pipeline.inpainting
@@ -130,6 +143,19 @@ class PaintController:
         self.drawing.fill_tolerance = int(value)
         self._save("fill_tolerance", int(value))
 
+    def _on_clone_aligned(self, on: bool) -> None:
+        self.drawing.clone_aligned = bool(on)
+        if not on and not self.drawing.clone_lock:
+            # The next stroke starts again from the Alt+clicked point.
+            self.drawing.clone_offset = None
+        self._save("clone_aligned", bool(on))
+
+    def _on_clone_lock(self, on: bool) -> None:
+        self.drawing.clone_lock = bool(on)
+        if not on and not self.drawing.clone_aligned:
+            self.drawing.clone_offset = None
+        self._save("clone_lock", bool(on))
+
     def _on_pressure_flow(self, on: bool) -> None:
         self.drawing.paint_pressure_flow = bool(on)
         self._save("pressure_flow", bool(on))
@@ -153,6 +179,8 @@ class PaintController:
         pressure_size = settings.value("pressure_size", True, type=bool)
         pressure_flow = settings.value("pressure_flow", False, type=bool)
         fill_tolerance = settings.value("fill_tolerance", 32, type=int)
+        clone_aligned = settings.value("clone_aligned", True, type=bool)
+        clone_lock = settings.value("clone_lock", False, type=bool)
         settings.endGroup()
         self._loading = True
         try:
@@ -168,5 +196,9 @@ class PaintController:
             drawing.paint_pressure_flow = pressure_flow
             main.fill_tolerance_spin.setValue(fill_tolerance)
             drawing.fill_tolerance = fill_tolerance
+            main.clone_aligned_check.setChecked(clone_aligned)
+            main.clone_lock_check.setChecked(clone_lock)
+            drawing.clone_aligned = clone_aligned
+            drawing.clone_lock = clone_lock
         finally:
             self._loading = False

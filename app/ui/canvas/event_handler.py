@@ -7,6 +7,7 @@ from .text_item import TextBlockItem, TextBlockState
 from .rectangle import MoveableRectItem, RectState
 from .layer_apply import is_locked
 from .scene_registry import is_top_level
+from .pixel_session import BRUSH_TOOLS
 
 
 class EventHandler:
@@ -126,13 +127,16 @@ class EventHandler:
                 )
                 return
 
-        if self.viewer.current_tool in ('paint', 'restore', 'eyedropper', 'fill', 'aibrush') and self.viewer.hasPhoto():
+        if self.viewer.current_tool in (*BRUSH_TOOLS, 'eyedropper', 'fill') and self.viewer.hasPhoto():
             if event.button() == Qt.MouseButton.LeftButton and self._is_on_image(scene_pos):
                 alt = bool(event.modifiers() & Qt.KeyboardModifier.AltModifier)
                 tool = self.viewer.current_tool
                 if tool == 'eyedropper' or (alt and tool in ('paint', 'fill')):
                     # Alt+click samples while painting, as in every image editor.
                     self.viewer.drawing_manager.eyedrop(scene_pos)
+                elif alt and tool in ('clone', 'heal'):
+                    # ...and sets where the clone stamp samples from.
+                    self.viewer.drawing_manager.set_clone_source(scene_pos)
                 elif tool == 'fill':
                     # Ctrl takes every region of that colour, as the wand does.
                     ctrl = bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
@@ -190,7 +194,7 @@ class EventHandler:
         if self.viewer.current_tool == 'marquee' and event.buttons() & Qt.MouseButton.LeftButton:
             self.viewer.drawing_manager.marquee_move(scene_pos)
 
-        if self.viewer.current_tool in ('paint', 'restore', 'aibrush') and event.buttons() & Qt.MouseButton.LeftButton:
+        if self.viewer.current_tool in BRUSH_TOOLS and event.buttons() & Qt.MouseButton.LeftButton:
             self.viewer.drawing_manager.pixel_move(scene_pos, self.viewer.tablet_pressure)
         
         if self.viewer.current_tool == 'box':
@@ -236,7 +240,7 @@ class EventHandler:
                 self.viewer.mapToScene(event.position().toPoint())
             )
 
-        if self.viewer.current_tool in ('paint', 'restore', 'aibrush') and event.button() == Qt.MouseButton.LeftButton:
+        if self.viewer.current_tool in BRUSH_TOOLS and event.button() == Qt.MouseButton.LeftButton:
             self.viewer.drawing_manager.pixel_release()
 
         if self.viewer.current_tool == 'marquee' and event.button() == Qt.MouseButton.LeftButton:

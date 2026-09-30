@@ -4,6 +4,7 @@ from PySide6 import QtGui, QtWidgets
 from PySide6.QtGui import QFontDatabase
 
 from .constants import user_font_path
+from app.ui.canvas.pixel_session import BRUSH_TOOLS
 
 
 class ToolStateMixin:
@@ -68,6 +69,12 @@ class ToolStateMixin:
     def toggle_ai_brush_tool(self):
         self._toggle_pixel_tool(self.ai_brush_button, "aibrush")
 
+    def toggle_clone_tool(self):
+        self._toggle_pixel_tool(self.clone_button, "clone")
+
+    def toggle_heal_tool(self):
+        self._toggle_pixel_tool(self.heal_button, "heal")
+
     def toggle_eyedropper_tool(self):
         if self.eyedropper_button.isChecked():
             self.set_tool("eyedropper")
@@ -120,7 +127,7 @@ class ToolStateMixin:
         except Exception:
             current_tool = None
 
-        if current_tool in ("paint", "restore", "aibrush"):
+        if current_tool in BRUSH_TOOLS:
             self.image_viewer.set_br_er_size(size, size)
             return
         if current_tool == "brush":

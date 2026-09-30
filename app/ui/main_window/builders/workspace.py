@@ -559,6 +559,23 @@ class WorkspaceMixin:
         self.ai_brush_button.clicked.connect(self.toggle_ai_brush_tool)
         self.tool_buttons["aibrush"] = self.ai_brush_button
 
+        self.clone_button = self.create_tool_button(svg="clone-stamp.svg", checkable=True)
+        self.clone_button.setToolTip(self.tr(
+            "Clone stamp: paint the page with a copy of another part of it.\n"
+            "Alt+click where to copy from, then paint."
+        ))
+        self.clone_button.clicked.connect(self.toggle_clone_tool)
+        self.tool_buttons["clone"] = self.clone_button
+
+        self.heal_button = self.create_tool_button(svg="heal-brush.svg", checkable=True)
+        self.heal_button.setToolTip(self.tr(
+            "Healing brush: like the clone stamp, but the copy takes on the brightness "
+            "and colour around where you paint.\n"
+            "Alt+click where to copy from, then paint."
+        ))
+        self.heal_button.clicked.connect(self.toggle_heal_tool)
+        self.tool_buttons["heal"] = self.heal_button
+
         self.eyedropper_button = self.create_tool_button(svg="eyedropper.svg", checkable=True)
         self.eyedropper_button.setToolTip(self.tr("Pick the paint colour from the page."))
         self.eyedropper_button.clicked.connect(self.toggle_eyedropper_tool)
@@ -640,8 +657,8 @@ class WorkspaceMixin:
         groups = (
             (self.pan_button, self.box_button, self.type_text_button),
             (self.brush_button, self.eraser_button),
-            (self.paint_button, self.fill_button, self.ai_brush_button, self.restore_button,
-             self.eyedropper_button),
+            (self.paint_button, self.fill_button, self.ai_brush_button, self.clone_button,
+             self.heal_button, self.restore_button, self.eyedropper_button),
             (self.marquee_button, self.balloon_button, self.wand_button, self.lasso_button),
             (self.delete_button, self.clear_rectangles_button, self.draw_blklist_blks,
              self.clear_brush_strokes_button),
@@ -690,7 +707,13 @@ class WorkspaceMixin:
         brush_label = MLabel(self.tr("Brush size"))
         brush_label.setObjectName("toonOptionLabel")
         brush_row.addWidget(brush_label)
-        self.brush_eraser_slider.setFixedWidth(180)
+        # The slider is what gives way when the canvas column is narrow, never
+        # a label: 180 px when there is room, down to 72.
+        self.brush_eraser_slider.setMinimumWidth(72)
+        self.brush_eraser_slider.setMaximumWidth(180)
+        self.brush_eraser_slider.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed
+        )
         brush_row.addWidget(self.brush_eraser_slider)
         options.addWidget(self.brush_options)
         self.paint_options = QtWidgets.QWidget()
@@ -705,7 +728,13 @@ class WorkspaceMixin:
         selection_row.setSpacing(6)
         self._build_selection_options(selection_row)
         options.addWidget(self.selection_options)
-        options.addStretch(1)
+        # Stretch 0: it shares spare room with the size slider (up to its
+        # 180 px) instead of taking all of it.
+        options.addStretch(0)
+        for label in options_bar.findChildren(QtWidgets.QLabel):
+            # MLabel reports a tiny minimum so it can elide; in this bar a
+            # clipped "Hardness" reads as a different word.
+            label.setMinimumWidth(label.sizeHint().width())
         self.refresh_options_bar()
         # Rows come and go with the tool; a fixed height keeps the canvas from
         # jumping a few pixels every time the box-size spin box does.
@@ -867,8 +896,8 @@ class WorkspaceMixin:
             options.addWidget(button)
 
     SELECTION_TOOLS = ("marquee", "balloon", "wand", "lasso")
-    PIXEL_TOOLS = ("paint", "fill", "aibrush", "restore", "eyedropper")
-    BRUSH_SIZED_TOOLS = ("brush", "eraser", "paint", "restore", "aibrush")
+    PIXEL_TOOLS = ("paint", "fill", "aibrush", "clone", "heal", "restore", "eyedropper")
+    BRUSH_SIZED_TOOLS = ("brush", "eraser", "paint", "restore", "aibrush", "clone", "heal")
 
     def _build_paint_options(self, row: QtWidgets.QHBoxLayout) -> None:
         """Colour, hardness, opacity and pen pressure for the pixel tools. The
@@ -901,15 +930,35 @@ class WorkspaceMixin:
         self.fill_tolerance_spin.setFixedWidth(60)
         self.fill_tolerance_spin.setToolTip(self.tr("How different a colour may be and still be filled"))
         row.addWidget(self.fill_tolerance_spin)
-        pressure_label = self.paint_pressure_label = MLabel(self.tr("Pen pressure"))
-        pressure_label.setObjectName("toonOptionLabel")
-        row.addWidget(pressure_label)
-        self.paint_pressure_size_check = MCheckBox(self.tr("Size"))
+        self.clone_aligned_check = MCheckBox(self.tr("Aligned"))
+        self.clone_aligned_check.setToolTip(self.tr(
+            "On: every stroke keeps the same distance to where it copies from.\n"
+            "Off: every stroke starts copying from the Alt+clicked point again."
+        ))
+        row.addWidget(self.clone_aligned_check)
+        self.clone_lock_check = MCheckBox(self.tr("Lock offset"))
+        self.clone_lock_check.setToolTip(self.tr(
+            "Keep the distance to the source across pages, until the next Alt+click —\n"
+            "for the same mark in the same place on every page."
+        ))
+        row.addWidget(self.clone_lock_check)
+        # Pen pressure is a menu behind one small button: as a label and two
+        # checkboxes it took a fifth of the bar, and the clone tools' row no
+        # longer fit the canvas column. The two options are checkable actions.
+        self.paint_pressure_button = MToolButton().svg("pen-pressure.svg").small()
+        self.paint_pressure_button.setToolTip(self.tr("Pen pressure"))
+        self.paint_pressure_button.setPopupMode(QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup)
+        pressure_menu = self.paint_pressure_menu = QtWidgets.QMenu(self.paint_pressure_button)
+        pressure_menu.setToolTipsVisible(True)
+        pressure_menu.addSection(self.tr("Pen pressure"))
+        self.paint_pressure_size_check = pressure_menu.addAction(self.tr("Size"))
+        self.paint_pressure_size_check.setCheckable(True)
         self.paint_pressure_size_check.setToolTip(self.tr("A lighter touch paints a thinner line (tablet only)"))
-        self.paint_pressure_flow_check = MCheckBox(self.tr("Flow"))
+        self.paint_pressure_flow_check = pressure_menu.addAction(self.tr("Flow"))
+        self.paint_pressure_flow_check.setCheckable(True)
         self.paint_pressure_flow_check.setToolTip(self.tr("A lighter touch paints more faintly (tablet only)"))
-        row.addWidget(self.paint_pressure_size_check)
-        row.addWidget(self.paint_pressure_flow_check)
+        self.paint_pressure_button.setMenu(pressure_menu)
+        row.addWidget(self.paint_pressure_button)
 
     def refresh_options_bar(self, *_args) -> None:
         """Show the options that belong to the active tool."""
@@ -925,6 +974,8 @@ class WorkspaceMixin:
                 "paint": {"colour", "hardness", "opacity", "pressure"},
                 "fill": {"colour", "opacity", "tolerance"},
                 "aibrush": {"pressure"},
+                "clone": {"hardness", "opacity", "clone", "pressure"},
+                "heal": {"hardness", "opacity", "clone", "pressure"},
                 "restore": {"hardness", "opacity", "pressure"},
                 "eyedropper": {"colour"},
             }[tool]
@@ -933,13 +984,14 @@ class WorkspaceMixin:
                 "hardness": (self.paint_hardness_label, self.paint_hardness_slider),
                 "opacity": (self.paint_opacity_label, self.paint_opacity_spin),
                 "tolerance": (self.fill_tolerance_label, self.fill_tolerance_spin),
-                "pressure": (self.paint_pressure_label, self.paint_pressure_size_check,
-                             self.paint_pressure_flow_check),
+                "clone": (self.clone_aligned_check, self.clone_lock_check),
+                "pressure": (self.paint_pressure_button,),
             }
             for name, widgets in groups.items():
                 for widget in widgets:
                     widget.setVisible(name in uses)
-            self.paint_pressure_flow_check.setVisible("pressure" in uses and tool != "aibrush")
+            # The AI brush makes a mask: in or out, nothing to be faint about.
+            self.paint_pressure_flow_check.setVisible(tool != "aibrush")
         self.selection_options.setVisible(show_selection)
         self.brush_options.setVisible(
             tool in self.BRUSH_SIZED_TOOLS or not (show_selection or show_paint)

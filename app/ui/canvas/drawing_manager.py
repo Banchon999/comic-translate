@@ -76,6 +76,17 @@ class DrawingManager:
         # painted meanwhile would be covered when they land: pixel tools refuse
         # to start until it is done.
         self.pixel_busy = False
+        # Clone stamp / healing brush. The source is set by Alt+click (scene
+        # coordinates); the offset is source − brush, fixed at the first dab.
+        # Aligned keeps that offset for every later stroke, otherwise each
+        # stroke starts sampling at the source point again. Locked keeps the
+        # offset even across page loads — the same watermark in the same
+        # place on every page is cleaned by brushing, with no new Alt+click.
+        self.clone_source: QPointF | None = None
+        self.clone_offset: tuple[float, float] | None = None
+        self.clone_aligned = True
+        self.clone_lock = False
+        self.clone_marker = None
 
         # Rectangle marquee in progress (scene coordinates).
         self._marquee_start: QPointF | None = None
@@ -357,30 +368,101 @@ class DrawingManager:
     # Pixel tools: every stroke ends as inpaint patches (see pixel_session).
 
     def pixel_press(self, scene_pos: QPointF, mode: str, pressure=None) -> bool:
-        from .pixel_session import PixelSession
+        from .pixel_session import CLONE_MODES, PixelSession
 
         self.pixel_cancel()
         if self.pixel_busy:
             self.viewer.pixel_tool_busy.emit()
             return False
+        offset = None
+        if mode in CLONE_MODES:
+            offset = self._clone_offset_for(scene_pos)
+            if offset is None:
+                self.viewer.clone_source_missing.emit()
+                return False
         session = PixelSession(
             self.viewer, mode, self.paint_colour, self.paint_size, self.paint_hardness,
             self.paint_opacity, self.paint_pressure_size, self.paint_pressure_flow,
+            clone_offset=offset,
         )
         if not session.begin(scene_pos, pressure):
             return False
         self.pixel_session = session
+        if offset is not None:
+            self._place_clone_marker(scene_pos + QPointF(*offset))
         return True
 
     def pixel_move(self, scene_pos: QPointF, pressure=None) -> None:
-        if self.pixel_session is not None:
-            self.pixel_session.move(scene_pos, pressure)
+        session = self.pixel_session
+        if session is not None:
+            session.move(scene_pos, pressure)
+            if session.clone_offset is not None:
+                self._place_clone_marker(scene_pos + QPointF(*session.clone_offset))
+
+    # Clone stamp / healing brush source.
+
+    def set_clone_source(self, scene_pos: QPointF) -> None:
+        """Alt+click: sample from here. Replaces any kept (or locked) offset."""
+        self.clone_source = QPointF(scene_pos)
+        self.clone_offset = None
+        self._place_clone_marker(self.clone_source)
+
+    def _clone_offset_for(self, scene_pos: QPointF):
+        if self.clone_offset is not None and (self.clone_aligned or self.clone_lock):
+            return self.clone_offset
+        if self.clone_source is None:
+            return None
+        offset = (self.clone_source.x() - scene_pos.x(), self.clone_source.y() - scene_pos.y())
+        if self.clone_aligned or self.clone_lock:
+            self.clone_offset = offset
+        return offset
+
+    def forget_clone_source(self) -> None:
+        """A new page: its source point meant another page's pixels. A locked
+        offset survives — that is what locking it is for."""
+        self.clone_marker = None       # the scene is about to delete it
+        if not self.clone_lock:
+            self.clone_source = None
+            self.clone_offset = None
+
+    def refresh_clone_marker(self) -> None:
+        """Show the source crosshair only while a clone tool is in hand."""
+        from .pixel_session import CLONE_MODES
+
+        if self.viewer.current_tool in CLONE_MODES and self.clone_source is not None and self.clone_offset is None:
+            self._place_clone_marker(self.clone_source)
+        else:
+            self._remove_clone_marker()
+
+    def _place_clone_marker(self, scene_pos: QPointF) -> None:
+        from .pixel_session import CloneSourceMarker
+
+        marker = self.clone_marker
+        try:
+            if marker is None or marker.scene() is not self._scene:
+                marker = self.clone_marker = CloneSourceMarker()
+                self._scene.addItem(marker)
+            marker.setPos(scene_pos)
+        except RuntimeError:
+            self.clone_marker = None
+
+    def _remove_clone_marker(self) -> None:
+        marker, self.clone_marker = self.clone_marker, None
+        if marker is None:
+            return
+        try:
+            if marker.scene() is not None:
+                marker.scene().removeItem(marker)
+        except RuntimeError:
+            pass
 
     def pixel_release(self):
         """Finish the stroke and announce it; returns the PixelEdit or None."""
         session, self.pixel_session = self.pixel_session, None
         if session is None:
             return None
+        if session.clone_offset is not None:
+            self.refresh_clone_marker()
         edit = session.finish()
         if edit is not None:
             self.viewer.pixel_edit_finished.emit(edit)

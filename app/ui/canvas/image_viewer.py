@@ -19,6 +19,7 @@ from .webtoons.webtoon_manager import LazyWebtoonManager
 from .interaction_manager import InteractionManager
 from .event_handler import EventHandler
 from .selection import SelectionManager
+from .pixel_session import BRUSH_TOOLS
 
 
 class ImageViewer(QGraphicsView):
@@ -46,6 +47,8 @@ class ImageViewer(QGraphicsView):
     colour_picked = Signal(QtGui.QColor)
     # A pixel tool was refused because an AI-brush stroke is still running.
     pixel_tool_busy = Signal()
+    # A clone-stamp or healing stroke was started with no source set yet.
+    clone_source_missing = Signal()
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -192,6 +195,7 @@ class ImageViewer(QGraphicsView):
         # A stroke still held when the tool changes is dropped, not committed.
         self.drawing_manager.pixel_cancel()
         self.current_tool = tool
+        self.drawing_manager.refresh_clone_marker()
         if tool == 'pan':
             self.setDragMode(QGraphicsView.ScrollHandDrag)
         elif tool == 'lasso':
@@ -200,7 +204,7 @@ class ImageViewer(QGraphicsView):
             # Keys only reach a view that can take focus, and Enter/Escape are
             # how a clicked polygon gets closed or abandoned.
             self.setFocus()
-        elif tool in ('paint', 'restore', 'aibrush'):
+        elif tool in BRUSH_TOOLS:
             self.setDragMode(QGraphicsView.NoDrag)
             size = max(3, int(self.drawing_manager.paint_size * max(self.transform().m11(), 0.05)))
             self.setCursor(self.drawing_manager.create_inpaint_cursor("eraser", size))
@@ -275,7 +279,7 @@ class ImageViewer(QGraphicsView):
         return self.event_handler.handle_viewport_event(event)
 
     def set_br_er_size(self, size, scaled_size):
-        if self.current_tool in ('paint', 'restore', 'aibrush'):
+        if self.current_tool in BRUSH_TOOLS:
             self.drawing_manager.paint_size = size
             cursor_size = max(3, int(size * max(self.transform().m11(), 0.05)))
             self.setCursor(self.drawing_manager.create_inpaint_cursor("eraser", cursor_size))
@@ -418,6 +422,7 @@ class ImageViewer(QGraphicsView):
         # its overlay) before the scene deletes the overlay out from under it.
         self.selection.forget()
         self.drawing_manager.pixel_cancel()
+        self.drawing_manager.forget_clone_source()
         self.webtoon_manager.clear() 
         self._scene.clear()
         self.rectangles.clear()
