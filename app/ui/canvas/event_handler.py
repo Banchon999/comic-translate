@@ -126,6 +126,18 @@ class EventHandler:
                 )
                 return
 
+        if self.viewer.current_tool in ('paint', 'restore', 'eyedropper') and self.viewer.hasPhoto():
+            if event.button() == Qt.MouseButton.LeftButton and self._is_on_image(scene_pos):
+                alt = bool(event.modifiers() & Qt.KeyboardModifier.AltModifier)
+                if self.viewer.current_tool == 'eyedropper' or (alt and self.viewer.current_tool == 'paint'):
+                    # Alt+click samples while painting, as in every image editor.
+                    self.viewer.drawing_manager.eyedrop(scene_pos)
+                else:
+                    self.viewer.drawing_manager.pixel_press(
+                        scene_pos, self.viewer.current_tool, self.viewer.tablet_pressure
+                    )
+                return
+
         if self.viewer.current_tool == 'balloon' and self.viewer.hasPhoto():
             if self._is_on_image(scene_pos) and event.button() == Qt.MouseButton.LeftButton:
                 reason = self.viewer.drawing_manager.balloon_at(scene_pos, event.modifiers())
@@ -172,6 +184,9 @@ class EventHandler:
 
         if self.viewer.current_tool == 'marquee' and event.buttons() & Qt.MouseButton.LeftButton:
             self.viewer.drawing_manager.marquee_move(scene_pos)
+
+        if self.viewer.current_tool in ('paint', 'restore') and event.buttons() & Qt.MouseButton.LeftButton:
+            self.viewer.drawing_manager.pixel_move(scene_pos, self.viewer.tablet_pressure)
         
         if self.viewer.current_tool == 'box':
             self._move_handle_box_resize(scene_pos)
@@ -215,6 +230,9 @@ class EventHandler:
             self.viewer.drawing_manager.lasso_release(
                 self.viewer.mapToScene(event.position().toPoint())
             )
+
+        if self.viewer.current_tool in ('paint', 'restore') and event.button() == Qt.MouseButton.LeftButton:
+            self.viewer.drawing_manager.pixel_release()
 
         if self.viewer.current_tool == 'marquee' and event.button() == Qt.MouseButton.LeftButton:
             self.viewer.drawing_manager.marquee_release(
@@ -279,6 +297,16 @@ class EventHandler:
         if event.type() == QEvent.Type.Gesture:
             return self._handle_gesture_event(event)
         viewer = getattr(self, 'viewer', None)
+        if viewer is not None and event.type() in (QEvent.Type.TabletPress, QEvent.Type.TabletMove):
+            # Remember the pen's pressure and leave the event unaccepted, so
+            # Qt goes on to synthesise the mouse event the tools handle.
+            viewer.tablet_pressure = float(event.pressure())
+            event.ignore()
+            return False
+        if viewer is not None and event.type() == QEvent.Type.TabletRelease:
+            viewer.tablet_pressure = None
+            event.ignore()
+            return False
         if viewer is None:
             # Qt can still deliver a viewport event while Python is tearing the
             # handler down — on application quit, and at interpreter exit after

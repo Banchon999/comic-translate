@@ -53,6 +53,25 @@ class ToolStateMixin:
         else:
             self.set_tool(None)
 
+    def toggle_paint_tool(self):
+        self._toggle_pixel_tool(self.paint_button, "paint")
+
+    def toggle_restore_tool(self):
+        self._toggle_pixel_tool(self.restore_button, "restore")
+
+    def toggle_eyedropper_tool(self):
+        if self.eyedropper_button.isChecked():
+            self.set_tool("eyedropper")
+        else:
+            self.set_tool(None)
+
+    def _toggle_pixel_tool(self, button, name):
+        if button.isChecked():
+            self.set_tool(name)
+            self.set_slider_size(int(self.image_viewer.drawing_manager.paint_size))
+        else:
+            self.set_tool(None)
+
     def toggle_balloon_tool(self):
         if self.balloon_button.isChecked():
             self.set_tool("balloon")
@@ -92,6 +111,9 @@ class ToolStateMixin:
         except Exception:
             current_tool = None
 
+        if current_tool in ("paint", "restore"):
+            self.image_viewer.set_br_er_size(size, size)
+            return
         if current_tool == "brush":
             self.image_viewer.brush_size = size
         elif current_tool == "eraser":

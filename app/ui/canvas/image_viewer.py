@@ -40,6 +40,10 @@ class ImageViewer(QGraphicsView):
     selection_changed = Signal(bool)
     # The balloon tool found no bubble at the click; carries the reason.
     balloon_refused = Signal(str)
+    # A paint-brush or restore-eraser stroke finished (a pixel_session.PixelEdit).
+    pixel_edit_finished = Signal(object)
+    # The eyedropper picked a colour.
+    colour_picked = Signal(QtGui.QColor)
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -96,6 +100,11 @@ class ImageViewer(QGraphicsView):
         self.rectangles: list[MoveableRectItem] = []
         self.text_items: list[TextBlockItem] = []
         self.selected_rect: MoveableRectItem = None
+
+        # Pen pressure of the tablet event being handled, 0..1, or None for a
+        # mouse. Tablet events are left unaccepted so Qt synthesises the mouse
+        # events every tool already handles; the pixel tools read this.
+        self.tablet_pressure = None
 
         # Box drawing state
         self.start_point: QPointF = None
@@ -178,6 +187,8 @@ class ImageViewer(QGraphicsView):
             self.drawing_manager.lasso_cancel()
         if self.current_tool == 'marquee' and tool != 'marquee':
             self.drawing_manager.marquee_cancel()
+        # A stroke still held when the tool changes is dropped, not committed.
+        self.drawing_manager.pixel_cancel()
         self.current_tool = tool
         if tool == 'pan':
             self.setDragMode(QGraphicsView.ScrollHandDrag)
@@ -187,7 +198,11 @@ class ImageViewer(QGraphicsView):
             # Keys only reach a view that can take focus, and Enter/Escape are
             # how a clicked polygon gets closed or abandoned.
             self.setFocus()
-        elif tool in ('marquee', 'balloon'):
+        elif tool in ('paint', 'restore'):
+            self.setDragMode(QGraphicsView.NoDrag)
+            size = max(3, int(self.drawing_manager.paint_size * max(self.transform().m11(), 0.05)))
+            self.setCursor(self.drawing_manager.create_inpaint_cursor("eraser", size))
+        elif tool in ('marquee', 'balloon', 'eyedropper'):
             self.setDragMode(QGraphicsView.NoDrag)
             self.setCursor(QtGui.QCursor(Qt.CursorShape.CrossCursor))
         elif tool == 'wand':
@@ -258,6 +273,11 @@ class ImageViewer(QGraphicsView):
         return self.event_handler.handle_viewport_event(event)
 
     def set_br_er_size(self, size, scaled_size):
+        if self.current_tool in ('paint', 'restore'):
+            self.drawing_manager.paint_size = size
+            cursor_size = max(3, int(size * max(self.transform().m11(), 0.05)))
+            self.setCursor(self.drawing_manager.create_inpaint_cursor("eraser", cursor_size))
+            return
         if self.current_tool == 'brush':
             self.drawing_manager.set_brush_size(size, scaled_size)
             self.setCursor(self.drawing_manager.brush_cursor)
@@ -395,6 +415,7 @@ class ImageViewer(QGraphicsView):
         # The selection belongs to the page being cleared away; drop it (and
         # its overlay) before the scene deletes the overlay out from under it.
         self.selection.forget()
+        self.drawing_manager.pixel_cancel()
         self.webtoon_manager.clear() 
         self._scene.clear()
         self.rectangles.clear()

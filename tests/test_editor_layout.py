@@ -49,7 +49,8 @@ def win(qapp):
 
 
 def test_the_layout_holds_every_old_widget_in_its_new_place(win):
-    rail_tools = ("pan", "box", "type", "brush", "eraser", "marquee", "wand", "lasso")
+    rail_tools = ("pan", "box", "type", "brush", "eraser", "paint", "restore", "eyedropper",
+                  "marquee", "balloon", "wand", "lasso")
     for key in rail_tools:
         assert win.tool_buttons[key].parentWidget().objectName() == "toonToolRail", key
     for button in (win.delete_button, win.clear_rectangles_button, win.clear_brush_strokes_button,
@@ -187,7 +188,7 @@ def test_the_options_bar_never_sets_the_window_width(win):
     assert win.minimumSizeHint().width() <= 1280
 
 
-@pytest.mark.parametrize("tool", ["wand", "brush", None])
+@pytest.mark.parametrize("tool", ["wand", "brush", "paint", "restore", "eyedropper", None])
 def test_the_options_bar_fits_its_column_for_each_tool(win, tool):
     """Every row the bar shows must fit a 1440 px window without squeezing
     its labels — a Modify button once clipped "Box size" and "Pick into"."""
@@ -203,3 +204,11 @@ def test_the_options_bar_fits_its_column_for_each_tool(win, tool):
         bar = bar.parentWidget()
     assert bar.layout().sizeHint().width() <= bar.width()
 
+
+
+def test_the_paint_tools_show_their_options(win):
+    win.set_tool("paint")
+    assert not win.paint_options.isHidden() and not win.brush_options.isHidden()
+    assert win.selection_options.isHidden() and win.box_options.isHidden()
+    win.set_tool("eyedropper")
+    assert not win.paint_options.isHidden() and win.brush_options.isHidden()
