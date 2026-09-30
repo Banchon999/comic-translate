@@ -51,6 +51,7 @@ class TextController:
             self.main.gradient_color_button,
             self.main.gradient_angle_dropdown,
             self.main.curvature_dropdown,
+            self.main.warp_style_combo,
         ]
         self._text_change_timer = QtCore.QTimer(self.main)
         self._text_change_timer.setSingleShot(True)
@@ -780,8 +781,16 @@ class TextController:
             return
         item = self.main.curr_tblock_item
         command = TextFormatCommand(self.main.image_viewer, item)
-        # The dropdown is a percentage; the item works in -1..1.
-        item.set_curvature(self._dropdown_value(self.main.curvature_dropdown, 0.0) / 100.0)
+        # The dropdown is a percentage; the item works in -1..1. Arc is the
+        # glyph-placing curve; every other style is a point warp.
+        bend = self._dropdown_value(self.main.curvature_dropdown, 0.0) / 100.0
+        style = self.main.warp_style_combo.currentData() or "arc"
+        if style == "arc":
+            item.set_warp("", 0.0)
+            item.set_curvature(bend)
+        else:
+            item.set_curvature(0.0)
+            item.set_warp(style, bend)
         command.finalize_new_state()
         self.main.push_command(command)
 
@@ -900,9 +909,11 @@ class TextController:
                 str(getattr(text_item, 'gradient_angle', 90.0))
             )
             self.main.gradient_checkbox.setChecked(bool(getattr(text_item, 'gradient_enabled', False)))
-            self.main.curvature_dropdown.setCurrentText(
-                str(round(getattr(text_item, 'curvature', 0.0) * 100))
-            )
+            warp_style = getattr(text_item, 'warp_style', '') or ''
+            bend = getattr(text_item, 'warp_bend', 0.0) if warp_style else getattr(text_item, 'curvature', 0.0)
+            index = self.main.warp_style_combo.findData(warp_style or "arc")
+            self.main.warp_style_combo.setCurrentIndex(max(0, index))
+            self.main.curvature_dropdown.setCurrentText(str(round(bend * 100)))
 
             self.main.bold_button.setChecked(text_item.bold)
             self.main.italic_button.setChecked(text_item.italic)

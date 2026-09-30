@@ -65,6 +65,7 @@ def build_text_item(text_block: dict) -> TextBlockItem:
     )
     text_item.set_curvature(text_props.curvature)
     text_item.set_stroke_layers(text_props.stroke_layers)
+    text_item.set_warp(text_props.warp_style, text_props.warp_bend)
     text_item.set_quad(text_props.quad)
     return text_item
 

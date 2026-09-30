@@ -52,6 +52,9 @@ class TextItemProperties:
     stroke_layers: list = field(default_factory=list)
     # Perspective corners as fractions of the box (TL, TR, BR, BL); None = flat.
     quad: Optional[tuple] = None
+    # Point warp (text_effects.WARP_STYLES) and its bend -1..1; "" = none.
+    warp_style: str = ""
+    warp_bend: float = 0.0
 
     # Advanced properties
     selection_outlines: list = field(default_factory=list)
@@ -149,6 +152,8 @@ class TextItemProperties:
         props.curvature = float(data.get('curvature', 0.0))
         props.stroke_layers = stroke_layers_from(data.get('stroke_layers'))
         props.quad = normalise_quad(data.get('quad'))
+        props.warp_style = str(data.get('warp_style', '') or '')
+        props.warp_bend = float(data.get('warp_bend', 0.0) or 0.0)
 
         # Advanced
         props.selection_outlines = data.get('selection_outlines', [])
@@ -208,6 +213,8 @@ class TextItemProperties:
         props.curvature = getattr(item, 'curvature', 0.0)
         props.stroke_layers = list(getattr(item, 'stroke_layers', []) or [])
         props.quad = normalise_quad(getattr(item, 'quad', None))
+        props.warp_style = getattr(item, 'warp_style', '') or ''
+        props.warp_bend = float(getattr(item, 'warp_bend', 0.0) or 0.0)
 
         # Advanced properties
         props.selection_outlines = getattr(item, 'selection_outlines', []).copy()
@@ -256,6 +263,9 @@ class TextItemProperties:
             out['stroke_layers'] = stroke_layers_payload(self.stroke_layers)
         if self.quad:
             out['quad'] = [list(corner) for corner in self.quad]
+        if self.warp_style and self.warp_bend:
+            out['warp_style'] = self.warp_style
+            out['warp_bend'] = self.warp_bend
         return out
 
 

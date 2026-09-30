@@ -301,6 +301,7 @@ class ComicTranslate(ComicTranslateUI):
         self.gradient_color_button.clicked.connect(self.text_ctrl.on_gradient_color_change)
         self.gradient_angle_dropdown.currentTextChanged.connect(self.text_ctrl.apply_gradient_settings)
         self.curvature_dropdown.currentTextChanged.connect(self.text_ctrl.apply_curvature)
+        self.warp_style_combo.currentIndexChanged.connect(self.text_ctrl.apply_curvature)
 
         # Page List
         self.page_list.currentItemChanged.connect(self.image_ctrl.on_page_list_current_item_changed)
