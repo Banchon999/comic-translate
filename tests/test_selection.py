@@ -595,6 +595,19 @@ class TestPlanClean:
         alpha[2:20, 2:70] = 1.0
         assert ops.plan_clean(self.page(), alpha)["mode"] == "none"
 
+    def test_lettering_that_fills_most_of_a_tight_selection_is_still_lettering(self):
+        """A snug marquee around a bold SFX is mostly SFX. The background is
+        the colour around it inside the selection, not the majority colour —
+        judged by the majority, the SFX became the background and nothing was
+        cleaned."""
+        page = np.full((60, 120, 3), 200, np.uint8)
+        page[20:40, 20:100] = 20          # 73% of the selection below
+        alpha = np.zeros((60, 120), np.float32)
+        alpha[15:45, 15:105] = 1.0
+        plan = ops.plan_clean(page, alpha)
+        assert plan["mode"] == "solid" and plan["colour"] == (200, 200, 200)
+        assert (plan["mask"] > 0)[30, 60]
+
     def test_an_outline_the_selection_overlaps_is_not_lettering(self):
         """The wand grows its region over the anti-aliased edge, so a bubble
         selection includes a sliver of the outline. Painting that white would

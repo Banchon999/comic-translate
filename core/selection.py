@@ -167,6 +167,11 @@ SOLID_SPREAD = 8.0
 #: ringing sit a pixel or two outside the glyph itself.
 LETTERING_GROW = 2
 
+#: The background is read from this band just inside the selection's edge —
+#: what surrounds whatever sits on it — not from the whole selection. Wide
+#: enough that the wand's 2 px of outline sliver is a minority of it.
+RING_WIDTH = 6
+
 
 def _enclosed(foreign: np.ndarray, selected: np.ndarray) -> np.ndarray:
     """The parts of `foreign` that sit *on* the selection, not across its edge.
@@ -214,14 +219,23 @@ def plan_clean(image: np.ndarray, alpha: np.ndarray) -> dict:
     if not selected.any():
         return none
     whole = {"mode": "inpaint", "mask": selected.astype(np.uint8) * 255, "colour": None}
-    pixels = rgb[core] if core.any() else rgb[selected]
-    if pixels.shape[0] < 16:
+    region = core if core.any() else selected
+    if int(region.sum()) < 16:
         return whole
 
-    background = np.median(pixels.astype(np.float32), axis=0)
+    # The background is what lies just inside the selection's edge. Taking
+    # the median of the whole selection instead picked the *lettering* as the
+    # background whenever it covered most of a tight marquee (bold SFX), and
+    # then cleaned nothing. The page edge is not an edge of the selection:
+    # shrink pads with edge values.
+    inner = shrink(region.astype(np.uint8) * 255, RING_WIDTH) > 0
+    ring = region & ~inner
+    if int(ring.sum()) < 16:
+        ring = region
+    background = np.median(rgb[ring].astype(np.float32), axis=0)
     distance = np.abs(rgb.astype(np.float32) - background).max(axis=2)
     near = distance <= BACKGROUND_TOLERANCE
-    share = float(near[core].mean()) if core.any() else float(near[selected].mean())
+    share = float(near[ring].mean())
     if share < FLAT_SHARE:
         return whole
 
