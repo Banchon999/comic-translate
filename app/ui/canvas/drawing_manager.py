@@ -20,7 +20,7 @@ from modules.utils.text_segmentation import peek_page_mask
 from modules.utils.textblock import adjust_text_line_coordinates
 from modules.detection.utils.content import detect_content_mask_in_bbox
 from modules.utils.flood_select import (
-    DEFAULT_FEATHER, DEFAULT_TOLERANCE, balloon_select, flood_select, mask_to_polygons,
+    DEFAULT_FEATHER, DEFAULT_TOLERANCE, balloon_select, fill_alpha, flood_select, mask_to_polygons,
 )
 
 logger = logging.getLogger(__name__)
@@ -69,7 +69,13 @@ class DrawingManager:
         self.paint_opacity = 1.0
         self.paint_pressure_size = True
         self.paint_pressure_flow = False
+        self.fill_tolerance = 32
         self.pixel_session = None
+        # Set while an AI-brush stroke is being inpainted. Its patches are cut
+        # from the page as it was at the press, padding included, so anything
+        # painted meanwhile would be covered when they land: pixel tools refuse
+        # to start until it is done.
+        self.pixel_busy = False
 
         # Rectangle marquee in progress (scene coordinates).
         self._marquee_start: QPointF | None = None
@@ -354,6 +360,9 @@ class DrawingManager:
         from .pixel_session import PixelSession
 
         self.pixel_cancel()
+        if self.pixel_busy:
+            self.viewer.pixel_tool_busy.emit()
+            return False
         session = PixelSession(
             self.viewer, mode, self.paint_colour, self.paint_size, self.paint_hardness,
             self.paint_opacity, self.paint_pressure_size, self.paint_pressure_flow,
@@ -381,6 +390,49 @@ class DrawingManager:
         session, self.pixel_session = self.pixel_session, None
         if session is not None:
             session.cancel()
+
+    def fill_at(self, scene_pos: QPointF, all_regions: bool = False):
+        """Fill the region under the cursor with the paint colour.
+
+        The anti-aliased rim around the region is covered in proportion to how
+        much of it is region colour (`flood_select.fill_alpha`), so no fringe of
+        the old colour is left — while a hard edge, such as a bubble's outline,
+        is not touched at all. Holes are *not* filled: filling a bubble's white
+        must not paint over its lettering. An active selection clips it.
+        Returns the PixelEdit, or None when nothing changed.
+        """
+        from core.selection import blend
+
+        from .pixel_session import PixelEdit
+
+        if self.pixel_busy:
+            self.viewer.pixel_tool_busy.emit()
+            return None
+        image = self.viewer.get_image_array(include_patches=True)
+        if image is None:
+            return None
+        ox, oy = self._visible_area_offset()
+        region = flood_select(
+            image, int(round(scene_pos.x())) - ox, int(round(scene_pos.y())) - oy,
+            tolerance=self.fill_tolerance, feather=0, contiguous=not all_regions, fill_holes=False,
+        )
+        if region is None or not region.any():
+            return None
+        composite = image[..., :3].copy()
+        height, width = composite.shape[:2]
+        alpha = fill_alpha(image, region) * float(self.paint_opacity)
+        if not self.viewer.selection.is_empty():
+            alpha *= self.viewer.selection.alpha(ox, oy, width, height)
+        colour = np.empty_like(composite)
+        colour[...] = (self.paint_colour.red(), self.paint_colour.green(), self.paint_colour.blue())
+        result = blend(composite, colour, alpha)
+        changed = np.any(result != composite, axis=2)
+        if not changed.any():
+            return None
+        mappings = self.viewer.get_visible_area_image()[1] if self.viewer.webtoon_mode else None
+        edit = PixelEdit(image=result, mask=changed.astype(np.uint8) * 255, mappings=mappings, mode="fill")
+        self.viewer.pixel_edit_finished.emit(edit)
+        return edit
 
     def eyedrop(self, scene_pos: QPointF, size: int = 3):
         """Sample the page as the user sees it into the paint colour."""

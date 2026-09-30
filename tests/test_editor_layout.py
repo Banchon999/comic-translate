@@ -49,7 +49,7 @@ def win(qapp):
 
 
 def test_the_layout_holds_every_old_widget_in_its_new_place(win):
-    rail_tools = ("pan", "box", "type", "brush", "eraser", "paint", "restore", "eyedropper",
+    rail_tools = ("pan", "box", "type", "brush", "eraser", "paint", "fill", "aibrush", "restore", "eyedropper",
                   "marquee", "balloon", "wand", "lasso")
     for key in rail_tools:
         assert win.tool_buttons[key].parentWidget().objectName() == "toonToolRail", key
@@ -188,7 +188,7 @@ def test_the_options_bar_never_sets_the_window_width(win):
     assert win.minimumSizeHint().width() <= 1280
 
 
-@pytest.mark.parametrize("tool", ["wand", "brush", "paint", "restore", "eyedropper", None])
+@pytest.mark.parametrize("tool", ["wand", "brush", "paint", "fill", "aibrush", "restore", "eyedropper", None])
 def test_the_options_bar_fits_its_column_for_each_tool(win, tool):
     """Every row the bar shows must fit a 1440 px window without squeezing
     its labels — a Modify button once clipped "Box size" and "Pick into"."""

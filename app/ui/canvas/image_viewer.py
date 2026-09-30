@@ -44,6 +44,8 @@ class ImageViewer(QGraphicsView):
     pixel_edit_finished = Signal(object)
     # The eyedropper picked a colour.
     colour_picked = Signal(QtGui.QColor)
+    # A pixel tool was refused because an AI-brush stroke is still running.
+    pixel_tool_busy = Signal()
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -198,11 +200,11 @@ class ImageViewer(QGraphicsView):
             # Keys only reach a view that can take focus, and Enter/Escape are
             # how a clicked polygon gets closed or abandoned.
             self.setFocus()
-        elif tool in ('paint', 'restore'):
+        elif tool in ('paint', 'restore', 'aibrush'):
             self.setDragMode(QGraphicsView.NoDrag)
             size = max(3, int(self.drawing_manager.paint_size * max(self.transform().m11(), 0.05)))
             self.setCursor(self.drawing_manager.create_inpaint_cursor("eraser", size))
-        elif tool in ('marquee', 'balloon', 'eyedropper'):
+        elif tool in ('marquee', 'balloon', 'eyedropper', 'fill'):
             self.setDragMode(QGraphicsView.NoDrag)
             self.setCursor(QtGui.QCursor(Qt.CursorShape.CrossCursor))
         elif tool == 'wand':
@@ -273,7 +275,7 @@ class ImageViewer(QGraphicsView):
         return self.event_handler.handle_viewport_event(event)
 
     def set_br_er_size(self, size, scaled_size):
-        if self.current_tool in ('paint', 'restore'):
+        if self.current_tool in ('paint', 'restore', 'aibrush'):
             self.drawing_manager.paint_size = size
             cursor_size = max(3, int(size * max(self.transform().m11(), 0.05)))
             self.setCursor(self.drawing_manager.create_inpaint_cursor("eraser", cursor_size))

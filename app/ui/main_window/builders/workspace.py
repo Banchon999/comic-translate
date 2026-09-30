@@ -544,6 +544,21 @@ class WorkspaceMixin:
         self.restore_button.clicked.connect(self.toggle_restore_tool)
         self.tool_buttons["restore"] = self.restore_button
 
+        self.fill_button = self.create_tool_button(svg="fill-bucket.svg", checkable=True)
+        self.fill_button.setToolTip(self.tr(
+            "Fill a flat area with the paint colour in one click — lettering inside it is left alone.\n"
+            "Ctrl fills every area of that colour; Alt+click picks the colour."
+        ))
+        self.fill_button.clicked.connect(self.toggle_fill_tool)
+        self.tool_buttons["fill"] = self.fill_button
+
+        self.ai_brush_button = self.create_tool_button(svg="ai-brush.svg", checkable=True)
+        self.ai_brush_button.setToolTip(self.tr(
+            "Paint over anything to remove it with the inpainter, right away — no Clean step."
+        ))
+        self.ai_brush_button.clicked.connect(self.toggle_ai_brush_tool)
+        self.tool_buttons["aibrush"] = self.ai_brush_button
+
         self.eyedropper_button = self.create_tool_button(svg="eyedropper.svg", checkable=True)
         self.eyedropper_button.setToolTip(self.tr("Pick the paint colour from the page."))
         self.eyedropper_button.clicked.connect(self.toggle_eyedropper_tool)
@@ -607,7 +622,8 @@ class WorkspaceMixin:
         groups = (
             (self.pan_button, self.box_button, self.type_text_button),
             (self.brush_button, self.eraser_button),
-            (self.paint_button, self.restore_button, self.eyedropper_button),
+            (self.paint_button, self.fill_button, self.ai_brush_button, self.restore_button,
+             self.eyedropper_button),
             (self.marquee_button, self.balloon_button, self.wand_button, self.lasso_button),
             (self.delete_button, self.clear_rectangles_button, self.draw_blklist_blks,
              self.clear_brush_strokes_button),
@@ -832,7 +848,8 @@ class WorkspaceMixin:
             options.addWidget(button)
 
     SELECTION_TOOLS = ("marquee", "balloon", "wand", "lasso")
-    PIXEL_TOOLS = ("paint", "restore", "eyedropper")
+    PIXEL_TOOLS = ("paint", "fill", "aibrush", "restore", "eyedropper")
+    BRUSH_SIZED_TOOLS = ("brush", "eraser", "paint", "restore", "aibrush")
 
     def _build_paint_options(self, row: QtWidgets.QHBoxLayout) -> None:
         """Colour, hardness, opacity and pen pressure for the pixel tools. The
@@ -841,7 +858,7 @@ class WorkspaceMixin:
         self.paint_colour_button.setToolTip(self.tr("Paint colour (Alt+click the page to pick one)"))
         self.paint_colour_button.setFixedSize(26, 26)
         row.addWidget(self.paint_colour_button)
-        hardness_label = MLabel(self.tr("Hardness"))
+        hardness_label = self.paint_hardness_label = MLabel(self.tr("Hardness"))
         hardness_label.setObjectName("toonOptionLabel")
         row.addWidget(hardness_label)
         self.paint_hardness_slider = MSlider()
@@ -849,7 +866,7 @@ class WorkspaceMixin:
         self.paint_hardness_slider.setFixedWidth(80)
         self.paint_hardness_slider.setToolTip(self.tr("Soft edge (left) to hard edge (right)"))
         row.addWidget(self.paint_hardness_slider)
-        opacity_label = MLabel(self.tr("Opacity"))
+        opacity_label = self.paint_opacity_label = MLabel(self.tr("Opacity"))
         opacity_label.setObjectName("toonOptionLabel")
         row.addWidget(opacity_label)
         self.paint_opacity_spin = QtWidgets.QSpinBox()
@@ -857,7 +874,15 @@ class WorkspaceMixin:
         self.paint_opacity_spin.setSuffix("%")
         self.paint_opacity_spin.setFixedWidth(64)
         row.addWidget(self.paint_opacity_spin)
-        pressure_label = MLabel(self.tr("Pen pressure"))
+        tolerance_label = self.fill_tolerance_label = MLabel(self.tr("Tolerance"))
+        tolerance_label.setObjectName("toonOptionLabel")
+        row.addWidget(tolerance_label)
+        self.fill_tolerance_spin = QtWidgets.QSpinBox()
+        self.fill_tolerance_spin.setRange(0, 255)
+        self.fill_tolerance_spin.setFixedWidth(60)
+        self.fill_tolerance_spin.setToolTip(self.tr("How different a colour may be and still be filled"))
+        row.addWidget(self.fill_tolerance_spin)
+        pressure_label = self.paint_pressure_label = MLabel(self.tr("Pen pressure"))
         pressure_label.setObjectName("toonOptionLabel")
         row.addWidget(pressure_label)
         self.paint_pressure_size_check = MCheckBox(self.tr("Size"))
@@ -875,9 +900,30 @@ class WorkspaceMixin:
         show_paint = tool in self.PIXEL_TOOLS
         show_selection = not show_paint and (tool in self.SELECTION_TOOLS or has_selection)
         self.paint_options.setVisible(show_paint)
+        if show_paint:
+            # Each pixel tool shows only the options it uses.
+            uses = {
+                "paint": {"colour", "hardness", "opacity", "pressure"},
+                "fill": {"colour", "opacity", "tolerance"},
+                "aibrush": {"pressure"},
+                "restore": {"hardness", "opacity", "pressure"},
+                "eyedropper": {"colour"},
+            }[tool]
+            groups = {
+                "colour": (self.paint_colour_button,),
+                "hardness": (self.paint_hardness_label, self.paint_hardness_slider),
+                "opacity": (self.paint_opacity_label, self.paint_opacity_spin),
+                "tolerance": (self.fill_tolerance_label, self.fill_tolerance_spin),
+                "pressure": (self.paint_pressure_label, self.paint_pressure_size_check,
+                             self.paint_pressure_flow_check),
+            }
+            for name, widgets in groups.items():
+                for widget in widgets:
+                    widget.setVisible(name in uses)
+            self.paint_pressure_flow_check.setVisible("pressure" in uses and tool != "aibrush")
         self.selection_options.setVisible(show_selection)
         self.brush_options.setVisible(
-            tool in ("brush", "eraser", "paint", "restore") or not (show_selection or show_paint)
+            tool in self.BRUSH_SIZED_TOOLS or not (show_selection or show_paint)
         )
         # The selection row alone nearly fills the canvas column (in Thai);
         # box sizing is a detection-stage action, not a selection or paint one.

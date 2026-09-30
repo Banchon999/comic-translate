@@ -25,6 +25,12 @@ from core.selection import blend
 
 PAINT = "paint"
 RESTORE = "restore"
+#: The AI inpaint brush: the stroke is a mask for the inpainter, not paint.
+AI = "aibrush"
+
+#: How strongly the AI brush's preview tints what it covers (the mask
+#: brush's translucent red), so it reads as "to be removed", not as paint.
+AI_PREVIEW_ALPHA = 0.45
 
 #: Above inpaint patches (0.5), below mask strokes (0.8) and text (1): where
 #: the result will live once it is a patch.
@@ -84,7 +90,9 @@ class PixelSession:
         self.mode = mode
         self.colour = QColor(colour)
         self.diameter = max(1.0, float(diameter))
-        self.hardness = float(hardness)
+        # The AI brush marks pixels in or out: a soft edge would only make the
+        # mask's boundary depend on a threshold.
+        self.hardness = 1.0 if mode == AI else float(hardness)
         self.opacity = min(1.0, max(0.0, float(opacity)))
         self.pressure_size = pressure_size
         self.pressure_flow = pressure_flow
@@ -110,8 +118,9 @@ class PixelSession:
                 return False
             self.source = raw[..., :3].copy()
         else:
+            colour = QColor(255, 0, 0) if self.mode == AI else self.colour
             self.source = np.empty_like(self.composite)
-            self.source[...] = (self.colour.red(), self.colour.green(), self.colour.blue())
+            self.source[...] = (colour.red(), colour.green(), colour.blue())
         ox, oy = self.offset
         self.selection_alpha = None
         if not viewer.selection.is_empty():
@@ -145,6 +154,11 @@ class PixelSession:
         if not (alpha > 0).any():
             self._last = None
             return None
+        if self.mode == AI:
+            # Nothing is blended: the stroke is what the inpainter must fill.
+            self._last = None
+            mask = (alpha > 0).astype(np.uint8) * 255
+            return PixelEdit(image=self.composite, mask=mask, mappings=self.mappings, mode=self.mode)
         image = blend(self.composite, self.source, alpha)
         changed = np.any(image != self.composite, axis=2)
         self._last = None
@@ -170,7 +184,8 @@ class PixelSession:
         return self.diameter / 2.0 * paint.pressure_scale(pressure, self.pressure_size)
 
     def _alpha(self, region) -> np.ndarray:
-        alpha = self.coverage[region] * self.opacity
+        opacity = 1.0 if self.mode == AI else self.opacity
+        alpha = self.coverage[region] * opacity
         if self.selection_alpha is not None:
             alpha = alpha * self.selection_alpha[region]
         return alpha
@@ -183,7 +198,8 @@ class PixelSession:
         x0, y0, x1, y1 = rect
         region = np.s_[y0:y1, x0:x1]
         alpha = self._alpha(region)
-        rgb = blend(self.composite[region], self.source[region], alpha)
+        shown = alpha * AI_PREVIEW_ALPHA if self.mode == AI else alpha
+        rgb = blend(self.composite[region], self.source[region], shown)
         try:
             self.preview.put(x0, y0, rgb, alpha)
         except RuntimeError:
