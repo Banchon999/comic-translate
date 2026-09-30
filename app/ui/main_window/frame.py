@@ -34,15 +34,55 @@ def _edges_at(win: QtWidgets.QMainWindow, gpos: QtCore.QPoint, margin: int = RES
     return edges
 
 
+class _VisibilityWatcher(QtCore.QObject):
+    """Tells the resizer when its window is shown or hidden. A filter on the
+    window alone, so it sees only the window's own events."""
+
+    def __init__(self, resizer: "EdgeResizer", window: QtWidgets.QMainWindow) -> None:
+        super().__init__(resizer)
+        self._resizer = resizer
+        window.installEventFilter(self)
+
+    def eventFilter(self, watched: QtCore.QObject, event: QtCore.QEvent) -> bool:  # noqa: N802
+        etype = event.type()
+        if etype == QtCore.QEvent.Type.Show:
+            self._resizer.attach()
+        elif etype in (QtCore.QEvent.Type.Hide, QtCore.QEvent.Type.Close):
+            self._resizer.detach()
+        return False
+
+
 class EdgeResizer(QtCore.QObject):
-    """Event filter that provides edge resize cursors and startSystemResize for frameless windows."""
+    """Event filter that provides edge resize cursors and startSystemResize for frameless windows.
+
+    It watches the whole application — the cursor has to change over child
+    widgets at the window's edge, and they, not the window, get those mouse
+    events. That routes *every* event in the process through this Python
+    method, each one wrapped for it, so the filter is installed only while the
+    window is visible. Installed for the window's whole life, a closed window
+    kept taxing every event until it was collected: thirty of them in the test
+    suite made one ``processEvents()`` call take 30 s.
+    """
 
     MARGIN = RESIZE_MARGIN
 
     def __init__(self, window: QtWidgets.QMainWindow) -> None:
         super().__init__(window)
         self._win = window
-        QtWidgets.QApplication.instance().installEventFilter(self)
+        self.attached = False
+        self._watcher = _VisibilityWatcher(self, window)
+        if window.isVisible():
+            self.attach()
+
+    def attach(self) -> None:
+        if not self.attached:
+            QtWidgets.QApplication.instance().installEventFilter(self)
+            self.attached = True
+
+    def detach(self) -> None:
+        if self.attached:
+            QtWidgets.QApplication.instance().removeEventFilter(self)
+            self.attached = False
 
     def eventFilter(self, watched: QtCore.QObject, event: QtCore.QEvent) -> bool:  # noqa: N802
         etype = event.type()
