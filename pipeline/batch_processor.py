@@ -24,7 +24,8 @@ from modules.utils.image_utils import generate_mask, get_smart_text_color
 from modules.utils.text_segmentation import segment_page
 from modules.utils.language_utils import get_language_code, is_no_space_lang
 from modules.utils.translator_utils import get_raw_translation, get_raw_text, format_translations, is_renderable_translation
-from modules.rendering.render import get_best_render_area, pyside_word_wrap, is_vertical_block, font_family_for_block
+from modules.rendering.render import get_best_render_area, pyside_word_wrap, is_vertical_block, font_family_for_block, default_preset_for
+from modules.utils.text_presets import apply_to_state as apply_text_preset
 from modules.utils.device import resolve_device
 from modules.utils.exceptions import InsufficientCreditsException
 from modules.utils.glossary import collect_source_text
@@ -600,7 +601,7 @@ class BatchProcessor:
                 # A plain state dict, not a Qt object: TextItemProperties
                 # .from_dict rebuilds it on the canvas side and already accepts
                 # a colour as a string and a direction as an int.
-                text_items_state.append(build_text_item_state(
+                text_items_state.append(apply_text_preset(build_text_item_state(
                     object_id=getattr(blk, 'object_id', '') or '',
                     text=translation,
                     font_family=blk_font,
@@ -622,7 +623,7 @@ class BatchProcessor:
                     direction=direction,
                     vertical=vertical,
                     outline=outline,
-                ))
+                ), default_preset_for(render_settings, blk)))
 
             page_viewer_state = self.main_page.image_states.ensure_viewer_state(image_path)
             page_viewer_state.update({

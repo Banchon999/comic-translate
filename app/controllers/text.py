@@ -12,10 +12,12 @@ from app.ui.commands.textformat import TextFormatCommand
 from app.ui.commands.box import AddTextItemCommand, ResizeBlocksCommand
 from app.ui.commands.text_edit import TextEditCommand
 from app.ui.canvas.text_item import TextBlockItem
+from app.ui.canvas.text.presets import apply_preset_to_item, preset_label, preset_from_item
+from modules.utils.text_presets import LOOK_FIELDS
 from app.ui.canvas.text.text_item_properties import TextItemProperties
 
 from modules.utils.textblock import TextBlock
-from modules.rendering.render import TextRenderingSettings, manual_wrap, is_vertical_block, pyside_word_wrap, font_family_for_block
+from modules.rendering.render import TextRenderingSettings, manual_wrap, is_vertical_block, pyside_word_wrap, font_family_for_block, default_preset_for
 from app.validation import font_selected
 from app.ui.qt_values import to_qt_layout_direction
 from modules.utils.language_utils import get_language_code, get_layout_direction, is_no_space_lang
@@ -165,6 +167,9 @@ class TextController:
         
         text_item = self.main.image_viewer.add_text_item(properties)
         text_item.set_plain_text(text)
+        preset = default_preset_for(render_settings, blk)
+        if preset is not None:
+            apply_preset_to_item(text_item, preset, LOOK_FIELDS)
 
         # Update or append the block in the main controller's blk_list
         existing_idx = next(
@@ -736,6 +741,125 @@ class TextController:
             self.main.tr("+ Strokes") if not count else self.main.tr("Strokes: {0}").format(count)
         )
 
+    # Style presets
+    @property
+    def preset_store(self):
+        store = getattr(self, '_preset_store', None)
+        if store is None:
+            from modules.utils.text_presets import TextPresetStore
+
+            store = self._preset_store = TextPresetStore()
+        return store
+
+    def refresh_preset_widgets(self, bubble=None, free=None):
+        """Refill the inspector's style list and Settings' default-style combos."""
+        names = self.preset_store.names()
+        combo = self.main.style_preset_combo
+        keep = combo.currentData()
+        combo.blockSignals(True)
+        combo.clear()
+        combo.addItem(self.main.tr("Choose a style…"), "")
+        for name in names:
+            combo.addItem(preset_label(name), name)
+        combo.setCurrentIndex(max(0, combo.findData(keep or "")))
+        combo.blockSignals(False)
+        page = self.main.settings_page.ui.text_rendering_page
+        page.refresh_preset_choices(names, bubble=bubble, free=free)
+
+    def _selected_text_items(self):
+        items = [
+            item for item in self.main.image_viewer._scene.selectedItems()
+            if isinstance(item, TextBlockItem)
+        ]
+        current = self.main.curr_tblock_item
+        if current is not None and current not in items:
+            items.append(current)
+        return items
+
+    def apply_style_preset(self, *_):
+        name = self.main.style_preset_combo.currentData()
+        preset = self.preset_store.get(name) if name else None
+        items = self._selected_text_items()
+        if preset is None or not items:
+            return
+
+        stack = self.main.undo_group.activeStack()
+        if stack is not None:
+            stack.beginMacro(self.main.tr("Apply style {0}").format(preset_label(name)))
+        try:
+            for item in items:
+                command = TextFormatCommand(self.main.image_viewer, item)
+                apply_preset_to_item(item, preset)
+                command.finalize_new_state()
+                self.main.push_command(command)
+        finally:
+            if stack is not None:
+                stack.endMacro()
+        if self.main.curr_tblock_item is not None:
+            self.set_values_for_blk_item(self.main.curr_tblock_item)
+
+    def save_style_preset(self, *_):
+        item = self.main.curr_tblock_item
+        if item is None:
+            return
+        name, ok = QtWidgets.QInputDialog.getText(
+            self.main, self.main.tr("Save Style"), self.main.tr("Name for this style:")
+        )
+        name = (name or "").strip()
+        if not ok or not name:
+            return
+
+        builtin = [p.name for p in self.preset_store.presets() if p.builtin]
+        if name in builtin or name in (preset_label(b) for b in builtin):
+            QtWidgets.QMessageBox.warning(
+                self.main, self.main.tr("Save Style"),
+                self.main.tr("\"{0}\" is the name of a built-in style. Choose another name.").format(name),
+            )
+            return
+        if self.preset_store.get(name) is not None:
+            answer = QtWidgets.QMessageBox.question(
+                self.main, self.main.tr("Save Style"),
+                self.main.tr("Replace the style \"{0}\"?").format(name),
+            )
+            if answer != QtWidgets.QMessageBox.StandardButton.Yes:
+                return
+        self.preset_store.put(preset_from_item(item, name))
+        self.refresh_preset_widgets()
+        combo = self.main.style_preset_combo
+        combo.blockSignals(True)
+        combo.setCurrentIndex(combo.findData(name))
+        combo.blockSignals(False)
+
+    def delete_style_preset(self, *_):
+        name = self.main.style_preset_combo.currentData()
+        preset = self.preset_store.get(name) if name else None
+        if preset is None:
+            return
+        if preset.builtin:
+            QtWidgets.QMessageBox.information(
+                self.main, self.main.tr("Delete Style"), self.main.tr("Built-in styles cannot be deleted.")
+            )
+            return
+        answer = QtWidgets.QMessageBox.question(
+            self.main, self.main.tr("Delete Style"), self.main.tr("Delete the style \"{0}\"?").format(name)
+        )
+        if answer != QtWidgets.QMessageBox.StandardButton.Yes:
+            return
+        self.preset_store.delete(name)
+        self.refresh_preset_widgets()
+
+    def default_presets(self) -> dict:
+        """text_class → preset for new text, from Settings > Text Rendering."""
+        ui = self.main.settings_page.ui
+        out = {}
+        for text_class, combo in (("text_bubble", ui.default_bubble_preset_combo),
+                                  ("text_free", ui.default_free_preset_combo)):
+            name = combo.currentData()
+            preset = self.preset_store.get(name) if name else None
+            if preset is not None:
+                out[text_class] = preset
+        return out
+
     def toggle_perspective(self, checked=False):
         """Corner handles move corners (perspective) instead of resizing."""
         TextBlockItem.perspective_editing = bool(checked)
@@ -1296,4 +1420,5 @@ class TextController:
             direction = direction,
             bubble_font_family = settings_ui.bubble_font_combo.currentText() if per_class_fonts else "",
             free_font_family = settings_ui.free_font_combo.currentText() if per_class_fonts else "",
+            default_presets = self.default_presets(),
         )

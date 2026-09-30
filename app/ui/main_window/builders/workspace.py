@@ -439,8 +439,25 @@ class WorkspaceMixin:
         curve_layout.addWidget(self.reset_transform_button)
         curve_layout.addStretch()
 
+        style_layout = QtWidgets.QHBoxLayout()
+        style_label = MLabel(self.tr("Style"))
+        self.style_preset_combo = MComboBox().small()
+        self.style_preset_combo.setToolTip(self.tr(
+            "Apply a saved text style to the selected text: font, colours, strokes, shadow and warp."
+        ))
+        self.style_preset_combo.setMinimumWidth(140)
+        self.save_style_button = MPushButton(self.tr("Save…")).small()
+        self.save_style_button.setToolTip(self.tr("Save the selected text's look as a new style."))
+        self.delete_style_button = MPushButton(self.tr("Delete")).small()
+        self.delete_style_button.setToolTip(self.tr("Delete the chosen style (built-in styles cannot be deleted)."))
+        style_layout.addWidget(style_label)
+        style_layout.addWidget(self.style_preset_combo, 1)
+        style_layout.addWidget(self.save_style_button)
+        style_layout.addWidget(self.delete_style_button)
+
         rendering_divider_top = MDivider()
         text_render_layout.addWidget(rendering_divider_top)
+        text_render_layout.addLayout(style_layout)
         text_render_layout.addLayout(font_settings_layout)
         text_render_layout.addLayout(font_metrics_layout)
         text_render_layout.addLayout(main_text_settings_layout)

@@ -1509,7 +1509,11 @@ class ProjectController:
     def save_main_page_settings(self):
         settings = QSettings("ComicLabs", "ComicTranslate")
 
-        self.process_group('text_rendering', self.main.render_settings(), settings)
+        # default_presets holds preset objects, not settings values; the chosen
+        # names are persisted below instead.
+        render_settings = asdict(self.main.render_settings())
+        render_settings.pop('default_presets', None)
+        self.process_group('text_rendering', render_settings, settings)
 
         # Style defaults live outside TextRenderingSettings (they are the source
         # the render settings read from, not a rendered result), so persist them
@@ -1520,6 +1524,8 @@ class ProjectController:
         settings.setValue('default_text_color', settings_ui.default_text_color_button.get_color())
         settings.setValue('default_outline_color', settings_ui.default_outline_color_button.get_color())
         settings.setValue('default_outline_width', settings_ui.default_outline_width_combo.currentText())
+        settings.setValue('default_preset_bubble', settings_ui.default_bubble_preset_combo.currentData() or '')
+        settings.setValue('default_preset_free', settings_ui.default_free_preset_combo.currentData() or '')
         settings.endGroup()
 
         settings.beginGroup("main_page")
@@ -1629,6 +1635,10 @@ class ProjectController:
         )
         settings_ui.default_outline_width_combo.setCurrentText(
             settings.value('default_outline_width', '1.0')
+        )
+        self.main.text_ctrl.refresh_preset_widgets(
+            bubble=settings.value('default_preset_bubble', '', type=str),
+            free=settings.value('default_preset_free', '', type=str),
         )
 
         self.main.bold_button.setChecked(settings.value('bold', False, type=bool))
