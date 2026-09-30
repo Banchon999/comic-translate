@@ -110,3 +110,57 @@ def arc_bulge(placements: Sequence[GlyphPlacement], glyph_height: float = 0.0) -
     if not placements:
         return 0.0
     return max(abs(placement.y) for placement in placements) + max(0.0, glyph_height)
+
+
+#: The corners of a text box as fractions of it, TL, TR, BR, BL: no distortion.
+IDENTITY_QUAD = ((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0))
+
+
+def normalise_quad(value):
+    """A perspective quad as four ``(u, v)`` corner fractions, or None.
+
+    The corners are fractions of the text box (TL, TR, BR, BL), not pixels,
+    so resizing the box keeps the distortion's shape. None means no
+    distortion — both for an identity quad and for anything unreadable, so a
+    damaged value in a project draws the text plainly instead of failing.
+    """
+    if value is None:
+        return None
+    try:
+        corners = tuple((float(u), float(v)) for u, v in value)
+    except (TypeError, ValueError):
+        return None
+    if len(corners) != 4 or not all(math.isfinite(c) for corner in corners for c in corner):
+        return None
+    if all(abs(a - b) < 1e-9 for corner, ident in zip(corners, IDENTITY_QUAD) for a, b in zip(corner, ident)):
+        return None
+    return corners
+
+
+def quad_points(x: float, y: float, width: float, height: float, quad) -> list[tuple[float, float]]:
+    """The quad's corners in the box's own coordinates (identity when None)."""
+    corners = normalise_quad(quad) or IDENTITY_QUAD
+    return [(x + u * width, y + v * height) for u, v in corners]
+
+
+def quad_corner_from_point(x: float, y: float, width: float, height: float, px: float, py: float):
+    """A point in box coordinates as a corner fraction of the box."""
+    return ((px - x) / width if width else 0.0, (py - y) / height if height else 0.0)
+
+
+def quad_is_convex(quad) -> bool:
+    """Whether the quad is a convex, non-degenerate shape.
+
+    A projective map exists for a self-crossing or folded quad too, and it
+    draws the text inside out; a corner dragged across the opposite edge is
+    refused instead.
+    """
+    corners = normalise_quad(quad) or IDENTITY_QUAD
+    signs = []
+    for i in range(4):
+        (x0, y0), (x1, y1), (x2, y2) = corners[i], corners[(i + 1) % 4], corners[(i + 2) % 4]
+        cross = (x1 - x0) * (y2 - y1) - (y1 - y0) * (x2 - x1)
+        if abs(cross) < 1e-6:
+            return False
+        signs.append(cross > 0)
+    return all(signs) or not any(signs)

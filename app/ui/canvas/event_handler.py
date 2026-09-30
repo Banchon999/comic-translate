@@ -16,6 +16,8 @@ class EventHandler:
         self.viewer = viewer
         self.dragged_item = None
         self.last_scene_pos = None
+        # A perspective drag is an attribute edit, undone as one (see release).
+        self._perspective_command = None
     
     # Main Event Handlers
 
@@ -347,6 +349,10 @@ class EventHandler:
             if handle:
                 sel_item.resize_handle = handle
                 sel_item.init_resize(scene_pos)
+                if isinstance(sel_item, TextBlockItem) and TextBlockItem.perspective_editing:
+                    from app.ui.commands.textformat import TextFormatCommand
+
+                    self._perspective_command = TextFormatCommand(self.viewer, sel_item)
                 # Record state for undo purposes (instead of calling mousePressEvent which expects QGraphicsSceneMouseEvent)
                 if isinstance(sel_item, TextBlockItem):
                     sel_item.old_state = TextBlockState.from_item(sel_item)
@@ -519,6 +525,14 @@ class EventHandler:
             if self.dragged_item:
                 self.dragged_item = None
 
+            command, self._perspective_command = self._perspective_command, None
+            if command is not None:
+                # The box did not move; its corners did. Undone through the
+                # item's attributes, which re-apply the quad.
+                sel_item.old_state = None
+                if command.old_dict.get('quad') != getattr(sel_item, 'quad', None):
+                    command.finalize_new_state()
+                    self.viewer.command_emitted.emit(command)
             if isinstance(sel_item, TextBlockItem) and sel_item.old_state:
                 new_state = TextBlockState.from_item(sel_item)
                 if new_state != sel_item.old_state:

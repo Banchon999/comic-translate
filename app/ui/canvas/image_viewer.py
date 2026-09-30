@@ -489,6 +489,7 @@ class ImageViewer(QGraphicsView):
         )
         item.set_curvature(properties.curvature)
         item.set_stroke_layers(getattr(properties, 'stroke_layers', None))
+        item.set_quad(getattr(properties, 'quad', None))
 
         # Stable identity: keep the properties' id (load, undo/redo, page
         # reload, webtoon merge), otherwise mint one for a brand-new item.

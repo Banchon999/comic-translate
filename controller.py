@@ -295,6 +295,8 @@ class ComicTranslate(ComicTranslateUI):
         self.shadow_blur_dropdown.currentTextChanged.connect(self.text_ctrl.apply_shadow_settings)
         self.shadow_opacity_dropdown.currentTextChanged.connect(self.text_ctrl.apply_shadow_settings)
         self.stroke_layers_button.clicked.connect(self.text_ctrl.edit_stroke_layers)
+        self.perspective_button.toggled.connect(self.text_ctrl.toggle_perspective)
+        self.reset_transform_button.clicked.connect(self.text_ctrl.reset_perspective)
         self.gradient_checkbox.stateChanged.connect(self.text_ctrl.apply_gradient_settings)
         self.gradient_color_button.clicked.connect(self.text_ctrl.on_gradient_color_change)
         self.gradient_angle_dropdown.currentTextChanged.connect(self.text_ctrl.apply_gradient_settings)

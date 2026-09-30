@@ -735,6 +735,22 @@ class TextController:
             self.main.tr("+ Strokes") if not count else self.main.tr("Strokes: {0}").format(count)
         )
 
+    def toggle_perspective(self, checked=False):
+        """Corner handles move corners (perspective) instead of resizing."""
+        TextBlockItem.perspective_editing = bool(checked)
+        item = self.main.curr_tblock_item
+        if item:
+            item.update()
+
+    def reset_perspective(self, *_):
+        item = self.main.curr_tblock_item
+        if not item or not getattr(item, 'quad', None):
+            return
+        command = TextFormatCommand(self.main.image_viewer, item)
+        item.set_quad(None)
+        command.finalize_new_state()
+        self.main.push_command(command)
+
     def apply_gradient_settings(self, *_):
         if not self.main.curr_tblock_item:
             return

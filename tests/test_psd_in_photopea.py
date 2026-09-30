@@ -333,3 +333,41 @@ def test_photopea_shows_stacked_strokes_and_a_bent_rich_range(tmp_path, sandbox_
     assert result.returncode == 0, (
         "Photopea did not render the stroked text as ComicTranslate does:\n" + result.stdout + result.stderr
     )
+
+
+def test_photopea_shows_perspective_text(tmp_path, sandbox_dir, qapp):
+    """A four-corner perspective lives in the type layer's cached raster; the
+    text stays editable. The composite must match the app's flattened render."""
+    art = np.full((HEIGHT, WIDTH, 3), 225, dtype=np.uint8)
+    art[150:220, 40:280] = (40, 70, 190)
+    page = psd_exporter.PsdPageData(
+        file_path="006.png", rgb_image=art,
+        viewer_state={"text_items_state": [
+            _text("ROAD", 40.0, 30.0, font_size=36.0, width=240.0, height=60.0,
+                  quad=[[0.3, 0.0], [0.7, 0.0], [1.0, 1.0], [0.0, 1.0]]),
+            _text("TILT", 60.0, 150.0, font_size=30.0, text_color="#FFFFFF",
+                  quad=[[0.1, 0.0], [1.1, 0.0], [0.9, 1.0], [-0.1, 1.0]]),
+        ]},
+        patches=[],
+    )
+    psd = Path(psd_exporter.export_psd_pages(str(sandbox_dir), [page], "perspective"))
+    reference = tmp_path / "flat.png"
+    _save_flat(page, reference)
+
+    out = tmp_path / "report-perspective"
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), str(psd), "--out", str(out), "--compare", str(reference)],
+        capture_output=True,
+        text=True,
+        cwd=str(REPO_ROOT),
+    )
+
+    if result.returncode == 2:
+        pytest.skip(f"the harness could not start: {result.stderr.strip()[:200]}")
+
+    if result.returncode != 0 and out.exists():
+        shutil.copytree(out, tmp_path / "failed-report-perspective", dirs_exist_ok=True)
+
+    assert result.returncode == 0, (
+        "Photopea did not render the perspective text as ComicTranslate does:\n" + result.stdout + result.stderr
+    )

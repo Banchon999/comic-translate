@@ -140,6 +140,35 @@ def paint_handles(painter: QPainter, rect: QRectF, scale: float) -> None:
     painter.restore()
 
 
+def paint_handles_projected(painter: QPainter, rect: QRectF, scale: float) -> None:
+    """Draw the handles where `rect`'s handles land under the painter's
+    transform, as screen-aligned squares.
+
+    For an item under a perspective transform: drawn in its own coordinates
+    the squares would be stretched into trapezoids along with the text, and a
+    handle has to look the same wherever it is.
+    """
+    if scale <= 0 or rect.isEmpty():
+        return
+    side = _hit_side(rect, scale) * (HANDLE_PX / HANDLE_HIT_PX)
+    inset = rect.adjusted(side / 2, side / 2, -side / 2, -side / 2)
+    if inset.width() <= 0 or inset.height() <= 0:
+        inset = rect
+    world = painter.worldTransform()
+    centres = [world.map(centre) for centre in handle_centres(inset).values()]
+
+    painter.save()
+    painter.resetTransform()
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    pen = QPen(HANDLE_BORDER)
+    pen.setWidthF(HANDLE_BORDER_PX)
+    painter.setPen(pen)
+    painter.setBrush(HANDLE_FILL)
+    for centre in centres:
+        painter.drawRect(_square(centre, HANDLE_PX))
+    painter.restore()
+
+
 def item_view_scale(item, option=None, painter: QPainter | None = None) -> float:
     """The item's local-to-screen scale factor.
 
