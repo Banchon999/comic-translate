@@ -164,3 +164,49 @@ def quad_is_convex(quad) -> bool:
             return False
         signs.append(cross > 0)
     return all(signs) or not any(signs)
+
+
+#: The warp styles besides Arc, which bends the baseline round a circle and
+#: places each glyph on it (arc_placements). These move points instead: every
+#: point of every glyph outline is shifted by warp_offset.
+WARP_STYLES = ("arch", "bulge", "flag", "wave", "rise")
+
+
+def warp_offset(style: str, bend: float, u: float, v: float) -> float:
+    """Vertical shift of a point, as a fraction of the box height.
+
+    `u` and `v` are the point's position across and down the box (0..1),
+    `bend` is -1..1 with 0 the identity; positive bends upward. Only vertical
+    shifts: a horizontal one would squeeze letters into their neighbours.
+
+    - arch: the block curves along a half sine, top and bottom together,
+      centred so the ends dip as much as the middle rises on average.
+    - bulge: the top rises and the bottom sinks in the middle — it swells.
+    - flag: one full wave across, like cloth.
+    - wave: two waves across, the bottom trailing the top by a quarter wave.
+    - rise: an S from low on the left to high on the right.
+    """
+    b = max(-1.0, min(1.0, float(bend)))
+    if not b:
+        return 0.0
+    if style == "arch":
+        # Centred on its mean (2/pi), so the word curves about where it sat
+        # instead of the whole block rising out of its box.
+        return -0.5 * b * (math.sin(math.pi * u) - 2.0 / math.pi)
+    if style == "bulge":
+        return -0.5 * b * math.sin(math.pi * u) * (1.0 - 2.0 * v)
+    if style == "flag":
+        return -0.3 * b * math.sin(2.0 * math.pi * u)
+    if style == "wave":
+        return -0.2 * b * math.sin(4.0 * math.pi * u + 0.5 * math.pi * v)
+    if style == "rise":
+        return -0.5 * b * math.sin(math.pi * (u - 0.5))
+    return 0.0
+
+
+def warp_extent(style: str, bend: float) -> float:
+    """The largest shift the warp makes anywhere in the box, as a height fraction."""
+    if style not in WARP_STYLES or not bend:
+        return 0.0
+    samples = [i / 64.0 for i in range(65)]
+    return max(abs(warp_offset(style, bend, u, v)) for u in samples for v in (0.0, 0.5, 1.0))

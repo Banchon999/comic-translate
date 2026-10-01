@@ -85,74 +85,74 @@
 <context>
     <name>ComicTranslate</name>
     <message>
-        <location filename="../../controller.py" line="349"/>
+        <location filename="../../controller.py" line="350"/>
         <source>Open Folder</source>
         <translation>เปิดโฟลเดอร์</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="350"/>
+        <location filename="../../controller.py" line="351"/>
         <source>No supported images were found in the selected folder.</source>
         <translation>ไม่พบรูปภาพที่รองรับในโฟลเดอร์ที่เลือก</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="569"/>
+        <location filename="../../controller.py" line="570"/>
         <source>Glossary: {0}</source>
         <translation>Glossary: {0}</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="571"/>
+        <location filename="../../controller.py" line="572"/>
         <source>Style: {0}</source>
         <translation>สไตล์: {0}</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="644"/>
+        <location filename="../../controller.py" line="645"/>
         <source>Remove this font from favourites</source>
         <translation>นำฟอนต์นี้ออกจากรายการโปรด</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="645"/>
+        <location filename="../../controller.py" line="646"/>
         <source>Add this font to favourites</source>
         <translation>เพิ่มฟอนต์นี้ในรายการโปรด</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="659"/>
+        <location filename="../../controller.py" line="660"/>
         <source>No favourite fonts yet</source>
         <translation>ยังไม่มีฟอนต์โปรด</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="824"/>
-        <location filename="../../controller.py" line="834"/>
+        <location filename="../../controller.py" line="825"/>
+        <location filename="../../controller.py" line="835"/>
         <source>Error</source>
         <translation>ข้อผิดพลาด</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="1083"/>
-        <location filename="../../controller.py" line="1094"/>
+        <location filename="../../controller.py" line="1084"/>
+        <location filename="../../controller.py" line="1095"/>
         <source>Downloading model file: {filename}</source>
         <translation>กำลังดาวน์โหลดไฟล์โมเดล: {filename}</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="1125"/>
+        <location filename="../../controller.py" line="1126"/>
         <source>Unsaved Changes</source>
         <translation>มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="1126"/>
+        <location filename="../../controller.py" line="1127"/>
         <source>Save changes to this file?</source>
         <translation>บันทึกการเปลี่ยนแปลงของไฟล์นี้หรือไม่?</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="1127"/>
+        <location filename="../../controller.py" line="1128"/>
         <source>Save</source>
         <translation>บันทึก</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="1128"/>
+        <location filename="../../controller.py" line="1129"/>
         <source>Don&apos;t Save</source>
         <translation>ไม่บันทึก</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="1129"/>
+        <location filename="../../controller.py" line="1130"/>
         <source>Cancel</source>
         <translation>ยกเลิก</translation>
     </message>
@@ -1736,12 +1736,12 @@ Open Batch Report to see all skipped images and reasons.</source>
         <translation>ตัวแปล</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="1048"/>
+        <location filename="../../controller.py" line="1049"/>
         <source>Processing:</source>
         <translation>กำลังประมวลผล:</translation>
     </message>
     <message>
-        <location filename="../../controller.py" line="1051"/>
+        <location filename="../../controller.py" line="1052"/>
         <source>Archiving:</source>
         <translation>กำลังบีบอัด:</translation>
     </message>
@@ -3463,7 +3463,7 @@ then do inpainting on the resized image.</source>
         <translation type="vanished">แสดง/ซ่อนแผ่นปะจากการเติมภาพ (บริเวณที่ลบข้อความแล้ว)</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="609"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="619"/>
         <source>Text</source>
         <translation>ข้อความ</translation>
     </message>
@@ -3670,76 +3670,111 @@ then do inpainting on the resized image.</source>
         <translation>ลบมุมมองและการเอียงออกจากข้อความที่เลือก</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="443"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="426"/>
+        <source>Warp Style</source>
+        <translation>รูปแบบการบิด</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="428"/>
+        <source>Arc</source>
+        <translation>โค้ง</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="428"/>
+        <source>Arch</source>
+        <translation>ซุ้ม</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="428"/>
+        <source>Bulge</source>
+        <translation>โป่ง</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="429"/>
+        <source>Flag</source>
+        <translation>ธง</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="429"/>
+        <source>Wave</source>
+        <translation>คลื่น</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="429"/>
+        <source>Rise</source>
+        <translation>ลาดขึ้น</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="453"/>
         <source>Pan Image</source>
         <translation>เลื่อนภาพ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="447"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="457"/>
         <source>Set for all</source>
         <translation>ใช้กับทุกหน้า</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="449"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="459"/>
         <source>Sets the Source and Target Language on the current page for all pages</source>
         <translation>ตั้งภาษาต้นทางและปลายทางของหน้าปัจจุบันให้กับทุกหน้า</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="454"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="464"/>
         <source>Draw or Select Text Boxes</source>
         <translation>วาดหรือเลือกกล่องข้อความ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="460"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="470"/>
         <source>Type your own text: click on the page to place a text box and start typing</source>
         <translation>พิมพ์ข้อความเอง: คลิกบนหน้าเพื่อวางกล่องข้อความแล้วเริ่มพิมพ์ได้ทันที</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="466"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="476"/>
         <source>Delete Selected Box</source>
         <translation>ลบกล่องที่เลือก</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="469"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="479"/>
         <source>Remove all the Boxes on the Image</source>
         <translation>ลบกล่องทั้งหมดบนภาพ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="474"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="484"/>
         <source>Draws all the Text Blocks in the existing Text Block List
 back on the Image (for further editing)</source>
         <translation>วาดกล่องข้อความทั้งหมดในรายการกลับลงบนภาพ
 (เพื่อแก้ไขต่อ)</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="481"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="491"/>
         <source>Reduce the size of all blocks</source>
         <translation>ลดขนาดกล่องทั้งหมด</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="492"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="502"/>
         <source>Increase the size of all blocks</source>
         <translation>เพิ่มขนาดกล่องทั้งหมด</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="496"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="506"/>
         <source>Draw Brush Strokes for Cleaning Image</source>
         <translation>วาดเส้นแปรงเพื่อลบข้อความออกจากภาพ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="501"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="511"/>
         <source>Erase Brush Strokes</source>
         <translation>ลบเส้นแปรง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="507"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="517"/>
         <source>Select a whole region with one click — the inside of a bubble, a panel gutter, a flat area behind a sound effect.
 Hold Ctrl to take every region of that colour on the page at once.</source>
         <translation>เลือกทั้งพื้นที่ด้วยคลิกเดียว — ในลูกโป่งคำพูด ช่องว่างระหว่างช่อง พื้นเรียบๆ หลังเสียงเอฟเฟกต์
 กด Ctrl ค้างเพื่อเลือกทุกพื้นที่ที่สีเดียวกันทั้งหน้าพร้อมกัน</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="516"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="526"/>
         <source>Draw around an irregular shape a round brush cannot follow.
 Drag to trace it freehand, or click corner to corner for straight edges.
 Double-click or press Enter to close it; Escape to start over.</source>
@@ -3748,32 +3783,32 @@ Double-click or press Enter to close it; Escape to start over.</source>
 ดับเบิลคลิกหรือกด Enter เพื่อปิดรูป กด Escape เพื่อเริ่มใหม่</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="524"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="534"/>
         <source>Remove all the brush strokes on the Image</source>
         <translation>ลบเส้นแปรงทั้งหมดบนภาพ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="531"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="541"/>
         <source>Brush/Eraser Size Slider</source>
         <translation>แถบปรับขนาดแปรง/ยางลบ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="564"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="574"/>
         <source>Box size</source>
         <translation>ขนาดกล่อง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="571"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="581"/>
         <source>Brush size</source>
         <translation>ขนาดแปรง</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="612"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="622"/>
         <source>Layers</source>
         <translation>เลเยอร์</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/builders/workspace.py" line="613"/>
+        <location filename="../../app/ui/main_window/builders/workspace.py" line="623"/>
         <source>Glossary</source>
         <translation>คลังคำศัพท์</translation>
     </message>
@@ -4359,12 +4394,12 @@ It may have been moved, renamed, or deleted.
         <translation>อังกฤษ</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/text.py" line="735"/>
+        <location filename="../../app/controllers/text.py" line="736"/>
         <source>+ Strokes</source>
         <translation>+ เส้นขอบ</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/text.py" line="735"/>
+        <location filename="../../app/controllers/text.py" line="736"/>
         <source>Strokes: {0}</source>
         <translation>เส้นขอบ: {0} ชั้น</translation>
     </message>

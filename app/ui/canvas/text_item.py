@@ -20,6 +20,7 @@ from core.text_style import StrokeLayer, stroke_layers_from, stroke_reaches
 from modules.rendering.text_effects import (
     arc_bulge, arc_placements, gradient_line,
     normalise_quad, quad_corner_from_point, quad_is_convex, quad_points,
+    WARP_STYLES, warp_extent, warp_offset,
 )
 
 
@@ -110,6 +111,10 @@ class TextBlockItem(QGraphicsTextItem):
         self.stroke_layers: list[StrokeLayer] = []
         # Perspective: the box's corners as fractions of it, or None (flat).
         self.quad = None
+        # Point warp (text_effects.WARP_STYLES) and its bend, -1..1. Arc is
+        # the separate `curvature`, which places glyphs rather than points.
+        self.warp_style = ""
+        self.warp_bend = 0.0
         self._perspective_last = None
         self._applying_gradient = False
         self._curved_bulge = None
@@ -616,6 +621,120 @@ class TextBlockItem(QGraphicsTextItem):
             self.apply_gradient()
         self.update()
 
+    # ------------------------------------------------------------------
+    # Warp
+    # ------------------------------------------------------------------
+
+    def set_warp(self, style: str, bend: float):
+        """Warp the lettering: one of WARP_STYLES, bent by -1..1 (0 = none)."""
+        style = style if style in WARP_STYLES else ""
+        bend = max(-1.0, min(1.0, float(bend or 0.0)))
+        if not style:
+            bend = 0.0
+        if (style, bend) == (self.warp_style, self.warp_bend):
+            return
+        self.prepareGeometryChange()
+        self.warp_style, self.warp_bend = style, bend
+        self.update()
+
+    def warp_scale(self) -> float:
+        """Pixels per unit of warp shift: the box height, or 30% of its width
+        when that is larger — a one-line caption is wide and short, and a bend
+        measured against its height alone would barely show."""
+        rect = QGraphicsTextItem.boundingRect(self)
+        return max(rect.height(), 0.3 * rect.width())
+
+    def is_warped(self) -> bool:
+        return bool(getattr(self, 'warp_style', '') and getattr(self, 'warp_bend', 0.0)) and not self.vertical
+
+    def document_glyph_runs(self) -> list:
+        """(path, brush) per format run of the laid-out document, item coords.
+
+        brush is None where the run has no solid colour of its own (the item's
+        fill applies). The same glyphs Qt draws, so wrapping, alignment and
+        per-range fonts carry over into whatever the paths are then mapped by.
+        """
+        runs = []
+        block = self.document().firstBlock()
+        while block.isValid():
+            layout = block.layout()
+            if layout is not None:
+                origin = layout.position()
+                iterator = block.begin()
+                while not iterator.atEnd():
+                    fragment = iterator.fragment()
+                    if fragment.isValid():
+                        brush = fragment.charFormat().foreground()
+                        brush = QBrush(brush) if brush.style() == Qt.BrushStyle.SolidPattern else None
+                        path = QPainterPath()
+                        start = fragment.position() - block.position()
+                        for run in layout.glyphRuns(start, fragment.length()):
+                            raw_font = run.rawFont()
+                            for index, position in zip(run.glyphIndexes(), run.positions()):
+                                glyph = raw_font.pathForGlyph(index)
+                                glyph.translate(origin + position)
+                                path.addPath(glyph)
+                        if not path.isEmpty():
+                            runs.append((path, brush))
+                    iterator += 1
+            block = block.next()
+        return runs
+
+    def _warp_path(self, path: QPainterPath) -> QPainterPath:
+        """Map a path through the warp, point by point.
+
+        Outlines are flattened to polygons and every edge subdivided finely,
+        so a straight stem bends into a smooth curve instead of staying a chord.
+        """
+        rect = self.text_rect()
+        width, height = max(rect.width(), 1e-6), max(rect.height(), 1e-6)
+        scale = self.warp_scale()
+        style, bend = self.warp_style, self.warp_bend
+        step = max(1.0, height / 80.0)
+        out = QPainterPath()
+        out.setFillRule(path.fillRule())
+        for polygon in path.toSubpathPolygons():
+            points = []
+            count = polygon.count()
+            for i in range(count):
+                a = polygon.at(i)
+                b = polygon.at((i + 1) % count) if i + 1 < count else a
+                pieces = max(1, int(math.hypot(b.x() - a.x(), b.y() - a.y()) / step))
+                for k in range(pieces):
+                    t = k / pieces
+                    x = a.x() + (b.x() - a.x()) * t
+                    y = a.y() + (b.y() - a.y()) * t
+                    u = (x - rect.left()) / width
+                    v = (y - rect.top()) / height
+                    points.append(QPointF(x, y + warp_offset(style, bend, u, v) * scale))
+            if points:
+                out.addPolygon(QPolygonF(points))
+                out.closeSubpath()
+        return out
+
+    def paint_warped(self, painter: QPainter):
+        """Draw the warped lettering: strokes from the union, then run fills."""
+        runs = [(self._warp_path(path), brush) for path, brush in self.document_glyph_runs()]
+        if not runs:
+            return
+        union = QPainterPath()
+        for path, _brush in runs:
+            union.addPath(path)
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        for reach, color in self._curved_strokes():
+            pen = QPen(color, reach * 2.0)
+            pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            painter.strokePath(union, pen)
+        if self.gradient_enabled:
+            painter.fillPath(union, self.fill_brush())
+        else:
+            item_fill = self.fill_brush()
+            for path, brush in runs:
+                painter.fillPath(path, brush or item_fill)
+        painter.restore()
+
     def text_rect(self) -> QRectF:
         """The laid-out text's rectangle — the box the user sizes and drags.
 
@@ -633,6 +752,9 @@ class TextBlockItem(QGraphicsTextItem):
         reach = self.stroke_reach() if getattr(self, 'stroke_layers', None) else 0.0
         if reach:
             rect = rect.adjusted(-reach, -reach, reach, reach)
+        if getattr(self, 'warp_style', '') and getattr(self, 'warp_bend', 0.0):
+            shift = warp_extent(self.warp_style, self.warp_bend) * self.warp_scale()
+            rect = rect.adjusted(0, -shift, 0, shift)
         if not getattr(self, 'curvature', 0.0):
             return rect
         bulge = self.curved_bulge()
@@ -1026,6 +1148,14 @@ class TextBlockItem(QGraphicsTextItem):
         option: QStyleOptionGraphicsItem, 
         widget: QWidget = None
     ):
+
+        if self.is_warped() and not self.editing_mode:
+            # Like the curve, a point warp is drawn from mapped glyph paths
+            # and has no Skia equivalent, so it stays on the Qt path.
+            self.paint_warped(painter)
+            if self.selected:
+                self._paint_handles(painter, option)
+            return
 
         if self.curvature:
             self.paint_curved(painter)

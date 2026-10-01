@@ -489,6 +489,7 @@ class ImageViewer(QGraphicsView):
         )
         item.set_curvature(properties.curvature)
         item.set_stroke_layers(getattr(properties, 'stroke_layers', None))
+        item.set_warp(getattr(properties, 'warp_style', ''), getattr(properties, 'warp_bend', 0.0))
         item.set_quad(getattr(properties, 'quad', None))
 
         # Stable identity: keep the properties' id (load, undo/redo, page

@@ -422,8 +422,18 @@ class WorkspaceMixin:
         self.reset_transform_button = MPushButton(self.tr("Reset")).small()
         self.reset_transform_button.setToolTip(self.tr("Remove the perspective and skew from the selected text."))
 
+        self.warp_style_combo = MComboBox().small()
+        self.warp_style_combo.setToolTip(self.tr("Warp Style"))
+        for label, key in (
+            (self.tr("Arc"), "arc"), (self.tr("Arch"), "arch"), (self.tr("Bulge"), "bulge"),
+            (self.tr("Flag"), "flag"), (self.tr("Wave"), "wave"), (self.tr("Rise"), "rise"),
+        ):
+            self.warp_style_combo.addItem(label, key)
+        self.warp_style_combo.setFixedWidth(96)
+
         curve_layout = QtWidgets.QHBoxLayout()
         curve_layout.addWidget(curve_label)
+        curve_layout.addWidget(self.warp_style_combo)
         curve_layout.addWidget(self.curvature_dropdown)
         curve_layout.addWidget(self.perspective_button)
         curve_layout.addWidget(self.reset_transform_button)

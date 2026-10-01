@@ -62,7 +62,7 @@ def _state(**overrides):
     )
     # Keys build_text_item_state does not take ride on the dict afterwards,
     # as they do in a saved project.
-    extra = {key: overrides.pop(key) for key in ("stroke_layers", "curvature", "quad") if key in overrides}
+    extra = {key: overrides.pop(key) for key in ("stroke_layers", "curvature", "quad", "warp_style", "warp_bend") if key in overrides}
     args.update(overrides)
     state = build_text_item_state(**args)
     state.update(extra)
@@ -124,6 +124,9 @@ CASES = {
     "stroke_layers_curved": {"stroke_layers": [{"color": "#ff000000", "width": 4.0}],
                              "curvature": 0.4},
     "perspective": {"quad": [[0.08, 0.0], [0.95, 0.12], [1.0, 0.9], [0.0, 1.0]]},
+    "warp_bulge": {"warp_style": "bulge", "warp_bend": 0.6},
+    "warp_wave_stroked": {"warp_style": "wave", "warp_bend": -0.5,
+                          "stroke_layers": [{"color": "#ff000000", "width": 3.0}]},
     "perspective_rotated": {"quad": [[0.0, 0.1], [1.0, 0.0], [0.9, 1.0], [0.1, 0.95]],
                             "rotation": 10.0, "transform_origin": (110, 35)},
 }
