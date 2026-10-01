@@ -47,7 +47,7 @@ def test_the_window_is_titled_toon_studio(qapp):
 
 
 def test_every_build_names_the_executable_toon_studio():
-    for name in ("build-linux.yml", "build-windows.yml", "build-windows-full.yml", "main full.yml"):
+    for name in ("build-linux.yml", "build-windows.yml", "build-windows-full.yml", "main full.yml", "build-macos-dmg.yml"):
         text = (REPO / ".github" / "workflows" / name).read_text(encoding="utf-8")
         assert "--name ToonStudio" in text, name
         assert "ComicTranslate" not in text, name

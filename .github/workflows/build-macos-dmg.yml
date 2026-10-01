@@ -1,7 +1,22 @@
 name: Build macOS DMG
 
+# Apple Silicon only, macOS 15 or later: PhotoshopAPI and onnxruntime publish
+# no Intel macOS wheels, and PhotoshopAPI's arm64 wheel is built for macOS 15.
+# The app is ad-hoc signed, not notarised (there is no Apple Developer ID), so
+# the first launch has to be allowed in System Settings > Privacy & Security;
+# the release notes say how.
 on:
   workflow_dispatch:
+    inputs:
+      attach_to:
+        description: "Also attach the DMG to this existing release tag (e.g. v3.0.0). Leave empty to only build."
+        required: false
+        default: ""
+  # release.yml builds the release with this same workflow.
+  workflow_call:
+
+permissions:
+  contents: write
 
 jobs:
   build-dmg:
@@ -23,34 +38,107 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Install create-dmg
-        run: brew install create-dmg
-
       - name: Build app with PyInstaller
-        env:
-          MACOSX_DEPLOYMENT_TARGET: '12.0'
-        run: pyinstaller ct-mac.spec
-
-      # Same reason as the other builds: a missing skia is silent, because
-      # core/skia_text.py guards the import and the app falls back to Qt.
-      # Checked before the DMG is packed, against the .app PyInstaller made.
-      - name: Verify the Skia text engine is bundled
         run: |
-          if ! find dist -name 'skia*.so' -print -quit | grep -q .; then
-            echo "skia-python is not in the bundle - the Skia text engine would be unavailable" >&2
+          pyinstaller --noconfirm --clean --windowed \
+            --name ToonStudio \
+            --icon resources/icons/icon.icns \
+            --osx-bundle-identifier com.comiclabs.toonstudio \
+            --add-data "resources:resources" \
+            comic.py
+
+      # PyInstaller writes version 0.0.0 and the bare executable name. Editing
+      # Info.plist breaks the ad-hoc signature PyInstaller applied, and Apple
+      # Silicon refuses to run code whose signature does not match ("is
+      # damaged"), so the bundle is signed again afterwards and verified.
+      - name: Name, version and sign the bundle
+        run: |
+          version=$(python3 -c "import re; print(re.search(r'__version__\s*=\s*\"([^\"]+)\"', open('app/version.py').read()).group(1))")
+          plist=dist/ToonStudio.app/Contents/Info.plist
+          plutil -replace CFBundleName -string "Toon Studio" "$plist"
+          plutil -replace CFBundleDisplayName -string "Toon Studio" "$plist"
+          plutil -replace CFBundleShortVersionString -string "$version" "$plist"
+          plutil -replace CFBundleVersion -string "$version" "$plist"
+          plutil -replace LSMinimumSystemVersion -string "15.0" "$plist"
+          plutil -replace NSHighResolutionCapable -bool true "$plist"
+          codesign --force --deep --sign - dist/ToonStudio.app
+          codesign --verify --deep --strict --verbose=2 dist/ToonStudio.app
+          plutil -p "$plist"
+
+      - name: Smoke test bundle
+        run: |
+          exe=dist/ToonStudio.app/Contents/MacOS/ToonStudio
+          "$exe" &
+          pid=$!
+          sleep 20
+          if ! kill -0 "$pid" 2>/dev/null; then
+            rc=0; wait "$pid" || rc=$?
+            echo "::error::App exited early with status $rc"
+            cat "$HOME/Library/Application Support/"*/logs/* 2>/dev/null || true
             exit 1
           fi
-          echo "Skia bundled: $(find dist -name 'skia*.so' -print -quit)"
+          kill "$pid"
+          echo "Smoke test passed"
 
+      # A missing skia is silent by design (core/skia_text.py guards the import
+      # and the app falls back to Qt), and a present one can still fault
+      # natively, so both the file and the runtime probe are checked.
+      - name: Verify the Skia text engine is bundled
+        run: |
+          if ! find dist/ToonStudio.app -name 'skia*.so' -print -quit | grep -q .; then
+            echo "::error::skia-python is not in the bundle - the Skia text engine would be unavailable"
+            exit 1
+          fi
+          echo "Skia bundled: $(find dist/ToonStudio.app -name 'skia*.so' -print -quit)"
+          dist/ToonStudio.app/Contents/MacOS/ToonStudio --skia-self-test
+          echo "Skia runtime self-test passed in the frozen bundle"
+
+      # hdiutil ships with macOS, so the DMG needs nothing from Homebrew. The
+      # bundle is copied with ditto, which keeps the symlinks PyInstaller lays
+      # out inside it (cp -R can follow them and break the signature).
       - name: Build DMG
         run: |
-          chmod +x builddmg.sh
-          ./builddmg.sh
+          stage=$(mktemp -d)
+          ditto dist/ToonStudio.app "$stage/Toon Studio.app"
+          ln -s /Applications "$stage/Applications"
+          hdiutil create -volname "Toon Studio" -srcfolder "$stage" -fs HFS+ \
+            -format UDZO -ov dist/ToonStudio-macOS-arm64.dmg
+          hdiutil verify dist/ToonStudio-macOS-arm64.dmg
+
+      # What users get is the DMG, not dist/: mount it and run the copy inside.
+      - name: Test the app inside the DMG
+        run: |
+          mount=$(mktemp -d)
+          hdiutil attach -nobrowse -readonly -mountpoint "$mount" dist/ToonStudio-macOS-arm64.dmg
+          ls -la "$mount"
+          test -L "$mount/Applications"
+          codesign --verify --deep --strict "$mount/Toon Studio.app"
+          "$mount/Toon Studio.app/Contents/MacOS/ToonStudio" --skia-self-test
+          hdiutil detach "$mount"
+          ls -lh dist/ToonStudio-macOS-arm64.dmg
 
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v6
         with:
-          name: Comic-Translate-macOS
-          path: "dist/Comic Translate.dmg"
+          name: ToonStudio-macOS
+          path: dist/ToonStudio-macOS-arm64.dmg
           if-no-files-found: error
           retention-days: 30
+
+      # For a release that went out before the DMG existed: run this workflow
+      # by hand with its tag. The notes are refreshed from the committed file
+      # so the release page describes the download it now carries.
+      - name: Attach to an existing release
+        if: github.event_name == 'workflow_dispatch' && inputs.attach_to != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.attach_to }}
+        run: |
+          gh release view "$TAG" >/dev/null
+          gh release upload "$TAG" dist/ToonStudio-macOS-arm64.dmg --clobber
+          notes=".github/release-notes/${TAG}.md"
+          if [ -s "$notes" ]; then
+            gh release edit "$TAG" --notes-file "$notes"
+          fi
+          gh release view "$TAG" --json assets --jq '.assets[].name'
