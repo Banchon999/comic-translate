@@ -30,7 +30,7 @@ def test_the_version_is_a_plain_release_number():
 def test_every_workflow_the_release_calls_can_be_called():
     release = (WORKFLOWS / "release.yml").read_text(encoding="utf-8")
     called = re.findall(r"uses:\s*\./\.github/workflows/([\w.-]+\.yml)", release)
-    assert set(called) == {"test.yml", "build-windows.yml", "build-linux.yml"}
+    assert set(called) == {"test.yml", "build-windows.yml", "build-linux.yml", "build-macos-dmg.yml"}
     for name in called:
         text = (WORKFLOWS / name).read_text(encoding="utf-8")
         assert re.search(r"^\s+workflow_call:", text, re.M), f"{name} cannot be called by release.yml"
@@ -42,11 +42,11 @@ def test_the_release_publishes_exactly_what_the_builds_upload():
     release = (WORKFLOWS / "release.yml").read_text(encoding="utf-8")
     published = set(re.findall(r"dist/(ToonStudio-[\w.-]+)", release))
     built = set()
-    for name in ("build-windows.yml", "build-linux.yml"):
+    for name in ("build-windows.yml", "build-linux.yml", "build-macos-dmg.yml"):
         text = (WORKFLOWS / name).read_text(encoding="utf-8")
         upload = text[text.index("upload-artifact"):]
         built |= set(re.findall(r"path:\s*dist/(ToonStudio-[\w.-]+)", upload))
-    assert published == built and len(built) == 2
+    assert published == built and len(built) == 3
 
 
 def test_the_release_runs_on_a_version_tag_or_by_hand_never_on_its_own():
@@ -73,3 +73,19 @@ def test_a_release_does_not_share_main_ci_concurrency_group():
     release run from main and main's own CI would cancel each other."""
     tests = (WORKFLOWS / "test.yml").read_text(encoding="utf-8")
     assert "group: tests-${{ github.workflow }}-" in tests
+
+
+def test_the_dmg_is_signed_after_its_plist_is_edited_and_tested_as_shipped():
+    """Editing Info.plist breaks PyInstaller's ad-hoc signature, and Apple
+    Silicon will not run code whose signature does not match; and what users
+    get is the DMG, so the copy inside it is what has to start."""
+    text = (WORKFLOWS / "build-macos-dmg.yml").read_text(encoding="utf-8")
+    plist = text.index("plutil -replace CFBundleShortVersionString")
+    sign = text.index("codesign --force --deep --sign -")
+    assert plist < sign < text.index("codesign --verify")
+    dmg = text.index("hdiutil create")
+    mounted = text.index("hdiutil attach")
+    assert dmg < mounted < text.index('"$mount/Toon Studio.app/Contents/MacOS/ToonStudio" --skia-self-test')
+    assert 'ln -s /Applications "$stage/Applications"' in text
+    # The release attaches the DMG; an older release gets it by hand.
+    assert "gh release upload \"$TAG\" dist/ToonStudio-macOS-arm64.dmg" in text

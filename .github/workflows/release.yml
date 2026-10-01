@@ -1,9 +1,9 @@
 name: Release
 
-# Publishes a commit as a GitHub Release: the test suite, then the Windows and
-# Linux builds (the very workflows behind the manual "Run workflow" buttons),
-# then one release carrying both archives and the notes written for it in
-# .github/release-notes/vX.Y.Z.md.
+# Publishes a commit as a GitHub Release: the test suite, then the Windows,
+# Linux and macOS builds (the very workflows behind the manual "Run workflow"
+# buttons), then one release carrying all three downloads and the notes
+# written for it in .github/release-notes/vX.Y.Z.md.
 #
 # Two ways to start it:
 #   - push a tag vX.Y.Z — the tag must match app/version.py;
@@ -14,9 +14,8 @@ name: Release
 # checker and the release page agree, and the notes file must exist, so a
 # release never goes out with an empty description.
 #
-# The PyTorch "full" Windows build and the macOS DMG are not part of it: the
-# first is several gigabytes (GitHub caps a release asset at 2 GB) and the
-# second has not been verified since the rename to Toon Studio.
+# The PyTorch "full" Windows build is not part of it: it is several gigabytes,
+# and GitHub caps a release asset at 2 GB.
 on:
   push:
     tags: ['v*']
@@ -73,8 +72,12 @@ jobs:
     needs: tests
     uses: ./.github/workflows/build-linux.yml
 
+  macos:
+    needs: tests
+    uses: ./.github/workflows/build-macos-dmg.yml
+
   publish:
-    needs: [check, windows, linux]
+    needs: [check, windows, linux, macos]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -98,4 +101,5 @@ jobs:
           files: |
             dist/ToonStudio-Windows-x86_64.zip
             dist/ToonStudio-Linux-x86_64.tar.gz
+            dist/ToonStudio-macOS-arm64.dmg
           fail_on_unmatched_files: true

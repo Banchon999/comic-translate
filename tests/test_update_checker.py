@@ -135,6 +135,7 @@ def _published_assets():
 @pytest.mark.parametrize("system, expected", [
     ("Windows", "ToonStudio-Windows-x86_64.zip"),
     ("Linux", "ToonStudio-Linux-x86_64.tar.gz"),
+    ("Darwin", "ToonStudio-macOS-arm64.dmg"),
 ])
 def test_every_os_finds_its_own_archive_in_a_release(system, expected):
     url = update_checker.choose_asset(_published_assets(), system)
@@ -144,8 +145,15 @@ def test_every_os_finds_its_own_archive_in_a_release(system, expected):
 def test_an_installer_wins_over_an_archive_and_macos_needs_one():
     assets = _published_assets() + [{"name": "ToonStudio-Setup.exe", "browser_download_url": "https://dl.invalid/setup"}]
     assert update_checker.choose_asset(assets, "Windows") == "https://dl.invalid/setup"
-    # No DMG in the release: macOS is told there is nothing for it.
-    assert update_checker.choose_asset(_published_assets(), "Darwin") is None
+    # A release without the DMG (v3.0.0 went out without one): macOS is told
+    # there is nothing for it rather than offered another OS's archive.
+    no_dmg = [a for a in _published_assets() if not a["name"].endswith(".dmg")]
+    assert update_checker.choose_asset(no_dmg, "Darwin") is None
+
+
+def test_the_dmg_is_opened_not_revealed():
+    # `open` mounts a DMG and shows its window with the app and Applications.
+    assert update_checker.is_installer("/tmp/ToonStudio-macOS-arm64.dmg", "Darwin")
 
 
 def test_it_asks_this_projects_releases_not_upstreams(qapp, monkeypatch):
