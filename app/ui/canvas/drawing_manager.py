@@ -61,6 +61,16 @@ class DrawingManager:
         # selections existed. The options bar switches it.
         self.region_output = REGION_SELECTION
 
+        # Pixel tools (paint brush, restore eraser, eyedropper). The size is
+        # the brush slider's, in image pixels like the mask brush's pen.
+        self.paint_colour = QColor(255, 255, 255)
+        self.paint_size = 25
+        self.paint_hardness = 0.8
+        self.paint_opacity = 1.0
+        self.paint_pressure_size = True
+        self.paint_pressure_flow = False
+        self.pixel_session = None
+
         # Rectangle marquee in progress (scene coordinates).
         self._marquee_start: QPointF | None = None
         self._marquee_modifiers = Qt.KeyboardModifier.NoModifier
@@ -337,6 +347,55 @@ class DrawingManager:
             self.lasso_preview.setZValue(1.0)
         else:
             self.lasso_preview.setPath(path)
+
+    # Pixel tools: every stroke ends as inpaint patches (see pixel_session).
+
+    def pixel_press(self, scene_pos: QPointF, mode: str, pressure=None) -> bool:
+        from .pixel_session import PixelSession
+
+        self.pixel_cancel()
+        session = PixelSession(
+            self.viewer, mode, self.paint_colour, self.paint_size, self.paint_hardness,
+            self.paint_opacity, self.paint_pressure_size, self.paint_pressure_flow,
+        )
+        if not session.begin(scene_pos, pressure):
+            return False
+        self.pixel_session = session
+        return True
+
+    def pixel_move(self, scene_pos: QPointF, pressure=None) -> None:
+        if self.pixel_session is not None:
+            self.pixel_session.move(scene_pos, pressure)
+
+    def pixel_release(self):
+        """Finish the stroke and announce it; returns the PixelEdit or None."""
+        session, self.pixel_session = self.pixel_session, None
+        if session is None:
+            return None
+        edit = session.finish()
+        if edit is not None:
+            self.viewer.pixel_edit_finished.emit(edit)
+        return edit
+
+    def pixel_cancel(self) -> None:
+        session, self.pixel_session = self.pixel_session, None
+        if session is not None:
+            session.cancel()
+
+    def eyedrop(self, scene_pos: QPointF, size: int = 3):
+        """Sample the page as the user sees it into the paint colour."""
+        from core.paint import sample
+
+        image = self.viewer.get_image_array(include_patches=True)
+        if image is None:
+            return None
+        ox, oy = self._visible_area_offset()
+        rgb = sample(image, scene_pos.x() - ox, scene_pos.y() - oy, size)
+        if rgb is None:
+            return None
+        self.paint_colour = QColor(*rgb)
+        self.viewer.colour_picked.emit(QColor(self.paint_colour))
+        return self.paint_colour
 
     # Rectangle marquee: always a selection, never a mask stroke.
 

@@ -40,6 +40,7 @@ from app.projects.page_state_store import PageStateStore
 from core.layers import DocumentLayers
 from app.controllers.layers import LayerController
 from app.controllers.selection import SelectionController
+from app.controllers.paint import PaintController
 from modules.utils.exceptions import InsufficientCreditsException, ContentFlaggedException
 
 
@@ -142,6 +143,7 @@ class ComicTranslate(ComicTranslateUI):
         self.manual_workflow_ctrl = ManualWorkflowController(self)
         self.layer_ctrl = LayerController(self)
         self.selection_ctrl = SelectionController(self)
+        self.paint_ctrl = PaintController(self)
         self.layers_panel.bind(self.layer_ctrl)
         self.layers_button.toggled.connect(self.show_layers_tab)
         self.editor_status_bar.bind(self)
@@ -259,6 +261,7 @@ class ComicTranslate(ComicTranslateUI):
         self.image_viewer.rectangle_deleted.connect(self.rect_item_ctrl.handle_rectangle_deletion)
         self.image_viewer.command_emitted.connect(self.push_command)
         self.selection_ctrl.connect()
+        self.paint_ctrl.connect()
         self.image_viewer.connect_rect_item.connect(self.rect_item_ctrl.connect_rect_item_signals)
         self.image_viewer.connect_text_item.connect(self.text_ctrl.connect_text_item_signals)
         self.image_viewer.add_text_requested.connect(self.text_ctrl.add_typed_text)

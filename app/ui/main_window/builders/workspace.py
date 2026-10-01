@@ -529,6 +529,26 @@ class WorkspaceMixin:
         self.eraser_button.clicked.connect(self.toggle_eraser_tool)
         self.tool_buttons["eraser"] = self.eraser_button
 
+        self.paint_button = self.create_tool_button(svg="paint-brush.svg", checkable=True)
+        self.paint_button.setToolTip(self.tr(
+            "Paint over the page in a colour — to touch up what cleaning left behind.\n"
+            "Alt+click picks a colour from the page. Stays inside the selection if there is one."
+        ))
+        self.paint_button.clicked.connect(self.toggle_paint_tool)
+        self.tool_buttons["paint"] = self.paint_button
+
+        self.restore_button = self.create_tool_button(svg="restore-brush.svg", checkable=True)
+        self.restore_button.setToolTip(self.tr(
+            "Brush the original page back where cleaning or painting went too far."
+        ))
+        self.restore_button.clicked.connect(self.toggle_restore_tool)
+        self.tool_buttons["restore"] = self.restore_button
+
+        self.eyedropper_button = self.create_tool_button(svg="eyedropper.svg", checkable=True)
+        self.eyedropper_button.setToolTip(self.tr("Pick the paint colour from the page."))
+        self.eyedropper_button.clicked.connect(self.toggle_eyedropper_tool)
+        self.tool_buttons["eyedropper"] = self.eyedropper_button
+
         self.marquee_button = self.create_tool_button(svg="select-rect.svg", checkable=True)
         self.marquee_button.setToolTip(self.tr(
             "Select a rectangle: drag across the area.\n"
@@ -587,6 +607,7 @@ class WorkspaceMixin:
         groups = (
             (self.pan_button, self.box_button, self.type_text_button),
             (self.brush_button, self.eraser_button),
+            (self.paint_button, self.restore_button, self.eyedropper_button),
             (self.marquee_button, self.balloon_button, self.wand_button, self.lasso_button),
             (self.delete_button, self.clear_rectangles_button, self.draw_blklist_blks,
              self.clear_brush_strokes_button),
@@ -637,6 +658,12 @@ class WorkspaceMixin:
         self.brush_eraser_slider.setFixedWidth(180)
         brush_row.addWidget(self.brush_eraser_slider)
         options.addWidget(self.brush_options)
+        self.paint_options = QtWidgets.QWidget()
+        paint_row = QtWidgets.QHBoxLayout(self.paint_options)
+        paint_row.setContentsMargins(0, 0, 0, 0)
+        paint_row.setSpacing(6)
+        self._build_paint_options(paint_row)
+        options.addWidget(self.paint_options)
         self.selection_options = QtWidgets.QWidget()
         selection_row = QtWidgets.QHBoxLayout(self.selection_options)
         selection_row.setContentsMargins(0, 0, 0, 0)
@@ -805,18 +832,56 @@ class WorkspaceMixin:
             options.addWidget(button)
 
     SELECTION_TOOLS = ("marquee", "balloon", "wand", "lasso")
+    PIXEL_TOOLS = ("paint", "restore", "eyedropper")
+
+    def _build_paint_options(self, row: QtWidgets.QHBoxLayout) -> None:
+        """Colour, hardness, opacity and pen pressure for the pixel tools. The
+        size is the brush slider's."""
+        self.paint_colour_button = QtWidgets.QPushButton()
+        self.paint_colour_button.setToolTip(self.tr("Paint colour (Alt+click the page to pick one)"))
+        self.paint_colour_button.setFixedSize(26, 26)
+        row.addWidget(self.paint_colour_button)
+        hardness_label = MLabel(self.tr("Hardness"))
+        hardness_label.setObjectName("toonOptionLabel")
+        row.addWidget(hardness_label)
+        self.paint_hardness_slider = MSlider()
+        self.paint_hardness_slider.setRange(0, 100)
+        self.paint_hardness_slider.setFixedWidth(80)
+        self.paint_hardness_slider.setToolTip(self.tr("Soft edge (left) to hard edge (right)"))
+        row.addWidget(self.paint_hardness_slider)
+        opacity_label = MLabel(self.tr("Opacity"))
+        opacity_label.setObjectName("toonOptionLabel")
+        row.addWidget(opacity_label)
+        self.paint_opacity_spin = QtWidgets.QSpinBox()
+        self.paint_opacity_spin.setRange(1, 100)
+        self.paint_opacity_spin.setSuffix("%")
+        self.paint_opacity_spin.setFixedWidth(64)
+        row.addWidget(self.paint_opacity_spin)
+        pressure_label = MLabel(self.tr("Pen pressure"))
+        pressure_label.setObjectName("toonOptionLabel")
+        row.addWidget(pressure_label)
+        self.paint_pressure_size_check = MCheckBox(self.tr("Size"))
+        self.paint_pressure_size_check.setToolTip(self.tr("A lighter touch paints a thinner line (tablet only)"))
+        self.paint_pressure_flow_check = MCheckBox(self.tr("Flow"))
+        self.paint_pressure_flow_check.setToolTip(self.tr("A lighter touch paints more faintly (tablet only)"))
+        row.addWidget(self.paint_pressure_size_check)
+        row.addWidget(self.paint_pressure_flow_check)
 
     def refresh_options_bar(self, *_args) -> None:
         """Show the options that belong to the active tool."""
         viewer = getattr(self, "image_viewer", None)
         tool = getattr(viewer, "current_tool", None)
         has_selection = viewer is not None and not viewer.selection.is_empty()
-        show_selection = tool in self.SELECTION_TOOLS or has_selection
+        show_paint = tool in self.PIXEL_TOOLS
+        show_selection = not show_paint and (tool in self.SELECTION_TOOLS or has_selection)
+        self.paint_options.setVisible(show_paint)
         self.selection_options.setVisible(show_selection)
-        self.brush_options.setVisible(tool in ("brush", "eraser") or not show_selection)
+        self.brush_options.setVisible(
+            tool in ("brush", "eraser", "paint", "restore") or not (show_selection or show_paint)
+        )
         # The selection row alone nearly fills the canvas column (in Thai);
-        # box sizing is a detection-stage action, not a selection one.
-        self.box_options.setVisible(not show_selection)
+        # box sizing is a detection-stage action, not a selection or paint one.
+        self.box_options.setVisible(not (show_selection or show_paint))
 
     def show_layers_tab(self, show: bool) -> None:
         """The layers button: open the Layers tab, or go back to Text."""

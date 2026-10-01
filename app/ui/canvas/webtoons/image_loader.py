@@ -544,7 +544,11 @@ class LazyImageLoader:
             
             page_scene_bounds = QRectF(page_scene_left, page_scene_top, pixmap.width(), page_height)
             
-            for item in self._scene.items():
+            # Bottom-up, as the scene draws them: items() lists the topmost
+            # first, and compositing in that order let an older patch cover a
+            # newer one wherever they overlap — the screen showed the newer
+            # one while OCR, inpainting and the pixel tools read the older.
+            for item in self._scene.items(Qt.SortOrder.AscendingOrder):
                 if isinstance(item, QGraphicsPixmapItem) and item != page_item:
                     # Check if this is a patch item (has the hash key data)
                     if item.data(0) is not None:  # HASH_KEY = 0 from PatchCommandBase
