@@ -1,4 +1,4 @@
-"""A stroke of a pixel tool (paint brush, restore eraser), from press to patch.
+"""A stroke of a pixel tool (paint, restore, AI, clone, heal), from press to patch.
 
 The session reads everything it needs on the press: the page composite as
 the user sees it, the source it paints from (a flat colour, or the raw page for
@@ -27,6 +27,13 @@ PAINT = "paint"
 RESTORE = "restore"
 #: The AI inpaint brush: the stroke is a mask for the inpainter, not paint.
 AI = "aibrush"
+#: The clone stamp paints the page from elsewhere on it; the healing brush
+#: does the same, then takes the tone of the stroke's surroundings.
+CLONE = "clone"
+HEAL = "heal"
+CLONE_MODES = (CLONE, HEAL)
+#: The pixel tools that paint a stroke with the brush (press, drag, release).
+BRUSH_TOOLS = (PAINT, RESTORE, AI, CLONE, HEAL)
 
 #: How strongly the AI brush's preview tints what it covers (the mask
 #: brush's translucent red), so it reads as "to be removed", not as paint.
@@ -81,12 +88,53 @@ class PixelPreviewItem(QGraphicsItem):
         self.update(QRectF(x0, y0, w, h))
 
 
+class CloneSourceMarker(QGraphicsItem):
+    """A crosshair where the clone stamp / healing brush samples from.
+
+    Drawn at a fixed size on screen (it ignores the view's zoom), in two pens
+    so it shows on light and dark artwork alike. Not a layer, not a stroke,
+    never hit by a click: a plain QGraphicsItem with an empty shape, like the
+    stroke preview.
+    """
+
+    RADIUS = 9.0
+
+    def __init__(self):
+        super().__init__()
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations, True)
+        self.setZValue(5.0)
+        self.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+
+    def boundingRect(self) -> QRectF:
+        r = self.RADIUS + 3.0
+        return QRectF(-r, -r, 2 * r, 2 * r)
+
+    def shape(self) -> QPainterPath:
+        return QPainterPath()
+
+    def paint(self, painter, option, widget=None):
+        from PySide6.QtGui import QPen
+
+        r = self.RADIUS
+        for colour, width in ((QColor(255, 255, 255), 3.0), (QColor(0, 0, 0), 1.0)):
+            pen = QPen(colour, width)
+            pen.setCosmetic(True)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawEllipse(QPointF(0, 0), r * 0.6, r * 0.6)
+            painter.drawLine(QPointF(-r, 0), QPointF(r, 0))
+            painter.drawLine(QPointF(0, -r), QPointF(0, r))
+
+
 class PixelSession:
     """One stroke. `begin` → `move`… → `finish` (or `cancel`)."""
 
     def __init__(self, viewer, mode: str, colour: QColor, diameter: float, hardness: float,
-                 opacity: float, pressure_size: bool = False, pressure_flow: bool = False):
+                 opacity: float, pressure_size: bool = False, pressure_flow: bool = False,
+                 clone_offset: tuple[float, float] | None = None):
         self.viewer = viewer
+        # Clone/heal: where the source is relative to the brush, in pixels.
+        self.clone_offset = clone_offset
         self.mode = mode
         self.colour = QColor(colour)
         self.diameter = max(1.0, float(diameter))
@@ -117,10 +165,18 @@ class PixelSession:
             if raw is None or raw.shape[:2] != (height, width):
                 return False
             self.source = raw[..., :3].copy()
+        elif self.mode in CLONE_MODES:
+            if self.clone_offset is None:
+                return False
+            # Sampled from the page as it was at the press, so the stroke
+            # never clones what it has just painted.
+            self.source, self.source_valid = paint.shifted(self.composite, *self.clone_offset)
         else:
             colour = QColor(255, 0, 0) if self.mode == AI else self.colour
             self.source = np.empty_like(self.composite)
             self.source[...] = (colour.red(), colour.green(), colour.blue())
+        if self.mode not in CLONE_MODES:
+            self.source_valid = None
         ox, oy = self.offset
         self.selection_alpha = None
         if not viewer.selection.is_empty():
@@ -159,7 +215,10 @@ class PixelSession:
             self._last = None
             mask = (alpha > 0).astype(np.uint8) * 255
             return PixelEdit(image=self.composite, mask=mask, mappings=self.mappings, mode=self.mode)
-        image = blend(self.composite, self.source, alpha)
+        source = self.source
+        if self.mode == HEAL:
+            source = paint.heal(self.composite, self.source, alpha > 0, valid=self.source_valid)
+        image = blend(self.composite, source, alpha)
         changed = np.any(image != self.composite, axis=2)
         self._last = None
         if not changed.any():
@@ -188,6 +247,9 @@ class PixelSession:
         alpha = self.coverage[region] * opacity
         if self.selection_alpha is not None:
             alpha = alpha * self.selection_alpha[region]
+        if self.source_valid is not None:
+            # Nothing to clone from beyond the page's edge.
+            alpha = alpha * self.source_valid[region]
         return alpha
 
     def _stamp(self, point, pressure) -> None:

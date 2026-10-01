@@ -49,8 +49,8 @@ def win(qapp):
 
 
 def test_the_layout_holds_every_old_widget_in_its_new_place(win):
-    rail_tools = ("pan", "box", "type", "brush", "eraser", "paint", "fill", "aibrush", "restore", "eyedropper",
-                  "marquee", "balloon", "wand", "lasso")
+    rail_tools = ("pan", "box", "type", "brush", "eraser", "paint", "fill", "aibrush", "clone", "heal",
+                  "restore", "eyedropper", "marquee", "balloon", "wand", "lasso")
     def inside(widget, name):
         # Bars group their parts in rows (and the rail scrolls its tools), so
         # ask whether the bar holds the widget, not whether it is the parent.
@@ -214,7 +214,8 @@ def test_the_tool_rail_never_sets_the_window_height(win):
     assert tools.minimumSizeHint().width() <= scroll.viewport().width()
 
 
-@pytest.mark.parametrize("tool", ["wand", "brush", "paint", "fill", "aibrush", "restore", "eyedropper", None])
+@pytest.mark.parametrize("tool", ["wand", "brush", "paint", "fill", "aibrush", "clone", "heal", "restore",
+                                  "eyedropper", None])
 def test_the_options_bar_fits_its_column_for_each_tool(win, tool):
     """Every row the bar shows must fit a 1440 px window without squeezing
     its labels — a Modify button once clipped "Box size" and "Pick into"."""
@@ -238,3 +239,34 @@ def test_the_paint_tools_show_their_options(win):
     assert win.selection_options.isHidden() and win.box_options.isHidden()
     win.set_tool("eyedropper")
     assert not win.paint_options.isHidden() and win.brush_options.isHidden()
+
+
+@pytest.mark.parametrize("tool", ["clone", "paint", "wand"])
+def test_a_narrower_window_shrinks_the_slider_not_the_labels(win, tool):
+    """At 1280 px the canvas column is narrow: the size slider gives way (down
+    to 72 px), while every label keeps its full text."""
+    from PySide6.QtWidgets import QApplication, QLabel
+
+    win.resize(1280, 800)
+    win.show()
+    win.show_main_page()
+    win.set_tool(tool)
+    QApplication.processEvents()
+    bar = win.clean_selection_button
+    while bar.objectName() != "toonOptionsBar":
+        bar = bar.parentWidget()
+    for label in bar.findChildren(QLabel):
+        if label.isVisibleTo(bar):
+            assert label.width() >= label.sizeHint().width(), label.text()
+    assert bar.layout().minimumSize().width() <= bar.width()
+
+
+def test_the_size_slider_takes_its_full_width_when_there_is_room(win):
+    from PySide6.QtWidgets import QApplication
+
+    win.resize(1440, 900)
+    win.show()
+    win.show_main_page()
+    win.set_tool("brush")
+    QApplication.processEvents()
+    assert win.brush_eraser_slider.width() == 180
