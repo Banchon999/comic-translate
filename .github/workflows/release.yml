@@ -1,13 +1,18 @@
 name: Release
 
-# Pushing a tag vX.Y.Z publishes that commit as a GitHub Release: the test
-# suite, then the Windows and Linux builds (the very workflows behind the
-# manual "Run workflow" buttons), then one release carrying both archives and
-# the notes written for it in .github/release-notes/vX.Y.Z.md.
+# Publishes a commit as a GitHub Release: the test suite, then the Windows and
+# Linux builds (the very workflows behind the manual "Run workflow" buttons),
+# then one release carrying both archives and the notes written for it in
+# .github/release-notes/vX.Y.Z.md.
 #
-# The tag must match app/version.py — otherwise About and the update checker
-# report one version while the release page says another — and the notes file
-# must exist, so a release never goes out with an empty description.
+# Two ways to start it:
+#   - push a tag vX.Y.Z — the tag must match app/version.py;
+#   - "Run workflow" on main — the tag is taken from app/version.py and
+#     created with the release, on the commit that was built. A version
+#     whose tag already exists is refused rather than published twice.
+# Either way the version comes from app/version.py, so About, the update
+# checker and the release page agree, and the notes file must exist, so a
+# release never goes out with an empty description.
 #
 # The PyTorch "full" Windows build and the macOS DMG are not part of it: the
 # first is several gigabytes (GitHub caps a release asset at 2 GB) and the
@@ -15,6 +20,7 @@ name: Release
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -22,22 +28,38 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: The tag matches app/version.py and has release notes
+      - name: The version, its tag and its release notes agree
+        id: version
         run: |
           version=$(python3 -c "import re; print(re.search(r'__version__\s*=\s*\"([^\"]+)\"', open('app/version.py').read()).group(1))")
-          if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
-            echo "::error::tag ${GITHUB_REF_NAME} does not match app/version.py (${version})"
-            exit 1
+          tag="v${version}"
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            if [ "${GITHUB_REF_NAME}" != "${tag}" ]; then
+              echo "::error::tag ${GITHUB_REF_NAME} does not match app/version.py (${version})"
+              exit 1
+            fi
+          else
+            if [ "${GITHUB_REF_NAME}" != "main" ]; then
+              echo "::error::run the release from main, not ${GITHUB_REF_NAME}"
+              exit 1
+            fi
+            if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null; then
+              echo "::error::${tag} already exists - bump app/version.py for a new release"
+              exit 1
+            fi
           fi
-          notes=".github/release-notes/${GITHUB_REF_NAME}.md"
+          notes=".github/release-notes/${tag}.md"
           if [ ! -s "$notes" ]; then
             echo "::error::missing release notes: $notes"
             exit 1
           fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
 
   tests:
     needs: check
@@ -52,7 +74,7 @@ jobs:
     uses: ./.github/workflows/build-linux.yml
 
   publish:
-    needs: [windows, linux]
+    needs: [check, windows, linux]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -67,8 +89,12 @@ jobs:
       - name: Publish the release
         uses: softprops/action-gh-release@v2
         with:
-          name: Toon Studio ${{ github.ref_name }}
-          body_path: .github/release-notes/${{ github.ref_name }}.md
+          # On a manual run the tag does not exist yet: the release creates it
+          # on the commit that was tested and built.
+          tag_name: ${{ needs.check.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: Toon Studio ${{ needs.check.outputs.tag }}
+          body_path: .github/release-notes/${{ needs.check.outputs.tag }}.md
           files: |
             dist/ToonStudio-Windows-x86_64.zip
             dist/ToonStudio-Linux-x86_64.tar.gz
