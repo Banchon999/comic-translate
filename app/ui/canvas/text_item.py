@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import QGraphicsTextItem, QGraphicsItem, \
      QApplication, QWidget, QStyleOptionGraphicsItem, QGraphicsDropShadowEffect
 from PySide6.QtGui import QFont, QCursor, QColor, QBrush, QPen, QFontMetricsF, \
-     QLinearGradient, QGradient, QPainterPath, QTransform, \
+     QLinearGradient, QGradient, QPainterPath, QTransform, QPolygonF, \
      QTextCharFormat, QTextBlockFormat, QTextCursor, QPainter
 from PySide6.QtCore import Qt, QRectF, Signal, QPointF
 import math, copy
@@ -10,14 +10,17 @@ from enum import Enum
 from . import handles
 from .text.vertical_layout import VerticalTextDocumentLayout
 from app.ui.qt_values import to_qt_color, to_qt_layout_direction
-from core import text_engine
+from core import text_engine, theme_tokens
 from app.ui.canvas import skia_paint
 # Re-exported: these moved to core so the pipeline can build them without
 # Qt. Same classes, so the project encoder and every existing holder of one
 # are unaffected, and `from .text_item import OutlineInfo` still works.
 from core.text_style import OutlineInfo, OutlineType  # noqa: F401
 from core.text_style import StrokeLayer, stroke_layers_from, stroke_reaches
-from modules.rendering.text_effects import arc_bulge, arc_placements, gradient_line
+from modules.rendering.text_effects import (
+    arc_bulge, arc_placements, gradient_line,
+    normalise_quad, quad_corner_from_point, quad_is_convex, quad_points,
+)
 
 
 @dataclass
@@ -40,7 +43,19 @@ class TextBlockState:
         )
     
 
+# Which quad corners a handle moves in perspective mode: a corner moves itself,
+# an edge moves its two corners together (a skew).
+_PERSPECTIVE_CORNERS = {
+    'top_left': (0,), 'top_right': (1,), 'bottom_right': (2,), 'bottom_left': (3,),
+    'top': (0, 1), 'right': (1, 2), 'bottom': (2, 3), 'left': (3, 0),
+}
+
+
 class TextBlockItem(QGraphicsTextItem):
+    # While on, dragging a handle moves corners of the perspective quad
+    # instead of resizing the box. Set from the toolbar for every item.
+    perspective_editing = False
+
     text_changed = Signal(str)
     item_selected = Signal(object)
     item_deselected = Signal()
@@ -93,6 +108,9 @@ class TextBlockItem(QGraphicsTextItem):
         self.curvature = 0.0
         # Extra strokes outside the outline, innermost first (core.text_style).
         self.stroke_layers: list[StrokeLayer] = []
+        # Perspective: the box's corners as fractions of it, or None (flat).
+        self.quad = None
+        self._perspective_last = None
         self._applying_gradient = False
         self._curved_bulge = None
 
@@ -193,6 +211,81 @@ class TextBlockItem(QGraphicsTextItem):
     def on_document_enlarged(self):
         self.prepareGeometryChange()
         self.setCenterTransform()
+        self.apply_quad()
+
+    # ------------------------------------------------------------------
+    # Perspective
+    # ------------------------------------------------------------------
+
+    def set_quad(self, quad):
+        """Distort the box to four corners given as fractions of it (None = flat).
+
+        A quad that folds or crosses itself is ignored and the current one kept.
+        """
+        quad = normalise_quad(quad)
+        if quad is not None and not quad_is_convex(quad):
+            return
+        self.quad = quad
+        self.apply_quad()
+
+    def apply_quad(self):
+        """Put the item's transform in step with its quad and current box.
+
+        The quad is stored as fractions of the box, so this runs again
+        whenever the box changes size (setTextWidth, text edits, undo) and the
+        distortion keeps its shape. Rotation and scale stay item properties,
+        applied around the transform origin on top of this.
+        """
+        quad = normalise_quad(getattr(self, 'quad', None))
+        if quad is None:
+            if not self.transform().isIdentity():
+                self.setTransform(QTransform())
+            return
+        rect = self.text_rect()
+        if rect.width() <= 0 or rect.height() <= 0:
+            return
+        source = QPolygonF([rect.topLeft(), rect.topRight(), rect.bottomRight(), rect.bottomLeft()])
+        target = QPolygonF([
+            QPointF(x, y) for x, y in quad_points(rect.x(), rect.y(), rect.width(), rect.height(), quad)
+        ])
+        transform = QTransform()
+        # A self-crossing quad has no projective map; keep the last good one.
+        if QTransform.quadToQuad(source, target, transform):
+            self.setTransform(transform)
+
+    def _box_point(self, scene_pos: QPointF) -> QPointF:
+        """A scene point in the box's own coordinates, after the perspective.
+
+        mapFromScene undoes the whole transform, perspective included; mapping
+        the result forward through the perspective alone gives the point in the
+        space the quad's corners live in.
+        """
+        return self.transform().map(self.mapFromScene(scene_pos))
+
+    def drag_perspective(self, scene_pos: QPointF) -> None:
+        """Move the corners under the active handle to follow the cursor."""
+        corners = _PERSPECTIVE_CORNERS.get(self.resize_handle)
+        if not corners:
+            return
+        rect = self.text_rect()
+        if rect.width() <= 0 or rect.height() <= 0:
+            return
+        point = self._box_point(scene_pos)
+        quad = [list(corner) for corner in (normalise_quad(self.quad) or
+                                             ((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)))]
+        if len(corners) == 1:
+            quad[corners[0]] = list(quad_corner_from_point(
+                rect.x(), rect.y(), rect.width(), rect.height(), point.x(), point.y()))
+        else:
+            last = self._perspective_last or point
+            du = (point.x() - last.x()) / rect.width()
+            dv = (point.y() - last.y()) / rect.height()
+            for index in corners:
+                quad[index][0] += du
+                quad[index][1] += dv
+        self._perspective_last = point
+        self.set_quad(quad)
+        self.update()
 
     def _apply_text_direction(self):
         text_option = self.document().defaultTextOption()
@@ -298,6 +391,7 @@ class TextBlockItem(QGraphicsTextItem):
         """
         # The stroke layers came back with __dict__; the repaint rect follows them.
         self.prepareGeometryChange()
+        self.apply_quad()
         self.apply_shadow()
         self.apply_letter_spacing()
 
@@ -744,6 +838,12 @@ class TextBlockItem(QGraphicsTextItem):
             self.font_size = font_size
         self.update_text_format('size', font_size)
 
+    def setTextWidth(self, width):
+        super().setTextWidth(width)
+        # The quad is a fraction of the box, so a new width re-shapes it.
+        if getattr(self, 'quad', None):
+            self.apply_quad()
+
     def update_text_width(self):
         width = self.document().size().width()
         self.setTextWidth(width)
@@ -930,9 +1030,7 @@ class TextBlockItem(QGraphicsTextItem):
         if self.curvature:
             self.paint_curved(painter)
             if self.selected:
-                handles.paint_handles(
-                    painter, self.text_rect(), handles.item_view_scale(self, option, painter)
-                )
+                self._paint_handles(painter, option)
             return
 
         # Skia draws the whole item in one pass — fill, outlines and shadow —
@@ -951,9 +1049,7 @@ class TextBlockItem(QGraphicsTextItem):
             and skia_paint.paint_item(painter, self)
         ):
             if self.selected:
-                handles.paint_handles(
-                    painter, self.text_rect(), handles.item_view_scale(self, option, painter)
-                )
+                self._paint_handles(painter, option)
             return
 
         # Outline pass: draw the glyphs underneath, displaced around a circle, so
@@ -977,9 +1073,24 @@ class TextBlockItem(QGraphicsTextItem):
         super().paint(painter, option, widget)
 
         if self.selected:
-            handles.paint_handles(
-                painter, self.text_rect(), handles.item_view_scale(self, option, painter)
-            )
+            self._paint_handles(painter, option)
+
+    def _paint_handles(self, painter: QPainter, option) -> None:
+        scale = handles.item_view_scale(self, option, painter)
+        if TextBlockItem.perspective_editing:
+            # The box's own outline, drawn before the perspective is applied,
+            # so on screen it is the quad being edited.
+            painter.save()
+            pen = QPen(QColor(theme_tokens.DARK["accent"]), 1.5 / max(scale, 1e-6), Qt.PenStyle.DashLine)
+            pen.setCosmetic(False)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRect(self.text_rect())
+            painter.restore()
+        if self.transform().isAffine():
+            handles.paint_handles(painter, self.text_rect(), scale)
+        else:
+            handles.paint_handles_projected(painter, self.text_rect(), scale)
 
     # Enough displacements that the gap left between neighbours, width*(1-cos(pi/n)),
     # stays under 2% of the outline width — well below a pixel at any usable size.
@@ -1218,6 +1329,8 @@ class TextBlockItem(QGraphicsTextItem):
             self.prepareGeometryChange()
         self.text_changed.emit(new_text)
         self.update_outlines()
+        if self.quad:
+            self.apply_quad()
         if self.gradient_enabled:
             # The gradient spans the laid-out document, so it has to be
             # rebuilt whenever the text that document holds changes size.
@@ -1267,6 +1380,7 @@ class TextBlockItem(QGraphicsTextItem):
     def init_resize(self, scene_pos: QPointF):
         self.resizing = True
         self.resize_start = scene_pos
+        self._perspective_last = self._box_point(scene_pos)
 
     def init_rotation(self, scene_pos):
         self.rotating = True
@@ -1328,6 +1442,9 @@ class TextBlockItem(QGraphicsTextItem):
 
     def resize_item(self, scene_pos: QPointF):
         if not self.resize_start:
+            return
+        if TextBlockItem.perspective_editing:
+            self.drag_perspective(scene_pos)
             return
 
         # Calculate delta from start position in scene coordinates

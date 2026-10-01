@@ -6,6 +6,7 @@ from app.ui.canvas.text_item import OutlineType
 from modules.utils.common_utils import new_object_id
 from core.layers import layer_dict
 from core.text_style import stroke_layers_from, stroke_layers_payload
+from modules.rendering.text_effects import normalise_quad
 from app.ui.canvas.scene_registry import get_item_layer
 
 @dataclass
@@ -49,6 +50,8 @@ class TextItemProperties:
     curvature: float = 0.0
     # Extra strokes outside the outline (core.text_style.StrokeLayer), innermost first.
     stroke_layers: list = field(default_factory=list)
+    # Perspective corners as fractions of the box (TL, TR, BR, BL); None = flat.
+    quad: Optional[tuple] = None
 
     # Advanced properties
     selection_outlines: list = field(default_factory=list)
@@ -145,6 +148,7 @@ class TextItemProperties:
         props.gradient_angle = float(data.get('gradient_angle', 90.0))
         props.curvature = float(data.get('curvature', 0.0))
         props.stroke_layers = stroke_layers_from(data.get('stroke_layers'))
+        props.quad = normalise_quad(data.get('quad'))
 
         # Advanced
         props.selection_outlines = data.get('selection_outlines', [])
@@ -203,6 +207,7 @@ class TextItemProperties:
         props.gradient_angle = getattr(item, 'gradient_angle', 90.0)
         props.curvature = getattr(item, 'curvature', 0.0)
         props.stroke_layers = list(getattr(item, 'stroke_layers', []) or [])
+        props.quad = normalise_quad(getattr(item, 'quad', None))
 
         # Advanced properties
         props.selection_outlines = getattr(item, 'selection_outlines', []).copy()
@@ -249,6 +254,8 @@ class TextItemProperties:
             out['layer'] = self.layer
         if self.stroke_layers:
             out['stroke_layers'] = stroke_layers_payload(self.stroke_layers)
+        if self.quad:
+            out['quad'] = [list(corner) for corner in self.quad]
         return out
 
 

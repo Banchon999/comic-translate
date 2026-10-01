@@ -414,9 +414,19 @@ class WorkspaceMixin:
         effects_settings_layout.addWidget(self.gradient_color_button)
         effects_settings_layout.addWidget(self.gradient_angle_dropdown)
         effects_settings_layout.addStretch()
+        self.perspective_button = MPushButton(self.tr("Perspective")).small()
+        self.perspective_button.setCheckable(True)
+        self.perspective_button.setToolTip(self.tr(
+            "Drag a corner handle to move that corner on its own, or an edge handle to skew."
+        ))
+        self.reset_transform_button = MPushButton(self.tr("Reset")).small()
+        self.reset_transform_button.setToolTip(self.tr("Remove the perspective and skew from the selected text."))
+
         curve_layout = QtWidgets.QHBoxLayout()
         curve_layout.addWidget(curve_label)
         curve_layout.addWidget(self.curvature_dropdown)
+        curve_layout.addWidget(self.perspective_button)
+        curve_layout.addWidget(self.reset_transform_button)
         curve_layout.addStretch()
 
         rendering_divider_top = MDivider()
