@@ -366,7 +366,7 @@ class EventHandler:
             return False
         if sel_item and self.viewer.interaction_manager._in_rotate_ring(sel_item, scene_pos):
             angle = sel_item.rotation()
-            inner_rect = sel_item.boundingRect()
+            inner_rect = self.viewer.interaction_manager._geometry_rect(sel_item)
             outer_rect = inner_rect.adjusted(-self.viewer.interaction_manager.rotate_margin_max, 
                                            -self.viewer.interaction_manager.rotate_margin_max, 
                                            self.viewer.interaction_manager.rotate_margin_max, 
@@ -466,7 +466,7 @@ class EventHandler:
             return True
         
         if self.viewer.interaction_manager._in_rotate_ring(sel_item, scene_pos):
-            outer_rect = sel_item.boundingRect().adjusted(-self.viewer.interaction_manager.rotate_margin_max, 
+            outer_rect = self.viewer.interaction_manager._geometry_rect(sel_item).adjusted(-self.viewer.interaction_manager.rotate_margin_max, 
                                            -self.viewer.interaction_manager.rotate_margin_max, 
                                            self.viewer.interaction_manager.rotate_margin_max, 
                                            self.viewer.interaction_manager.rotate_margin_max)

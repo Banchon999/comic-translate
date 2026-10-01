@@ -60,8 +60,13 @@ def _state(**overrides):
         vertical=False,
         outline=True,
     )
+    # Keys build_text_item_state does not take ride on the dict afterwards,
+    # as they do in a saved project.
+    extra = {key: overrides.pop(key) for key in ("stroke_layers", "curvature") if key in overrides}
     args.update(overrides)
-    return build_text_item_state(**args)
+    state = build_text_item_state(**args)
+    state.update(extra)
+    return state
 
 
 def _render_via_export(state_dict):
@@ -114,6 +119,10 @@ CASES = {
     },
     "vertical_cjk": {"text": "ありがとう", "vertical": True},
     "single_char": {"text": "A"},
+    "stroke_layers": {"stroke_layers": [{"color": "#ff000000", "width": 4.0},
+                                        {"color": "#ffffd400", "width": 3.0}]},
+    "stroke_layers_curved": {"stroke_layers": [{"color": "#ff000000", "width": 4.0}],
+                             "curvature": 0.4},
 }
 
 

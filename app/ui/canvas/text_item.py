@@ -16,6 +16,7 @@ from app.ui.canvas import skia_paint
 # Qt. Same classes, so the project encoder and every existing holder of one
 # are unaffected, and `from .text_item import OutlineInfo` still works.
 from core.text_style import OutlineInfo, OutlineType  # noqa: F401
+from core.text_style import StrokeLayer, stroke_layers_from, stroke_reaches
 from modules.rendering.text_effects import arc_bulge, arc_placements, gradient_line
 
 
@@ -90,6 +91,8 @@ class TextBlockItem(QGraphicsTextItem):
         self.gradient_color = QColor(255, 255, 255)
         self.gradient_angle = 90.0
         self.curvature = 0.0
+        # Extra strokes outside the outline, innermost first (core.text_style).
+        self.stroke_layers: list[StrokeLayer] = []
         self._applying_gradient = False
         self._curved_bulge = None
 
@@ -293,6 +296,8 @@ class TextBlockItem(QGraphicsTextItem):
         a graphics effect and Qt's HTML writer does not emit letter spacing, so both
         have to be put back explicitly.
         """
+        # The stroke layers came back with __dict__; the repaint rect follows them.
+        self.prepareGeometryChange()
         self.apply_shadow()
         self.apply_letter_spacing()
 
@@ -327,6 +332,103 @@ class TextBlockItem(QGraphicsTextItem):
         effect.setOffset(*self.shadow_offset)
         effect.setBlurRadius(self.shadow_blur)
         self.setGraphicsEffect(effect)
+
+    # ------------------------------------------------------------------
+    # Stroke layers
+    # ------------------------------------------------------------------
+
+    def set_stroke_layers(self, layers):
+        """Extra strokes stacked outside the outline, innermost first."""
+        layers = stroke_layers_from(layers)
+        if layers == self.stroke_layers:
+            return
+        # The repaint rect grows with the strokes (see boundingRect).
+        self.prepareGeometryChange()
+        self.stroke_layers = layers
+        self.update()
+
+    def _document_end(self) -> int:
+        return max(0, self.document().characterCount() - 1)
+
+    def _base_stroke_reach(self) -> float:
+        """How far the item-wide outline already reaches; layers start there."""
+        widths = [
+            float(o.width) for o in self.selection_outlines
+            if o.type == OutlineType.Full_Document and o.color
+        ]
+        return max(widths, default=0.0)
+
+    def effective_outlines(self) -> list:
+        """Every outline the renderers draw: the item's own plus its layers.
+
+        A layer is expressed as one more whole-document outline, at the
+        cumulative reach, so both painters — which already draw outlines
+        widest first — stack them with no new drawing code, and the PSD raster
+        and flattened export pick them up for free.
+        """
+        outlines = list(self.selection_outlines)
+        if not self.stroke_layers:
+            return outlines
+        end = self._document_end()
+        reaches = stroke_reaches(self._base_stroke_reach(), self.stroke_layers)
+        for layer, reach in zip(self.stroke_layers, reaches):
+            outlines.append(OutlineInfo(0, end, QColor(layer.color), reach, OutlineType.Full_Document))
+        return outlines
+
+    def document_glyph_path(self) -> QPainterPath:
+        """Every glyph of the laid-out document as one path, in item coordinates.
+
+        Read from each block's own layout, so wrapping, alignment, letter
+        spacing and per-range fonts are exactly what Qt draws.
+        """
+        path = QPainterPath()
+        block = self.document().firstBlock()
+        while block.isValid():
+            layout = block.layout()
+            if layout is not None:
+                origin = layout.position()
+                for run in layout.glyphRuns():
+                    raw_font = run.rawFont()
+                    for index, position in zip(run.glyphIndexes(), run.positions()):
+                        glyph = raw_font.pathForGlyph(index)
+                        glyph.translate(origin + position)
+                        path.addPath(glyph)
+            block = block.next()
+        return path
+
+    def _paint_stroke_layers(self, painter: QPainter) -> bool:
+        """Stroke the layers from the glyph outlines, widest first.
+
+        The flat outline trick — the glyph drawn again at 16 offsets on a
+        circle — only covers the ring at exactly that radius, which is fine
+        for a pixel or two and leaves visible gaps at the widths stacked
+        strokes reach. A real stroke of the glyph path is the true dilation.
+        False when it cannot be done this way (the vertical layout places its
+        glyphs itself, outside the block layouts), so the caller falls back.
+        """
+        if not self.stroke_layers:
+            return True
+        if self.vertical:
+            return False
+        path = self.document_glyph_path()
+        if path.isEmpty():
+            return True
+        reaches = stroke_reaches(self._base_stroke_reach(), self.stroke_layers)
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        for layer, reach in sorted(zip(self.stroke_layers, reaches), key=lambda pair: pair[1], reverse=True):
+            pen = QPen(QColor(layer.color), reach * 2.0)
+            pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            painter.strokePath(path, pen)
+        painter.restore()
+        return True
+
+    def stroke_reach(self) -> float:
+        """The outermost stroke's reach past the glyph edge, 0 without layers."""
+        if not self.stroke_layers:
+            return 0.0
+        return stroke_reaches(self._base_stroke_reach(), self.stroke_layers)[-1]
 
     # ------------------------------------------------------------------
     # Gradient fill
@@ -432,6 +534,11 @@ class TextBlockItem(QGraphicsTextItem):
 
     def boundingRect(self) -> QRectF:
         rect = super().boundingRect()
+        # Stacked strokes reach past the document margin; the item is cached
+        # to this rect, so anything outside it would be clipped off.
+        reach = self.stroke_reach() if getattr(self, 'stroke_layers', None) else 0.0
+        if reach:
+            rect = rect.adjusted(-reach, -reach, reach, reach)
         if not getattr(self, 'curvature', 0.0):
             return rect
         bulge = self.curved_bulge()
@@ -468,48 +575,95 @@ class TextBlockItem(QGraphicsTextItem):
         placements: list
         origin: QPointF
         metrics_height: float
+        # One per character: the run's own font and brush (None = item fill).
+        fonts: list = None
+        brushes: list = None
+
+    def _curved_characters(self) -> list:
+        """The document's characters as lines of (character, font, brush).
+
+        Read run by run from the document, so each character keeps the font,
+        size and colour its range was given — bending the text no longer
+        flattens it to one font and one fill. Letter spacing is taken off the
+        fonts and added to the advances by hand, as the arc maths expects.
+        """
+        base = self.curved_font()
+        lines, current = [], []
+        block = self.document().firstBlock()
+        while block.isValid():
+            iterator = block.begin()
+            while not iterator.atEnd():
+                fragment = iterator.fragment()
+                if fragment.isValid():
+                    char_format = fragment.charFormat()
+                    font = QFont(char_format.font()).resolve(base)
+                    font.setLetterSpacing(QFont.SpacingType.PercentageSpacing, 100.0)
+                    brush = char_format.foreground()
+                    # A gradient left on the document from before it was bent
+                    # is the item-wide fill, which fill_brush() already knows.
+                    if brush.style() != Qt.BrushStyle.SolidPattern:
+                        brush = None
+                    else:
+                        brush = QBrush(brush)
+                    for character in fragment.text():
+                        if character == '\u2028':  # a soft line break inside the block
+                            lines.append(current)
+                            current = []
+                        else:
+                            current.append((character, font, brush))
+                iterator += 1
+            lines.append(current)
+            current = []
+            block = block.next()
+        return lines or [[]]
 
     def curved_lines(self) -> list:
         """One arc per line of text, stacked and centred in the text rect."""
-        font = self.curved_font()
-        metrics = QFontMetricsF(font)
+        base_metrics = QFontMetricsF(self.curved_font())
         rect = self.text_rect()
-        line_height = metrics.height() * float(self.line_spacing or 1.0)
-        lines = self.toPlainText().split('\n')
+        spacing = float(self.line_spacing or 1.0)
 
-        top = rect.center().y() - line_height * len(lines) / 2.0
+        measured = []
+        for characters in self._curved_characters():
+            metrics = [QFontMetricsF(font) for _, font, _ in characters] or [base_metrics]
+            measured.append((
+                characters,
+                max(m.height() for m in metrics),
+                max(m.ascent() for m in metrics),
+            ))
+
+        total = sum(height * spacing for _, height, _ in measured)
+        top = rect.center().y() - total / 2.0
         result = []
-        for index, text in enumerate(lines):
+        for characters, height, ascent in measured:
             advances = [
-                metrics.horizontalAdvance(character) + self.letter_spacing
-                for character in text
+                QFontMetricsF(font).horizontalAdvance(character) + self.letter_spacing
+                for character, font, _ in characters
             ]
             result.append(self.CurvedLine(
-                text=text,
+                text=''.join(character for character, _, _ in characters),
                 advances=advances,
                 placements=arc_placements(advances, self.curvature),
-                origin=QPointF(
-                    rect.center().x(),
-                    top + line_height * index + metrics.ascent(),
-                ),
-                metrics_height=metrics.height(),
+                origin=QPointF(rect.center().x(), top + ascent),
+                metrics_height=height,
+                fonts=[font for _, font, _ in characters],
+                brushes=[brush for _, _, brush in characters],
             ))
+            top += height * spacing
         return result
 
-    def curved_path(self) -> QPainterPath:
-        """Every curved glyph as one path, in the item's own coordinates.
+    def curved_glyphs(self):
+        """(path, brush) for each visible curved glyph, in item coordinates.
 
-        Turning the glyphs into outlines and baking each one's rotation into
-        the path — rather than rotating the painter and drawing text — is what
-        lets the whole thing be filled in a single pass. A gradient brush
-        resolves against whatever transform the painter is under, so a glyph
-        drawn under its own rotation samples the gradient at its own origin and
-        every letter comes out the same colour.
+        The glyph's rotation is baked into its path rather than applied to
+        the painter: a gradient brush resolves against the painter's current
+        transform, so a glyph drawn under its own rotation would sample the
+        gradient at its own origin and every letter would come out one colour.
         """
-        path = QPainterPath()
-        font = self.curved_font()
         for line in self.curved_lines():
-            for character, advance, placement in zip(line.text, line.advances, line.placements):
+            for character, advance, placement, font, brush in zip(
+                line.text, line.advances, line.placements, line.fonts, line.brushes
+            ):
                 if not character.strip():
                     continue
                 glyph = QPainterPath()
@@ -520,34 +674,68 @@ class TextBlockItem(QGraphicsTextItem):
                     line.origin.y() + placement.y,
                 )
                 transform.rotate(placement.angle)
-                path.addPath(transform.map(glyph))
+                yield transform.map(glyph), brush
+
+    def curved_path(self) -> QPainterPath:
+        """Every curved glyph as one path, in the item's own coordinates."""
+        path = QPainterPath()
+        for glyph, _brush in self.curved_glyphs():
+            path.addPath(glyph)
         return path
+
+    def _curved_strokes(self) -> list:
+        """(reach, color) for the whole-item strokes, widest first."""
+        strokes = [
+            (float(o.width), to_qt_color(o.color))
+            for o in self.effective_outlines()
+            if o.type == OutlineType.Full_Document and o.color and float(o.width) > 0
+        ]
+        if not any(o.type == OutlineType.Full_Document for o in self.selection_outlines):
+            # An item whose outline was never pushed into selection_outlines
+            # still has one; the arc used to draw it from the attributes.
+            if self.outline and self.outline_color and self.outline_width:
+                strokes.append((float(self.outline_width), QColor(self.outline_color)))
+        return sorted(strokes, key=lambda stroke: stroke[0], reverse=True)
 
     def paint_curved(self, painter: QPainter):
         """Draw the text along its arc.
 
         Qt lays a document out on straight lines, so there is no document to
-        draw through here. That costs the per-range character formats — a curved
-        item is one font, one fill, one outline — which is what curved lettering
-        is in practice.
+        draw through here: each glyph is placed on the arc by hand, in its own
+        range's font and colour. The strokes are drawn from the union of the
+        glyphs, widest first, then the fill run by run.
         """
-        path = self.curved_path()
-        if path.isEmpty():
+        glyphs = list(self.curved_glyphs())
+        if not glyphs:
             return
+        union = QPainterPath()
+        for glyph, _brush in glyphs:
+            union.addPath(glyph)
 
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
-        if self.outline and self.outline_color and self.outline_width:
-            # Stroked down the middle of the outline, so half of it lands
-            # outside the glyph — the same reach as the width the flat path
-            # displaces its copies by.
-            pen = QPen(QColor(self.outline_color), float(self.outline_width) * 2.0)
+        for reach, color in self._curved_strokes():
+            # Stroked down the middle, so half of the pen lands outside the
+            # glyph — the same reach the flat path displaces its copies by.
+            pen = QPen(color, reach * 2.0)
             pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
             pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-            painter.strokePath(path, pen)
+            painter.strokePath(union, pen)
 
-        painter.fillPath(path, self.fill_brush())
+        if self.gradient_enabled:
+            painter.fillPath(union, self.fill_brush())
+        else:
+            item_fill = self.fill_brush()
+            runs: dict = {}
+            for glyph, brush in glyphs:
+                brush = brush or item_fill
+                key = brush.color().rgba()
+                if key not in runs:
+                    runs[key] = (QPainterPath(), brush)
+                runs[key][0].addPath(glyph)
+            for path, brush in runs.values():
+                painter.fillPath(path, brush)
         painter.restore()
 
     def set_font_size(self, font_size):
@@ -771,10 +959,13 @@ class TextBlockItem(QGraphicsTextItem):
         # Outline pass: draw the glyphs underneath, displaced around a circle, so
         # their union is the glyph dilated by the outline width. The fill is then
         # painted on top and stays intact.
-        if self.selection_outlines:
+        # Stroke layers first — they are always wider than the outline — then
+        # the outline pass over them, then the fill.
+        outlines = self.selection_outlines if self._paint_stroke_layers(painter) else self.effective_outlines()
+        if outlines:
             painter.save()
             painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-            for width, doc in self._outline_documents():
+            for width, doc in self._outline_documents(outlines):
                 for dx, dy in self._outline_offsets(width):
                     painter.save()
                     painter.translate(dx, dy)
@@ -802,7 +993,7 @@ class TextBlockItem(QGraphicsTextItem):
             for i in range(cls.OUTLINE_SAMPLES)
         ]
 
-    def _outline_documents(self):
+    def _outline_documents(self, outlines=None):
         """Yield (width, document) for each distinct outline width in use.
 
         Ranges sharing a width are drawn together since they are displaced by the
@@ -811,8 +1002,9 @@ class TextBlockItem(QGraphicsTextItem):
         than re-laying the text out — keeps word wrap, per-range character formats
         and the vertical CJK layout intact.
         """
+        outlines = self.selection_outlines if outlines is None else outlines
         # Widest first, so a narrower outline layered on top stays visible.
-        widths = sorted({outline_info.width for outline_info in self.selection_outlines},
+        widths = sorted({outline_info.width for outline_info in outlines},
                         reverse=True)
 
         for width in widths:
@@ -824,7 +1016,7 @@ class TextBlockItem(QGraphicsTextItem):
             hidden.setForeground(QColor(0, 0, 0, 0))
             cursor.mergeCharFormat(hidden)
 
-            for outline_info in self.selection_outlines:
+            for outline_info in outlines:
                 if outline_info.width != width:
                     continue
                 fmt = QTextCharFormat()

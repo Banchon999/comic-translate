@@ -320,9 +320,15 @@ class WorkspaceMixin:
         )
         self.outline_width_dropdown.set_editable(True)
 
+        self.stroke_layers_button = MPushButton(self.tr("+ Strokes")).small()
+        self.stroke_layers_button.setToolTip(self.tr(
+            "Stack extra strokes outside the outline, e.g. white then black."
+        ))
+
         outline_settings_layout.addWidget(self.outline_checkbox)
         outline_settings_layout.addWidget(self.outline_font_color_button)
         outline_settings_layout.addWidget(self.outline_width_dropdown)
+        outline_settings_layout.addWidget(self.stroke_layers_button)
         outline_settings_layout.addStretch()
 
         shadow_settings_layout = QtWidgets.QHBoxLayout()
@@ -356,8 +362,16 @@ class WorkspaceMixin:
         self.shadow_blur_dropdown.setFixedWidth(60)
         self.shadow_blur_dropdown.set_editable(True)
 
+        self.shadow_opacity_dropdown = MComboBox().small()
+        self.shadow_opacity_dropdown.setToolTip(self.tr("Shadow Opacity (%)"))
+        self.shadow_opacity_dropdown.addItems(["100", "80", "63", "50", "35", "20"])
+        self.shadow_opacity_dropdown.setCurrentText("63")
+        self.shadow_opacity_dropdown.setFixedWidth(60)
+        self.shadow_opacity_dropdown.set_editable(True)
+
         shadow_settings_layout.addWidget(self.shadow_checkbox)
         shadow_settings_layout.addWidget(self.shadow_color_button)
+        shadow_settings_layout.addWidget(self.shadow_opacity_dropdown)
         shadow_settings_layout.addWidget(self.shadow_offset_x_dropdown)
         shadow_settings_layout.addWidget(self.shadow_offset_y_dropdown)
         shadow_settings_layout.addWidget(self.shadow_blur_dropdown)

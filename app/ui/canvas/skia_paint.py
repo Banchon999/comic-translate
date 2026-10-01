@@ -146,7 +146,10 @@ def spec_for_item(item) -> TextRenderSpec:
             start=int(getattr(o, "start", 0) or 0),
             end=int(o.end) if getattr(o, "end", None) is not None else None,
         )
-        for o in getattr(item, "selection_outlines", []) or []
+        # The item's own outlines plus its stroke layers, which it expresses as
+        # wider whole-document outlines; Skia strokes them widest first.
+        for o in (item.effective_outlines() if hasattr(item, "effective_outlines")
+                  else getattr(item, "selection_outlines", []) or [])
         if float(o.width) > 0
     )
 

@@ -46,11 +46,22 @@ class InteractionManager:
             ),  None )
         return blk_item, rect_item
 
+    @staticmethod
+    def _geometry_rect(item):
+        """The rect the handles are drawn on: a text item's own text_rect().
+
+        boundingRect() grows past it for curved text and stroke layers, purely
+        so Qt repaints enough; hit-testing against it put every handle and the
+        rotation ring off by that much.
+        """
+        text_rect = getattr(item, 'text_rect', None)
+        return text_rect() if callable(text_rect) else item.boundingRect()
+
     def _in_rotate_ring(self, item: Optional[MoveableRectItem|TextBlockItem], scene_pos) -> bool:
         """Checks if a scene position is within the item's rotation ring."""
         if not item: return False
         local = item.mapFromScene(scene_pos)
-        r = item.boundingRect()
+        r = self._geometry_rect(item)
         dx = max(r.left() - local.x(), 0, local.x() - r.right())
         dy = max(r.top() - local.y(), 0, local.y() - r.bottom())
         dist = math.hypot(dx, dy)
@@ -60,7 +71,7 @@ class InteractionManager:
         """Checks if a scene position is within the item's resize area."""
         if not item: return False
         local = item.mapFromScene(scene_pos)
-        r = item.boundingRect()
+        r = self._geometry_rect(item)
         dx = max(r.left() - local.x(), 0, local.x() - r.right())
         dy = max(r.top() - local.y(), 0, local.y() - r.bottom())
         dist = math.hypot(dx, dy)
@@ -80,7 +91,7 @@ class InteractionManager:
 
     def get_resize_cursor(self, item: MoveableRectItem | TextBlockItem, pos: QPointF) -> QtGui.QCursor:
         """Gets the appropriate resize cursor for a given position."""
-        rect = item.boundingRect()
+        rect = self._geometry_rect(item)
         handle = self.get_handle_at_position(pos, rect, handles.item_view_scale(item))
         
         cursors = {
@@ -121,7 +132,7 @@ class InteractionManager:
 
     def get_resize_handle(self, item: MoveableRectItem | TextBlockItem, pos: QPointF) -> str | None:
         """Determines which resize handle is at a position (pos is in item's local coordinates)."""
-        return handles.handle_at(pos, item.boundingRect(), handles.item_view_scale(item))
+        return handles.handle_at(pos, self._geometry_rect(item), handles.item_view_scale(item))
 
     def get_handle_at_position(self, pos, rect, scale: float = 1.0):
         """Which handle is at `pos` within `rect`, at the given screen scale."""

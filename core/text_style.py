@@ -43,6 +43,68 @@ class OutlineInfo:
     type: OutlineType
 
 
+@dataclass(frozen=True)
+class StrokeLayer:
+    """One extra stroke drawn outside a text item's outline.
+
+    Comic lettering stacks strokes — a white ring inside a black one, say —
+    and a text item's own outline is only the first of them. Each layer is
+    item-wide and sits outside everything before it: its reach is the outline
+    width plus every earlier layer's width plus its own. `color` is a hex
+    string (``#AARRGGBB`` or ``#RRGGBB``) so the layer serialises without Qt.
+    """
+
+    color: str
+    width: float
+
+
+def stroke_layers_from(value) -> list[StrokeLayer]:
+    """Stroke layers from their saved form: dicts, pairs or StrokeLayers.
+
+    Anything unreadable is skipped rather than failing the whole item, and a
+    non-positive width draws nothing, so it is dropped too.
+    """
+    layers = []
+    for entry in value or ():
+        try:
+            if isinstance(entry, StrokeLayer):
+                color, width = entry.color, entry.width
+            elif isinstance(entry, dict):
+                color, width = entry.get("color"), entry.get("width")
+            else:
+                color, width = entry
+            width = float(width)
+        except (TypeError, ValueError):
+            continue
+        if not color or width <= 0:
+            continue
+        name = getattr(color, "name", None)
+        if callable(name):  # a QColor from the Qt side
+            try:
+                from PySide6.QtGui import QColor  # noqa: PLC0415 - only when handed Qt
+
+                color = color.name(QColor.NameFormat.HexArgb)
+            except Exception:
+                color = name()
+        layers.append(StrokeLayer(str(color), width))
+    return layers
+
+
+def stroke_layers_payload(layers) -> list[dict]:
+    """The saved form: plain dicts, so msgpack and JSON both take it."""
+    return [{"color": layer.color, "width": layer.width} for layer in stroke_layers_from(layers)]
+
+
+def stroke_reaches(base_reach: float, layers) -> list[float]:
+    """How far each layer reaches from the glyph edge, innermost first."""
+    reach = max(0.0, float(base_reach or 0.0))
+    out = []
+    for layer in stroke_layers_from(layers):
+        reach += layer.width
+        out.append(reach)
+    return out
+
+
 @dataclass
 class TextItemState:
     """Everything needed to recreate one rendered text item.

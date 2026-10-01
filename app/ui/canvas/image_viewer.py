@@ -488,6 +488,7 @@ class ImageViewer(QGraphicsView):
             properties.gradient_angle,
         )
         item.set_curvature(properties.curvature)
+        item.set_stroke_layers(getattr(properties, 'stroke_layers', None))
 
         # Stable identity: keep the properties' id (load, undo/redo, page
         # reload, webtoon merge), otherwise mint one for a brand-new item.

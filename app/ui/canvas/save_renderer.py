@@ -64,6 +64,7 @@ def build_text_item(text_block: dict) -> TextBlockItem:
         text_props.gradient_angle,
     )
     text_item.set_curvature(text_props.curvature)
+    text_item.set_stroke_layers(text_props.stroke_layers)
     return text_item
 
 
