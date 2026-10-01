@@ -49,8 +49,27 @@ def test_the_release_publishes_exactly_what_the_builds_upload():
     assert published == built and len(built) == 2
 
 
-def test_the_release_runs_only_on_a_version_tag():
+def test_the_release_runs_on_a_version_tag_or_by_hand_never_on_its_own():
     release = (WORKFLOWS / "release.yml").read_text(encoding="utf-8")
     on_block = release[release.index("\non:"):release.index("\npermissions:")]
     assert "tags: ['v*']" in on_block
+    assert "workflow_dispatch" in on_block
     assert "branches" not in on_block and "pull_request" not in on_block
+
+
+def test_a_manual_release_takes_its_tag_from_the_version_and_never_reuses_one():
+    """Run by hand there is no tag yet: the release must create v<version> on
+    the commit it built, and refuse a version that was already released."""
+    release = (WORKFLOWS / "release.yml").read_text(encoding="utf-8")
+    assert 'tag="v${version}"' in release
+    assert "git ls-remote --exit-code --tags origin" in release, "an existing tag must be refused"
+    assert "tag_name: ${{ needs.check.outputs.tag }}" in release
+    assert "target_commitish: ${{ github.sha }}" in release
+    assert "body_path: .github/release-notes/${{ needs.check.outputs.tag }}.md" in release
+
+
+def test_a_release_does_not_share_main_ci_concurrency_group():
+    """test.yml cancels older runs in its group; keyed on the branch alone, a
+    release run from main and main's own CI would cancel each other."""
+    tests = (WORKFLOWS / "test.yml").read_text(encoding="utf-8")
+    assert "group: tests-${{ github.workflow }}-" in tests
