@@ -59,6 +59,15 @@ class ToolStateMixin:
     def toggle_restore_tool(self):
         self._toggle_pixel_tool(self.restore_button, "restore")
 
+    def toggle_fill_tool(self):
+        if self.fill_button.isChecked():
+            self.set_tool("fill")
+        else:
+            self.set_tool(None)
+
+    def toggle_ai_brush_tool(self):
+        self._toggle_pixel_tool(self.ai_brush_button, "aibrush")
+
     def toggle_eyedropper_tool(self):
         if self.eyedropper_button.isChecked():
             self.set_tool("eyedropper")
@@ -111,7 +120,7 @@ class ToolStateMixin:
         except Exception:
             current_tool = None
 
-        if current_tool in ("paint", "restore"):
+        if current_tool in ("paint", "restore", "aibrush"):
             self.image_viewer.set_br_er_size(size, size)
             return
         if current_tool == "brush":

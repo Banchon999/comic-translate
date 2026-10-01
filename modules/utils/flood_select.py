@@ -229,3 +229,53 @@ def balloon_select(image: np.ndarray, seed_x: int, seed_y: int, bound=None,
     mask = np.zeros((height, width), np.uint8)
     mask[y1:y2, x1:x2] = region
     return mask, "ok"
+
+
+def _box_sum3(values: np.ndarray) -> np.ndarray:
+    """Sum over each pixel's 3×3 neighbourhood (zero outside the array)."""
+    padded = np.pad(values, [(1, 1), (1, 1)] + [(0, 0)] * (values.ndim - 2))
+    height, width = values.shape[:2]
+    total = np.zeros_like(values, dtype=np.float64)
+    for dy in range(3):
+        for dx in range(3):
+            total += padded[dy:dy + height, dx:dx + width]
+    return total
+
+
+def fill_alpha(image: np.ndarray, region: np.ndarray) -> np.ndarray:
+    """How much of each pixel a fill of `region` should cover, 0..1.
+
+    The region itself is covered fully. The one-pixel ring around it is the
+    question: an anti-aliased edge leaves pixels there that are part region
+    colour and part whatever lies beyond, and leaving them as they are shows a
+    fringe of the old colour round the fill. But on a hard edge that ring *is*
+    the neighbour — a bubble's black outline — and covering it eats the line.
+    So each ring pixel is covered by how far its colour sits from the colour
+    just beyond it, relative to how far it sits from the region's colour:
+    about half for a true in-between rim pixel, nothing for a hard edge.
+    """
+    region = np.asarray(region) > 0
+    alpha = region.astype(np.float32)
+    if not region.any():
+        return alpha
+    rgb = _as_rgb(image).astype(np.float32)
+    seed = np.median(rgb[region], axis=0)
+
+    kernel = imk.get_structuring_element(imk.MORPH_RECT, (3, 3))
+    grown1 = imk.dilate(region.astype(np.uint8) * 255, kernel) > 0
+    grown2 = imk.dilate(grown1.astype(np.uint8) * 255, kernel) > 0
+    ring = grown1 & ~region
+    outer = grown2 & ~grown1
+    if not ring.any():
+        return alpha
+
+    counts = _box_sum3(outer.astype(np.float64))
+    sums = _box_sum3(rgb * outer[..., None])
+    beyond = np.where(counts[..., None] > 0, sums / np.maximum(counts, 1.0)[..., None], rgb)
+
+    d_in = np.abs(rgb - seed).max(axis=2)
+    d_out = np.abs(rgb - beyond).max(axis=2)
+    total = d_in + d_out
+    share = np.where(total > 0, d_out / np.maximum(total, 1e-6), 1.0)
+    alpha[ring] = np.clip(share[ring], 0.0, 1.0)
+    return alpha

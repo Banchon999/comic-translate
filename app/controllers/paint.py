@@ -13,6 +13,8 @@ from PySide6.QtCore import QCoreApplication, QSettings
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QColorDialog
 
+from app.ui.dayu_widgets.message import MMessage
+
 SETTINGS_GROUP = "paint"
 
 
@@ -29,22 +31,63 @@ class PaintController:
         self._load()
         main.image_viewer.pixel_edit_finished.connect(self.apply_edit)
         main.image_viewer.colour_picked.connect(self.show_colour)
+        main.image_viewer.pixel_tool_busy.connect(self.say_busy)
         main.paint_colour_button.clicked.connect(self.choose_colour)
         main.paint_hardness_slider.valueChanged.connect(self._on_hardness)
         main.paint_opacity_spin.valueChanged.connect(self._on_opacity)
         main.paint_pressure_size_check.toggled.connect(self._on_pressure_size)
         main.paint_pressure_flow_check.toggled.connect(self._on_pressure_flow)
+        main.fill_tolerance_spin.valueChanged.connect(self._on_fill_tolerance)
 
     # -- strokes ------------------------------------------------------------
     def apply_edit(self, edit) -> bool:
         """Turn a stroke into patches on its page(s). False when it changed
         nothing that could be kept."""
         inpainting = self.main.pipeline.inpainting
+        if edit.mode == "aibrush":
+            return self._run_ai_brush(edit)
         patches = inpainting.get_inpainted_patches(edit.mask, edit.image, mappings=edit.mappings, denoise=False)
+        return self._push(patches, edit.mode)
+
+    def _run_ai_brush(self, edit) -> bool:
+        """Inpaint the stroke on a worker thread; the patches land when done.
+        The model is not something to wait for on the GUI thread."""
+        main = self.main
+        inpainting = main.pipeline.inpainting
+        drawing = self.drawing
+        drawing.pixel_busy = True
+        main.loading.setVisible(True)
+        main.disable_hbutton_group()
+
+        def run():
+            return inpainting.inpaint_region(edit.image, edit.mask, edit.mappings)
+
+        def finished():
+            drawing.pixel_busy = False
+            main.on_manual_finished()
+
+        main.run_threaded(run, lambda patches: self._push(patches, edit.mode),
+                          main.default_error_handler, finished)
+        return True
+
+    def say_busy(self) -> None:
+        MMessage.info(
+            text=QCoreApplication.translate(
+                "PaintController", "Wait for the AI brush to finish before painting again."
+            ),
+            parent=self.main,
+        )
+
+    def _push(self, patches, mode: str) -> bool:
         if not patches:
             return False
-        label = (QCoreApplication.translate("PaintController", "Restore")
-                 if edit.mode == "restore" else QCoreApplication.translate("PaintController", "Paint"))
+        labels = {
+            "restore": QCoreApplication.translate("PaintController", "Restore"),
+            "fill": QCoreApplication.translate("PaintController", "Fill"),
+            "aibrush": QCoreApplication.translate("PaintController", "AI Inpaint"),
+        }
+        label = labels.get(mode, QCoreApplication.translate("PaintController", "Paint"))
+        inpainting = self.main.pipeline.inpainting
         stack = self.main.undo_group.activeStack()
         if stack is not None:
             stack.beginMacro(label)
@@ -83,6 +126,10 @@ class PaintController:
         self.drawing.paint_pressure_size = bool(on)
         self._save("pressure_size", bool(on))
 
+    def _on_fill_tolerance(self, value: int) -> None:
+        self.drawing.fill_tolerance = int(value)
+        self._save("fill_tolerance", int(value))
+
     def _on_pressure_flow(self, on: bool) -> None:
         self.drawing.paint_pressure_flow = bool(on)
         self._save("pressure_flow", bool(on))
@@ -105,6 +152,7 @@ class PaintController:
         opacity = settings.value("opacity", 100, type=int)
         pressure_size = settings.value("pressure_size", True, type=bool)
         pressure_flow = settings.value("pressure_flow", False, type=bool)
+        fill_tolerance = settings.value("fill_tolerance", 32, type=int)
         settings.endGroup()
         self._loading = True
         try:
@@ -118,5 +166,7 @@ class PaintController:
             drawing.paint_opacity = opacity / 100.0
             drawing.paint_pressure_size = pressure_size
             drawing.paint_pressure_flow = pressure_flow
+            main.fill_tolerance_spin.setValue(fill_tolerance)
+            drawing.fill_tolerance = fill_tolerance
         finally:
             self._loading = False

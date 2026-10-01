@@ -757,6 +757,45 @@ class InpaintingHandler:
         mixed = blend(image, cleaned, alpha)
         return self.get_inpainted_patches(mask, mixed, mappings=mappings, denoise=False)
 
+    #: The crop around an AI-brush stroke reaches this far past the stroke
+    #: (at least), so the model sees enough surroundings to continue them.
+    REGION_PAD_MIN = 32
+
+    def inpaint_region(self, image: np.ndarray, mask: np.ndarray, mappings: list[dict] | None = None):
+        """Inpaint only what `mask` covers — the AI inpaint brush.
+
+        Only a crop around the mask reaches the model (padded by at least
+        `REGION_PAD_MIN`, or half the mask's size), so a stroke costs a crop
+        rather than a page. The result goes back only where the mask is: every
+        other pixel, the crop's padding included, stays exactly as it was. No
+        text blocks are passed — fast bubble fills act on whole blocks, and a
+        brushed stroke is precisely not one.
+        """
+        mask = (np.asarray(mask) > 0).astype(np.uint8) * 255
+        if image is None or not mask.any():
+            return []
+        ys, xs = np.nonzero(mask)
+        y0, y1, x0, x1 = int(ys.min()), int(ys.max()) + 1, int(xs.min()), int(xs.max()) + 1
+        pad = max(self.REGION_PAD_MIN, (y1 - y0) // 2, (x1 - x0) // 2)
+        height, width = mask.shape[:2]
+        cy0, cy1 = max(0, y0 - pad), min(height, y1 + pad)
+        cx0, cx1 = max(0, x0 - pad), min(width, x1 + pad)
+        crop = image[cy0:cy1, cx0:cx1]
+        crop_mask = mask[cy0:cy1, cx0:cx1]
+
+        config = get_config(self.main_page.settings_page)
+        cleaned = self.inpaint_image(crop, crop_mask, config, blk_list=None)
+        cleaned = imk.convert_scale_abs(cleaned)
+        if cleaned.ndim == 3 and crop.ndim == 3 and cleaned.shape[2] != crop.shape[2]:
+            cleaned = cleaned[..., :crop.shape[2]]
+        cleaned = self._denoise_cleaned(crop_mask, cleaned)
+
+        result = image.copy()
+        region = result[cy0:cy1, cx0:cx1]
+        inside = crop_mask > 0
+        region[inside] = cleaned[inside]
+        return self.get_inpainted_patches(mask, result, mappings=mappings, denoise=False)
+
     def apply_patch_list(self, patch_list):
         """Put inpainted patches onto their pages (as undoable patch commands)."""
         if self.main_page.webtoon_mode:
