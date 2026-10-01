@@ -49,14 +49,24 @@ def win(qapp):
 
 
 def test_the_layout_holds_every_old_widget_in_its_new_place(win):
-    rail_tools = ("pan", "box", "type", "brush", "eraser", "wand", "lasso")
+    rail_tools = ("pan", "box", "type", "brush", "eraser", "marquee", "wand", "lasso")
     for key in rail_tools:
         assert win.tool_buttons[key].parentWidget().objectName() == "toonToolRail", key
     for button in (win.delete_button, win.clear_rectangles_button, win.clear_brush_strokes_button,
                    win.file_tree_button, win.layers_button, win.webtoon_toggle):
         assert button.parentWidget().objectName() == "toonToolRail"
-    assert win.brush_eraser_slider.parentWidget().objectName() == "toonOptionsBar"
-    assert win.change_all_blocks_size_diff.parentWidget().objectName() == "toonOptionsBar"
+    def in_options_bar(widget):
+        # The bar groups its tool-specific parts (brush, selection) in their
+        # own rows, so ask whether the bar holds the widget, not its parent.
+        while widget is not None:
+            if widget.objectName() == "toonOptionsBar":
+                return True
+            widget = widget.parentWidget()
+        return False
+
+    assert in_options_bar(win.brush_eraser_slider)
+    assert in_options_bar(win.change_all_blocks_size_diff)
+    assert in_options_bar(win.clean_selection_button)
 
     tabs = win.inspector_tabs
     assert tabs.count() == 3
@@ -145,3 +155,34 @@ def test_a_theme_switch_recolours_the_step_marks(win, monkeypatch):
     finally:
         win.apply_theme(win.settings_page.ui.tr("Dark"))
     assert ("step-done.svg", theme_tokens.DARK["ok"]) in seen
+
+
+def test_the_options_bar_follows_the_tool(win):
+    win.set_tool("brush")
+    assert not win.brush_options.isHidden() and win.selection_options.isHidden()
+    win.set_tool("wand")
+    assert win.brush_options.isHidden() and not win.selection_options.isHidden()
+    win.set_tool(None)
+    assert not win.brush_options.isHidden() and win.selection_options.isHidden()
+
+
+def test_the_options_bar_never_sets_the_window_width(win):
+    """With every section showing, the bar is wider than the canvas column;
+    it must be clipped, not widen the window past the screen."""
+    from PySide6.QtWidgets import QApplication, QSizePolicy
+
+    win.show()
+    win.show_main_page()
+    # Every section at once: the widest the bar can get (~900 px in Thai).
+    win.brush_options.setVisible(True)
+    win.selection_options.setVisible(True)
+    QApplication.processEvents()
+    bar = win.clean_selection_button
+    while bar.objectName() != "toonOptionsBar":
+        bar = bar.parentWidget()
+    assert bar.sizePolicy().horizontalPolicy() == QSizePolicy.Policy.Ignored
+    # Measured before the fix: the column's minimum became the bar's full
+    # width and the window's minimum 1529 px.
+    assert bar.parentWidget().minimumSizeHint().width() < bar.sizeHint().width()
+    assert win.minimumSizeHint().width() <= 1280
+

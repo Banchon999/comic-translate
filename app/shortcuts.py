@@ -56,6 +56,24 @@ SHORTCUT_DEFINITIONS: tuple[ShortcutDefinition, ...] = (
         description=QT_TRANSLATE_NOOP("ShortcutDefinitions", "Toggle brush stroke drawing on or off."),
         default="Ctrl+D",
     ),
+    ShortcutDefinition(
+        id="select_all",
+        label=QT_TRANSLATE_NOOP("ShortcutDefinitions", "Select All"),
+        description=QT_TRANSLATE_NOOP("ShortcutDefinitions", "Select the whole page on the canvas."),
+        default="Ctrl+A",
+    ),
+    ShortcutDefinition(
+        id="deselect",
+        label=QT_TRANSLATE_NOOP("ShortcutDefinitions", "Deselect"),
+        description=QT_TRANSLATE_NOOP("ShortcutDefinitions", "Drop the canvas selection."),
+        default="Ctrl+Shift+A",
+    ),
+    ShortcutDefinition(
+        id="invert_selection",
+        label=QT_TRANSLATE_NOOP("ShortcutDefinitions", "Invert Selection"),
+        description=QT_TRANSLATE_NOOP("ShortcutDefinitions", "Select everything on the page that is not selected."),
+        default="Ctrl+Shift+I",
+    ),
 )
 
 

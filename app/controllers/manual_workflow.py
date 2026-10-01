@@ -632,6 +632,9 @@ class ManualWorkflowController:
                 self.main.default_error_handler,
                 self.main.on_manual_finished,
             )
+        elif not self.main.image_viewer.selection.is_empty():
+            # No mask, but a selection: that is what the user marked, so clean it.
+            self.main.selection_ctrl.clean_selection()
         else:
             # Cleaning with nothing marked used to fall off the end of this
             # branch and do nothing at all — no patch, no error, no message —

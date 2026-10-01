@@ -112,7 +112,7 @@ class EventHandler:
 
         if self.viewer.current_tool == 'lasso' and self.viewer.hasPhoto():
             if self._is_on_image(scene_pos):
-                self.viewer.drawing_manager.lasso_press(scene_pos)
+                self.viewer.drawing_manager.lasso_press(scene_pos, event.modifiers())
                 return
 
         if self.viewer.current_tool == 'wand' and self.viewer.hasPhoto():
@@ -121,7 +121,14 @@ class EventHandler:
                 # rather than only the one under the cursor — one click for all
                 # the panel gutters instead of one per gutter.
                 contiguous = not (event.modifiers() & Qt.KeyboardModifier.ControlModifier)
-                self.viewer.drawing_manager.flood_fill_at(scene_pos, contiguous=contiguous)
+                self.viewer.drawing_manager.flood_fill_at(
+                    scene_pos, contiguous=contiguous, modifiers=event.modifiers()
+                )
+                return
+
+        if self.viewer.current_tool == 'marquee' and self.viewer.hasPhoto():
+            if event.button() == Qt.MouseButton.LeftButton:
+                self.viewer.drawing_manager.marquee_press(scene_pos, event.modifiers())
                 return
 
         # Only pass to QGraphicsView for panning or tool-specific interactions, not our items
@@ -155,6 +162,9 @@ class EventHandler:
         if self.viewer.current_tool == 'lasso':
             held = bool(event.buttons() & Qt.MouseButton.LeftButton)
             self.viewer.drawing_manager.lasso_move(scene_pos, held)
+
+        if self.viewer.current_tool == 'marquee' and event.buttons() & Qt.MouseButton.LeftButton:
+            self.viewer.drawing_manager.marquee_move(scene_pos)
         
         if self.viewer.current_tool == 'box':
             self._move_handle_box_resize(scene_pos)
@@ -196,6 +206,11 @@ class EventHandler:
 
         if self.viewer.current_tool == 'lasso':
             self.viewer.drawing_manager.lasso_release(
+                self.viewer.mapToScene(event.position().toPoint())
+            )
+
+        if self.viewer.current_tool == 'marquee' and event.button() == Qt.MouseButton.LeftButton:
+            self.viewer.drawing_manager.marquee_release(
                 self.viewer.mapToScene(event.position().toPoint())
             )
 
