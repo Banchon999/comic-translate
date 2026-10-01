@@ -169,7 +169,49 @@ class TextRenderingPage(QtWidgets.QWidget):
         layout.addLayout(default_text_color_layout)
         layout.addLayout(default_outline_layout)
         layout.addSpacing(10)
+
+        # Default text style (preset) per text type. Only its look — colour,
+        # outline, strokes, shadow, gradient, warp — reaches new text; the
+        # renderer has already fitted the text in its own font and size.
+        preset_label = MLabel(self.tr("Default Text Style:")).h4()
+        self.default_bubble_preset_combo = MComboBox().small()
+        self.default_free_preset_combo = MComboBox().small()
+        preset_hint = MLabel(self.tr(
+            "Applied to newly rendered text: colours, outline, extra strokes, shadow, gradient and warp."
+        )).secondary()
+        preset_hint.setWordWrap(True)
+        bubble_preset_layout = QtWidgets.QHBoxLayout()
+        bubble_preset_layout.addWidget(MLabel(self.tr("Speech bubbles:")))
+        bubble_preset_layout.addWidget(self.default_bubble_preset_combo)
+        bubble_preset_layout.addStretch()
+        free_preset_layout = QtWidgets.QHBoxLayout()
+        free_preset_layout.addWidget(MLabel(self.tr("Free text and SFX:")))
+        free_preset_layout.addWidget(self.default_free_preset_combo)
+        free_preset_layout.addStretch()
+        for combo in (self.default_bubble_preset_combo, self.default_free_preset_combo):
+            combo.setMinimumWidth(160)
+        layout.addWidget(preset_label)
+        layout.addWidget(preset_hint)
+        layout.addLayout(bubble_preset_layout)
+        layout.addLayout(free_preset_layout)
+        self.refresh_preset_choices([])
         layout.addStretch(1)
+
+    def refresh_preset_choices(self, names, bubble: str | None = None, free: str | None = None):
+        """Fill both default-style combos; keep (or set) what each one shows."""
+        from app.ui.canvas.text.presets import preset_label
+
+        for combo, wanted in ((self.default_bubble_preset_combo, bubble),
+                              (self.default_free_preset_combo, free)):
+            keep = combo.currentData() if wanted is None else wanted
+            combo.blockSignals(True)
+            combo.clear()
+            combo.addItem(self.tr("None"), "")
+            for name in names:
+                combo.addItem(preset_label(name), name)
+            index = combo.findData(keep or "")
+            combo.setCurrentIndex(max(0, index))
+            combo.blockSignals(False)
 
     def _sync_per_class_font_widgets(self, *args):
         enabled = self.per_class_fonts_checkbox.isChecked()

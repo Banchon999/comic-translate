@@ -12,7 +12,7 @@ from modules.utils.textblock import adjust_blks_size
 from modules.detection.utils.geometry import shrink_bbox
 from modules.utils.language_utils import get_language_code, is_no_space_lang
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 @dataclass
 class TextRenderingSettings:
@@ -33,6 +33,16 @@ class TextRenderingSettings:
     # Optional per-text-type fonts; empty string falls back to font_family
     bubble_font_family: str = ""
     free_font_family: str = ""
+    # Default text preset per text_class ("text_bubble" / "text_free"), a
+    # modules.utils.text_presets.TextPreset or absent. Only its look is applied
+    # to new text (text_presets.LOOK_FIELDS): the fit already happened.
+    default_presets: dict = field(default_factory=dict)
+
+
+def default_preset_for(render_settings: TextRenderingSettings, blk):
+    """The default preset for a block's text class, or None."""
+    presets = getattr(render_settings, "default_presets", None) or {}
+    return presets.get(getattr(blk, "text_class", "") or "text_free") if presets else None
 
 
 def font_family_for_block(render_settings: TextRenderingSettings, blk) -> str:

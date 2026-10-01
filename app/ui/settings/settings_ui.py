@@ -279,6 +279,8 @@ class SettingsPageUI(QtWidgets.QWidget):
         self.bubble_font_combo = self.text_rendering_page.bubble_font_combo
         self.free_font_combo = self.text_rendering_page.free_font_combo
         self.use_style_defaults_checkbox = self.text_rendering_page.use_style_defaults_checkbox
+        self.default_bubble_preset_combo = self.text_rendering_page.default_bubble_preset_combo
+        self.default_free_preset_combo = self.text_rendering_page.default_free_preset_combo
         self.default_text_color_button = self.text_rendering_page.default_text_color_button
         self.default_outline_color_button = self.text_rendering_page.default_outline_color_button
         self.default_outline_width_combo = self.text_rendering_page.default_outline_width_combo

@@ -10,7 +10,8 @@ import imkit as imk
 from core.path_materialization import ensure_path_materialized
 from core.text_style import build_text_item_state
 from core.layers import merge_preserving_locked
-from modules.rendering.render import get_best_render_area, is_vertical_block, pyside_word_wrap, font_family_for_block
+from modules.rendering.render import get_best_render_area, is_vertical_block, pyside_word_wrap, font_family_for_block, default_preset_for
+from modules.utils.text_presets import apply_to_state as apply_text_preset
 from modules.utils.image_utils import get_smart_text_color
 from modules.utils.language_utils import get_language_code, is_no_space_lang
 from modules.utils.textblock import TextBlock
@@ -152,7 +153,7 @@ class RenderMixin:
                     wrapped_translation, font_size, render_block, image_path
                 )
 
-            viewer_state["text_items_state"].append(build_text_item_state(
+            viewer_state["text_items_state"].append(apply_text_preset(build_text_item_state(
                 object_id=getattr(block, 'object_id', '') or '',
                 text=wrapped_translation,
                 font_family=block_font,
@@ -174,7 +175,7 @@ class RenderMixin:
                 direction=direction,
                 vertical=vertical,
                 outline=outline,
-            ))
+            ), default_preset_for(render_settings, block)))
 
     def _save_final_rendered_page(
         self: WebtoonBatchProcessor, page_idx: int, image_path: str, timestamp: str

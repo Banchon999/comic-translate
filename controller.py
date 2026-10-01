@@ -302,6 +302,9 @@ class ComicTranslate(ComicTranslateUI):
         self.gradient_angle_dropdown.currentTextChanged.connect(self.text_ctrl.apply_gradient_settings)
         self.curvature_dropdown.currentTextChanged.connect(self.text_ctrl.apply_curvature)
         self.warp_style_combo.currentIndexChanged.connect(self.text_ctrl.apply_curvature)
+        self.style_preset_combo.activated.connect(self.text_ctrl.apply_style_preset)
+        self.save_style_button.clicked.connect(self.text_ctrl.save_style_preset)
+        self.delete_style_button.clicked.connect(self.text_ctrl.delete_style_preset)
 
         # Page List
         self.page_list.currentItemChanged.connect(self.image_ctrl.on_page_list_current_item_changed)

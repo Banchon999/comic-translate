@@ -133,6 +133,8 @@ class SettingsPage(QtWidgets.QWidget):
         ui.default_outline_width_combo.currentTextChanged.connect(self._mark_settings_dirty)
         ui.default_text_color_button.clicked.connect(self._mark_settings_dirty)
         ui.default_outline_color_button.clicked.connect(self._mark_settings_dirty)
+        ui.default_bubble_preset_combo.currentIndexChanged.connect(self._mark_settings_dirty)
+        ui.default_free_preset_combo.currentIndexChanged.connect(self._mark_settings_dirty)
 
         spinboxes = [
             ui.resize_spinbox, ui.crop_margin_spinbox, ui.crop_trigger_spinbox,
