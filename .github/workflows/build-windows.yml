@@ -2,6 +2,8 @@ name: Build Windows App
 
 on:
   workflow_dispatch:
+  # release.yml builds the release with this same workflow.
+  workflow_call:
 
 jobs:
   build-windows:

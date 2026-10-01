@@ -1,0 +1,75 @@
+name: Release
+
+# Pushing a tag vX.Y.Z publishes that commit as a GitHub Release: the test
+# suite, then the Windows and Linux builds (the very workflows behind the
+# manual "Run workflow" buttons), then one release carrying both archives and
+# the notes written for it in .github/release-notes/vX.Y.Z.md.
+#
+# The tag must match app/version.py — otherwise About and the update checker
+# report one version while the release page says another — and the notes file
+# must exist, so a release never goes out with an empty description.
+#
+# The PyTorch "full" Windows build and the macOS DMG are not part of it: the
+# first is several gigabytes (GitHub caps a release asset at 2 GB) and the
+# second has not been verified since the rename to Toon Studio.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: The tag matches app/version.py and has release notes
+        run: |
+          version=$(python3 -c "import re; print(re.search(r'__version__\s*=\s*\"([^\"]+)\"', open('app/version.py').read()).group(1))")
+          if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match app/version.py (${version})"
+            exit 1
+          fi
+          notes=".github/release-notes/${GITHUB_REF_NAME}.md"
+          if [ ! -s "$notes" ]; then
+            echo "::error::missing release notes: $notes"
+            exit 1
+          fi
+
+  tests:
+    needs: check
+    uses: ./.github/workflows/test.yml
+
+  windows:
+    needs: tests
+    uses: ./.github/workflows/build-windows.yml
+
+  linux:
+    needs: tests
+    uses: ./.github/workflows/build-linux.yml
+
+  publish:
+    needs: [windows, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Download the builds
+        uses: actions/download-artifact@v7
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish the release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Toon Studio ${{ github.ref_name }}
+          body_path: .github/release-notes/${{ github.ref_name }}.md
+          files: |
+            dist/ToonStudio-Windows-x86_64.zip
+            dist/ToonStudio-Linux-x86_64.tar.gz
+          fail_on_unmatched_files: true

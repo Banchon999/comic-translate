@@ -14,6 +14,9 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  # release.yml runs the suite before building a release: a tag push is not
+  # a branch push, so nothing else would test the tagged commit.
+  workflow_call:
 
 # Supersede a run when another commit lands on the same pull request, so a
 # stale green cannot arrive after the push that replaced it.
