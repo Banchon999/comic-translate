@@ -38,6 +38,8 @@ class ImageViewer(QGraphicsView):
     clear_text_edits = Signal()
     # The canvas selection became non-empty (True) or empty (False).
     selection_changed = Signal(bool)
+    # The balloon tool found no bubble at the click; carries the reason.
+    balloon_refused = Signal(str)
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -185,7 +187,7 @@ class ImageViewer(QGraphicsView):
             # Keys only reach a view that can take focus, and Enter/Escape are
             # how a clicked polygon gets closed or abandoned.
             self.setFocus()
-        elif tool == 'marquee':
+        elif tool in ('marquee', 'balloon'):
             self.setDragMode(QGraphicsView.NoDrag)
             self.setCursor(QtGui.QCursor(Qt.CursorShape.CrossCursor))
         elif tool == 'wand':

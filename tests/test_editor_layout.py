@@ -186,3 +186,20 @@ def test_the_options_bar_never_sets_the_window_width(win):
     assert bar.parentWidget().minimumSizeHint().width() < bar.sizeHint().width()
     assert win.minimumSizeHint().width() <= 1280
 
+
+@pytest.mark.parametrize("tool", ["wand", "brush", None])
+def test_the_options_bar_fits_its_column_for_each_tool(win, tool):
+    """Every row the bar shows must fit a 1440 px window without squeezing
+    its labels — a Modify button once clipped "Box size" and "Pick into"."""
+    from PySide6.QtWidgets import QApplication
+
+    win.resize(1440, 900)
+    win.show()
+    win.show_main_page()
+    win.set_tool(tool)
+    QApplication.processEvents()
+    bar = win.clean_selection_button
+    while bar.objectName() != "toonOptionsBar":
+        bar = bar.parentWidget()
+    assert bar.layout().sizeHint().width() <= bar.width()
+

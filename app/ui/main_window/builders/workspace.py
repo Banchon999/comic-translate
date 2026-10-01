@@ -537,6 +537,16 @@ class WorkspaceMixin:
         self.marquee_button.clicked.connect(self.toggle_marquee_tool)
         self.tool_buttons["marquee"] = self.marquee_button
 
+        self.balloon_button = self.create_tool_button(svg="select-balloon.svg", checkable=True)
+        self.balloon_button.setToolTip(self.tr(
+            "Select a speech bubble with one click: its inside and its lettering, "
+            "never its outline.\n"
+            "Works best after Detect, which finds where each bubble ends.\n"
+            "Shift adds to the selection, Alt takes away."
+        ))
+        self.balloon_button.clicked.connect(self.toggle_balloon_tool)
+        self.tool_buttons["balloon"] = self.balloon_button
+
         self.wand_button = self.create_tool_button(svg="wand.svg", checkable=True)
         self.wand_button.setToolTip(self.tr(
             "Select a whole region with one click — the inside of a bubble, a "
@@ -577,7 +587,7 @@ class WorkspaceMixin:
         groups = (
             (self.pan_button, self.box_button, self.type_text_button),
             (self.brush_button, self.eraser_button),
-            (self.marquee_button, self.wand_button, self.lasso_button),
+            (self.marquee_button, self.balloon_button, self.wand_button, self.lasso_button),
             (self.delete_button, self.clear_rectangles_button, self.draw_blklist_blks,
              self.clear_brush_strokes_button),
         )
@@ -604,11 +614,15 @@ class WorkspaceMixin:
         options.setSpacing(8)
         box_label = MLabel(self.tr("Box size"))
         box_label.setObjectName("toonOptionLabel")
-        options.addWidget(box_label)
-        options.addWidget(self.change_all_blocks_size_dec)
-        options.addWidget(self.change_all_blocks_size_diff)
-        options.addWidget(self.change_all_blocks_size_inc)
-        options.addSpacing(18)
+        self.box_options = QtWidgets.QWidget()
+        box_row = QtWidgets.QHBoxLayout(self.box_options)
+        box_row.setContentsMargins(0, 0, 18, 0)
+        box_row.setSpacing(8)
+        box_row.addWidget(box_label)
+        box_row.addWidget(self.change_all_blocks_size_dec)
+        box_row.addWidget(self.change_all_blocks_size_diff)
+        box_row.addWidget(self.change_all_blocks_size_inc)
+        options.addWidget(self.box_options)
         # The rest of the bar follows the active tool: the brush size for the
         # brush and eraser, the selection controls for the selection tools (or
         # while something is selected). Everything at once is wider than the
@@ -631,6 +645,9 @@ class WorkspaceMixin:
         options.addWidget(self.selection_options)
         options.addStretch(1)
         self.refresh_options_bar()
+        # Rows come and go with the tool; a fixed height keeps the canvas from
+        # jumping a few pixels every time the box-size spin box does.
+        options_bar.setFixedHeight(max(options_bar.sizeHint().height(), 36))
         central_layout.insertWidget(0, options_bar)
         central_layout.setContentsMargins(0, 0, 0, 0)
         central_layout.setSpacing(0)
@@ -766,16 +783,28 @@ class WorkspaceMixin:
         self.invert_selection_button.setToolTip(self.tr("Select everything that is not selected (Ctrl+Shift+I)."))
         self.deselect_button = MPushButton(self.tr("Deselect")).small()
         self.deselect_button.setToolTip(self.tr("Drop the selection (Ctrl+Shift+A)."))
+        self.modify_selection_button = MToolButton().text_only().small()
+        self.modify_selection_button.setText(self.tr("Modify") + " ▾")
+        self.modify_selection_button.setToolTip(self.tr(
+            "Grow, shrink, smooth or feather the selection by a number of pixels."
+        ))
+        self.modify_selection_button.setPopupMode(QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.modify_selection_menu = QtWidgets.QMenu(self.modify_selection_button)
+        self.grow_selection_action = self.modify_selection_menu.addAction(self.tr("Grow…"))
+        self.shrink_selection_action = self.modify_selection_menu.addAction(self.tr("Shrink…"))
+        self.smooth_selection_action = self.modify_selection_menu.addAction(self.tr("Smooth…"))
+        self.feather_selection_action = self.modify_selection_menu.addAction(self.tr("Feather…"))
+        self.modify_selection_button.setMenu(self.modify_selection_menu)
         self.selection_action_buttons = (
             self.clean_selection_button, self.selection_to_mask_button,
-            self.invert_selection_button, self.deselect_button,
+            self.modify_selection_button, self.invert_selection_button, self.deselect_button,
         )
         for button in self.selection_action_buttons:
             button.setEnabled(False)
             button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
             options.addWidget(button)
 
-    SELECTION_TOOLS = ("marquee", "wand", "lasso")
+    SELECTION_TOOLS = ("marquee", "balloon", "wand", "lasso")
 
     def refresh_options_bar(self, *_args) -> None:
         """Show the options that belong to the active tool."""
@@ -785,6 +814,9 @@ class WorkspaceMixin:
         show_selection = tool in self.SELECTION_TOOLS or has_selection
         self.selection_options.setVisible(show_selection)
         self.brush_options.setVisible(tool in ("brush", "eraser") or not show_selection)
+        # The selection row alone nearly fills the canvas column (in Thai);
+        # box sizing is a detection-stage action, not a selection one.
+        self.box_options.setVisible(not show_selection)
 
     def show_layers_tab(self, show: bool) -> None:
         """The layers button: open the Layers tab, or go back to Text."""

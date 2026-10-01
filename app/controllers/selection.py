@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 
 from PySide6.QtCore import QCoreApplication
+from PySide6.QtWidgets import QInputDialog
 
 from app.ui.canvas.drawing_manager import REGION_MASK, REGION_SELECTION
 from app.ui.dayu_widgets.message import MMessage
@@ -38,6 +39,11 @@ class SelectionController:
         main.selection_to_mask_button.clicked.connect(self.selection_to_mask)
         main.invert_selection_button.clicked.connect(self.invert)
         main.deselect_button.clicked.connect(self.deselect)
+        main.grow_selection_action.triggered.connect(lambda: self.modify("grow"))
+        main.shrink_selection_action.triggered.connect(lambda: self.modify("shrink"))
+        main.smooth_selection_action.triggered.connect(lambda: self.modify("smooth"))
+        main.feather_selection_action.triggered.connect(lambda: self.modify("feather"))
+        self.viewer.balloon_refused.connect(self.on_balloon_refused)
         self.on_selection_changed(not self.selection.is_empty())
 
     def on_selection_changed(self, has_selection: bool) -> None:
@@ -47,6 +53,50 @@ class SelectionController:
 
     def _on_region_output_toggled(self, to_selection: bool) -> None:
         self.viewer.drawing_manager.region_output = REGION_SELECTION if to_selection else REGION_MASK
+
+    def on_balloon_refused(self, reason: str) -> None:
+        messages = {
+            "not-light": QCoreApplication.translate("SelectionController",
+                "That spot is not the inside of a speech bubble. "
+                "Click the bubble's light background, or use the magic wand.",
+            ),
+            "leak": QCoreApplication.translate("SelectionController",
+                "Couldn't find where this bubble ends — its outline may have a gap. "
+                "Run Detect first, or use the magic wand or the lasso.",
+            ),
+        }
+        text = messages.get(reason)
+        if text:
+            MMessage.info(text=text, parent=self.main)
+
+    # Last amount entered per refine operation, offered again next time.
+    DEFAULT_AMOUNTS = {"grow": 2, "shrink": 2, "smooth": 2, "feather": 3}
+
+    def modify(self, operation: str, amount: int | None = None) -> bool:
+        """Grow, shrink, smooth or feather the selection. Asks for the amount
+        unless given one; returns False when nothing changed."""
+        if self.selection.is_empty():
+            return False
+        amounts = self.__dict__.setdefault("_amounts", dict(self.DEFAULT_AMOUNTS))
+        if amount is None:
+            titles = {
+                "grow": QCoreApplication.translate("SelectionController", "Grow Selection"),
+                "shrink": QCoreApplication.translate("SelectionController", "Shrink Selection"),
+                "smooth": QCoreApplication.translate("SelectionController", "Smooth Selection"),
+                "feather": QCoreApplication.translate("SelectionController", "Feather Selection"),
+            }
+            value, ok = QInputDialog.getInt(
+                self.main, titles[operation], QCoreApplication.translate("SelectionController", "Pixels:"),
+                amounts[operation], 0 if operation == "feather" else 1, 200,
+            )
+            if not ok:
+                return False
+            amount = value
+        amounts[operation] = int(amount)
+        before = self.selection.snapshot()
+        self.selection.refine(operation, int(amount))
+        after = self.selection.snapshot()
+        return before[1] != after[1] or before[0] != after[0]
 
     # -- simple actions ---------------------------------------------------------
     def select_all(self) -> None:
