@@ -16,7 +16,7 @@ from modules.utils.device import is_gpu_available
 from app.account.auth.auth_client import AuthClient, USER_INFO_GROUP, \
     EMAIL_KEY, TIER_KEY, CREDITS_KEY, MONTHLY_CREDITS_KEY
 from app.account.config import API_BASE_URL, FRONTEND_BASE_URL
-from app.update_checker import UpdateChecker
+from app.update_checker import UpdateChecker, is_installer
 from modules.utils.paths import get_user_data_dir, get_default_project_autosave_dir
 
 
@@ -1133,12 +1133,16 @@ class SettingsPage(QtWidgets.QWidget):
         if self.update_dialog:
              self.update_dialog.close()
         
-        # Ask to install
-        if self._ask_yes_no(
-            self.tr("Download Complete"),
-            self.tr("Installer downloaded to {path}. Run it now?").format(path=file_path),
-            default_yes=True
-        ):
+        # An installer is offered to run; a release archive is shown in its
+        # folder, to be unpacked over (or beside) the current copy.
+        if is_installer(file_path):
+            question = self.tr("Installer downloaded to {path}. Run it now?").format(path=file_path)
+        else:
+            question = self.tr(
+                "Update downloaded to {path}. Show it in its folder? "
+                "Unpack it and run Toon Studio from the new folder."
+            ).format(path=file_path)
+        if self._ask_yes_no(self.tr("Download Complete"), question, default_yes=True):
              self.update_checker.run_installer(file_path)
 
     def closeEvent(self, event):
