@@ -620,6 +620,13 @@ class WorkspaceMixin:
         self.tool_buttons["lasso"] = self.lasso_button
 
         self.clear_brush_strokes_button = self.create_tool_button(svg="clear-outlined.svg")
+        self.clean_balloons_button = self.create_tool_button(svg="clean-balloons.svg")
+        self.clean_balloons_button.setToolTip(self.tr(
+            "Clean white balloons: paint over the lettering of every plain white speech bubble "
+            "on this page, in one step and without the AI.\n"
+            "Runs Detect first if the page has not been detected. Bubbles that are not plain "
+            "white are skipped."
+        ))
         self.clear_brush_strokes_button.setToolTip(self.tr("Remove all the brush strokes on the Image"))
 
 
@@ -660,8 +667,8 @@ class WorkspaceMixin:
             (self.paint_button, self.fill_button, self.ai_brush_button, self.clone_button,
              self.heal_button, self.restore_button, self.eyedropper_button),
             (self.marquee_button, self.balloon_button, self.wand_button, self.lasso_button),
-            (self.delete_button, self.clear_rectangles_button, self.draw_blklist_blks,
-             self.clear_brush_strokes_button),
+            (self.clean_balloons_button, self.delete_button, self.clear_rectangles_button,
+             self.draw_blklist_blks, self.clear_brush_strokes_button),
         )
         for index, group in enumerate(groups):
             if index:

@@ -41,6 +41,8 @@ class PaintController:
         main.clone_aligned_check.toggled.connect(self._on_clone_aligned)
         main.clone_lock_check.toggled.connect(self._on_clone_lock)
         main.image_viewer.clone_source_missing.connect(self.say_no_source)
+        # Through a lambda: clicked(bool) would land in detect_if_needed.
+        main.clean_balloons_button.clicked.connect(lambda: self.clean_white_balloons())
 
     # -- strokes ------------------------------------------------------------
     def apply_edit(self, edit) -> bool:
@@ -73,10 +75,133 @@ class PaintController:
                           main.default_error_handler, finished)
         return True
 
+    # -- white balloons ---------------------------------------------------------
+    def clean_white_balloons(self, detect_if_needed: bool = True) -> None:
+        """Paint over the lettering of every white speech bubble on the page
+        (the loaded slice, in webtoon mode) in one undo step. Runs Detect first
+        when the page has no detected bubbles yet. No model cleans anything:
+        a bubble that is not white and flat is skipped and counted."""
+        main = self.main
+        viewer = main.image_viewer
+        if not viewer.hasPhoto():
+            return
+        if self.drawing.pixel_busy:
+            self.say_busy()
+            return
+        if not self._bubble_blocks():
+            if detect_if_needed:
+                self._detect_then_clean()
+            else:
+                self._say_no_bubbles()
+            return
+        image = viewer.get_image_array(include_patches=True)
+        if image is None:
+            return
+        image = image[..., :3].copy()
+        mappings = None
+        if viewer.webtoon_mode:
+            _, mappings = viewer.get_visible_area_image()
+            if not mappings:
+                return
+            blocks = self._visible_bubble_blocks(mappings)
+        else:
+            blocks = [blk.deep_copy() for blk in self._bubble_blocks()]
+        if not blocks:
+            self._say_no_bubbles()
+            return
+        inpainting = main.pipeline.inpainting
+        settings = main.settings_page
+        drawing = self.drawing
+        drawing.pixel_busy = True
+        main.loading.setVisible(True)
+        main.disable_hbutton_group()
+
+        def run():
+            from modules.utils.text_segmentation import segment_page
+
+            return inpainting.clean_white_balloons(
+                image, blocks, mappings, page_text_mask=segment_page(image, settings)
+            )
+
+        def done(result):
+            patches, cleaned, skipped = result
+            self._push(patches, "balloons")
+            self._report_balloons(cleaned, skipped)
+
+        def finished():
+            drawing.pixel_busy = False
+            main.on_manual_finished()
+
+        main.run_threaded(run, done, main.default_error_handler, finished)
+
+    def _bubble_blocks(self) -> list:
+        return [
+            blk for blk in (getattr(self.main, "blk_list", None) or [])
+            if getattr(blk, "text_class", None) == "text_bubble" and getattr(blk, "bubble_xyxy", None) is not None
+        ]
+
+    def _visible_bubble_blocks(self, mappings) -> list:
+        """The page's bubble blocks in the loaded slice's coordinates, as
+        copies. The conversion edits blocks in place, so every block it
+        touched is restored before returning, even if it raised halfway."""
+        from pipeline.webtoon_utils import filter_and_convert_visible_blocks, restore_original_block_coordinates
+
+        main = self.main
+        try:
+            converted = filter_and_convert_visible_blocks(main, main.pipeline, mappings)
+            return [
+                blk.deep_copy() for blk in converted
+                if getattr(blk, "text_class", None) == "text_bubble" and getattr(blk, "bubble_xyxy", None) is not None
+            ]
+        finally:
+            touched = [blk for blk in (getattr(main, "blk_list", None) or []) if hasattr(blk, "_original_xyxy")]
+            if touched:
+                restore_original_block_coordinates(touched)
+
+    def _detect_then_clean(self) -> None:
+        main = self.main
+        failed = []
+        main.loading.setVisible(True)
+        main.disable_hbutton_group()
+
+        def on_error(error):
+            failed.append(error)
+            main.default_error_handler(error)
+
+        def finished():
+            main.on_manual_finished()
+            if not failed:
+                self.clean_white_balloons(detect_if_needed=False)
+
+        main.run_threaded(main.pipeline.detect_blocks, main.pipeline.on_blk_detect_complete, on_error, finished, True)
+
+    def _report_balloons(self, cleaned: int, skipped: list) -> None:
+        if not cleaned and not skipped:
+            return
+        text = QCoreApplication.translate("PaintController", "Cleaned %n white balloon(s).", "", cleaned)
+        if skipped:
+            # A plain name for the count: lupdate drops a translate() call whose
+            # count is an expression such as len(...), and the string never
+            # reaches the catalogue.
+            refused = len(skipped)
+            skipped_text = QCoreApplication.translate(
+                "PaintController",
+                "Skipped %n that are not plain white — clean those with the AI brush or Clean.",
+                "", refused,
+            )
+            text = f"{text} {skipped_text}"
+        (MMessage.warning if skipped and not cleaned else MMessage.info)(text=text, parent=self.main)
+
+    def _say_no_bubbles(self) -> None:
+        MMessage.info(
+            text=QCoreApplication.translate("PaintController", "No speech bubbles were found on this page."),
+            parent=self.main,
+        )
+
     def say_busy(self) -> None:
         MMessage.info(
             text=QCoreApplication.translate(
-                "PaintController", "Wait for the AI brush to finish before painting again."
+                "PaintController", "Wait for the cleaning in progress to finish, then try again."
             ),
             parent=self.main,
         )
@@ -98,6 +223,7 @@ class PaintController:
             "aibrush": QCoreApplication.translate("PaintController", "AI Inpaint"),
             "clone": QCoreApplication.translate("PaintController", "Clone Stamp"),
             "heal": QCoreApplication.translate("PaintController", "Healing Brush"),
+            "balloons": QCoreApplication.translate("PaintController", "Clean White Balloons"),
         }
         label = labels.get(mode, QCoreApplication.translate("PaintController", "Paint"))
         inpainting = self.main.pipeline.inpainting

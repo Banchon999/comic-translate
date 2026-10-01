@@ -62,7 +62,8 @@ def test_the_layout_holds_every_old_widget_in_its_new_place(win):
 
     for key in rail_tools:
         assert inside(win.tool_buttons[key], "toonToolRail"), key
-    for button in (win.delete_button, win.clear_rectangles_button, win.clear_brush_strokes_button,
+    for button in (win.clean_balloons_button, win.delete_button, win.clear_rectangles_button,
+                   win.clear_brush_strokes_button,
                    win.file_tree_button, win.layers_button, win.webtoon_toggle):
         assert inside(button, "toonToolRail")
 
