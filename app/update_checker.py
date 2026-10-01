@@ -11,6 +11,44 @@ from app.version import __version__
 
 logger = logging.getLogger(__name__)
 
+#: Files the update can run as they are.
+INSTALLER_SUFFIXES = {
+    "Windows": (".exe", ".msi"),
+    "Darwin": (".dmg", ".pkg"),
+}
+#: Release archives (what release.yml publishes), per OS: a name fragment and
+#: a suffix. An archive is downloaded and shown in its folder, never run.
+ARCHIVES = {
+    "Windows": ("windows", ".zip"),
+    "Linux": ("linux", ".tar.gz"),
+}
+
+
+def choose_asset(assets: list[dict], system: str) -> str | None:
+    """The download URL for this OS from a release's assets, or None.
+
+    An installer wins when the release has one; otherwise the archive built
+    for this OS (``ToonStudio-Windows-x86_64.zip``, ``ToonStudio-Linux-…``).
+    """
+    installers = INSTALLER_SUFFIXES.get(system, ())
+    for asset in assets:
+        if asset.get("name", "").lower().endswith(installers) and installers:
+            return asset.get("browser_download_url")
+    fragment, suffix = ARCHIVES.get(system, (None, None))
+    if fragment:
+        for asset in assets:
+            name = asset.get("name", "").lower()
+            if fragment in name and name.endswith(suffix):
+                return asset.get("browser_download_url")
+    return None
+
+
+def is_installer(path: str, system: str | None = None) -> bool:
+    """Whether a downloaded update is run (an installer) or shown (an archive)."""
+    suffixes = INSTALLER_SUFFIXES.get(system or platform.system(), ())
+    return bool(suffixes) and path.lower().endswith(suffixes)
+
+
 class UpdateChecker(QObject):
     """
     Checks for updates on GitHub and handles downloading/running installers.
@@ -30,7 +68,9 @@ class UpdateChecker(QObject):
     download_progress = Signal(int)
     download_finished = Signal(str) # file_path
 
-    REPO_OWNER = "ogkalu2"
+    # Toon Studio's own releases (release.yml publishes them); asking the
+    # upstream project offered its versions as updates to this app.
+    REPO_OWNER = "Banchon999"
     REPO_NAME = "comic-translate"
 
     def __init__(self):
@@ -66,9 +106,13 @@ class UpdateChecker(QObject):
         self._start(worker.run)
 
     def run_installer(self, file_path):
-        """Executes the installer based on the platform."""
+        """Run a downloaded installer, or show a downloaded archive in its
+        folder — an archive is unpacked by the user, never executed."""
         try:
             system = platform.system()
+            if not is_installer(file_path, system):
+                self.reveal(file_path, system)
+                return
             if system == "Windows":
                 # Use os.startfile; Windows will parse the installer manifest
                 # and trigger UAC only if the installer requires it.
@@ -77,6 +121,17 @@ class UpdateChecker(QObject):
                 subprocess.Popen(["open", file_path])
         except Exception as e:
             self.error_occurred.emit(f"Failed to launch installer: {e}")
+
+    @staticmethod
+    def reveal(file_path, system=None):
+        """Open the file manager at `file_path`, selected where the OS can."""
+        system = system or platform.system()
+        if system == "Windows":
+            subprocess.Popen(["explorer", "/select,", os.path.normpath(file_path)])
+        elif system == "Darwin":
+            subprocess.Popen(["open", "-R", file_path])
+        else:
+            subprocess.Popen(["xdg-open", os.path.dirname(os.path.abspath(file_path))])
 
     def shutdown(self, timeout: float = 1.0):
         """Wait briefly for a running request (best-effort).
@@ -112,20 +167,7 @@ class UpdateWorker:
                  return
 
             if version.parse(latest_tag) > version.parse(self.current_version):
-                # Find appropriate asset
-                asset_url = None
-                system = platform.system()
-                if system == "Windows":
-                    for asset in data.get("assets", []):
-                        if asset["name"].endswith(".exe") or asset["name"].endswith(".msi"):
-                            asset_url = asset["browser_download_url"]
-                            break
-                elif system == "Darwin":
-                    for asset in data.get("assets", []):
-                        if asset["name"].endswith(".dmg") or asset["name"].endswith(".pkg"):
-                            asset_url = asset["browser_download_url"]
-                            break
-                
+                asset_url = choose_asset(data.get("assets", []), platform.system())
                 if asset_url:
                     self.emit("update_available", latest_tag, data.get("html_url", ""), asset_url)
                 else:
