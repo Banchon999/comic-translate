@@ -121,7 +121,7 @@ def test_self_test_passes_here():
 
 
 @pytest.mark.parametrize("name", [
-    "build-windows.yml", "build-windows-full.yml", "main full.yml", "build-linux.yml", "build-macos-dmg.yml",
+    "build-windows.yml", "build-windows-full.yml", "main full.yml", "build-linux.yml",
 ])
 def test_every_build_bundles_openvino_and_proves_it(name):
     """PyInstaller can ship openvino without the plugins it loads by path;
@@ -129,3 +129,12 @@ def test_every_build_bundles_openvino_and_proves_it(name):
     text = (WORKFLOWS / name).read_text(encoding="utf-8")
     assert re.search(r"--collect-all\s+openvino", text), name
     assert "--openvino-self-test" in text, name
+
+
+def test_the_macos_build_leaves_openvino_out_on_purpose():
+    """Every dylib in openvino's macOS wheel has a __LINKEDIT that
+    install_name_tool refuses to edit, which aborts PyInstaller; the DMG falls
+    back to ONNX Runtime rather than failing to build."""
+    text = (WORKFLOWS / "build-macos-dmg.yml").read_text(encoding="utf-8")
+    assert "pip uninstall -y openvino" in text
+    assert "--collect-all openvino" not in text
