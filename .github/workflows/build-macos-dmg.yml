@@ -38,6 +38,17 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      # openvino's macOS wheel ships a libhwloc.dylib whose __LINKEDIT
+      # install_name_tool refuses to edit, which aborts PyInstaller's COLLECT.
+      # hwloc is only TBB's optional NUMA binding (loaded through tbbbind, which
+      # copes with its absence) and a Mac is a single NUMA node, so it is left
+      # out; the OpenVINO self-test below proves the CPU plugin still runs.
+      - name: Drop openvino's optional hwloc library
+        run: |
+          ovdir=$(python -c "import openvino, os; print(os.path.dirname(openvino.__file__))")
+          ls "$ovdir/libs" | grep -i -E "hwloc|tbbbind" || true
+          rm -f "$ovdir"/libs/libhwloc*.dylib "$ovdir"/libs/libtbbbind*.dylib
+
       - name: Build app with PyInstaller
         run: |
           pyinstaller --noconfirm --clean --windowed \
