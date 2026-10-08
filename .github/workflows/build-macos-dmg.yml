@@ -38,6 +38,14 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      # OpenVINO is left out of the macOS build: every dylib in its macOS wheel
+      # (libhwloc, then libtbb, ...) has a __LINKEDIT install_name_tool refuses
+      # to edit ("link edit information does not fill the __LINKEDIT
+      # segment"), which aborts PyInstaller's COLLECT. Uninstalled here, text
+      # segmentation on a Mac falls back to ONNX Runtime, as it did before.
+      - name: Leave OpenVINO out of the bundle
+        run: pip uninstall -y openvino
+
       - name: Build app with PyInstaller
         run: |
           pyinstaller --noconfirm --clean --windowed \

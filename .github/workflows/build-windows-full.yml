@@ -81,6 +81,7 @@ jobs:
             --collect-all tokenizers `
             --collect-all safetensors `
             --hidden-import transformers.models.paddleocr_vl `
+            --collect-all openvino `
             comic.py
 
       - name: Smoke test bundle
@@ -156,6 +157,28 @@ jobs:
             exit 1
           }
           Write-Output "Skia runtime self-test passed in the frozen bundle"
+
+      # Text segmentation falls back to ONNX Runtime (37-40 s per call instead
+      # of ~0.5 s) when OpenVINO is unusable, silently. PyInstaller can ship the
+      # package without the plugins it loads by path, so the frozen exe proves
+      # the ONNX frontend and CPU plugin work, not just that the import does.
+      - name: Verify OpenVINO is bundled
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem -Path dist -Recurse -File -Filter 'ToonStudio.exe' |
+                 Select-Object -First 1
+          if (-not $exe) { Write-Error "no ToonStudio.exe in dist"; exit 1 }
+          $errFile = Join-Path $env:RUNNER_TEMP 'openvino-self-test.err'
+          $proc = Start-Process -FilePath $exe.FullName `
+                                -ArgumentList '--openvino-self-test' `
+                                -Wait -PassThru -NoNewWindow `
+                                -RedirectStandardError $errFile
+          $detail = if (Test-Path $errFile) { (Get-Content $errFile -Raw) } else { '' }
+          if ($proc.ExitCode -ne 0) {
+            Write-Error "the OpenVINO self-test failed in the bundle (exit $($proc.ExitCode)): $detail"
+            exit 1
+          }
+          Write-Output "OpenVINO self-test passed in the frozen bundle"
 
       - name: Package zip
         shell: pwsh

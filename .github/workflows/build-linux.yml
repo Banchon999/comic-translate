@@ -38,6 +38,7 @@ jobs:
           pyinstaller --noconfirm --clean \
             --name ToonStudio \
             --add-data "resources:resources" \
+            --collect-all openvino \
             comic.py
 
       - name: Smoke test bundle
@@ -64,6 +65,15 @@ jobs:
             exit 1
           fi
           echo "Skia bundled: $(find dist -name 'skia*.so' -print -quit)"
+
+      # Text segmentation falls back to ONNX Runtime (37-40 s per call instead
+      # of ~0.5 s) when OpenVINO is unusable, silently. PyInstaller can ship the
+      # package without the plugins it loads by path, so the frozen app proves
+      # the ONNX frontend and CPU plugin work, not just that the import does.
+      - name: Verify OpenVINO is bundled
+        run: |
+          ./dist/ToonStudio/ToonStudio --openvino-self-test
+          echo "OpenVINO self-test passed in the frozen bundle"
 
       - name: Package tarball
         run: |

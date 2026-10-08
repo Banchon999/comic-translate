@@ -20,4 +20,8 @@ psd-tools>=1.18
 #     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 pip install playwright
 playwright>=1.40
 
+# Builds the tiny ONNX models tests/test_text_seg_backend.py runs through both
+# backends, so the comparison needs no model download.
+onnx>=1.16
+
 ruff>=0.6
