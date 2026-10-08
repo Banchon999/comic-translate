@@ -484,11 +484,34 @@ def _run_skia_self_test() -> int:
     return 0
 
 
+def _run_openvino_self_test() -> int:
+    """Prove OpenVINO's ONNX frontend and CPU plugin made it into this build.
+
+    The build workflows run it against the frozen executable: text
+    segmentation silently falls back to ONNX Runtime (37-40 s per call instead
+    of ~0.5 s) when OpenVINO is unusable, so only this catches a bundle that
+    shipped without it.
+    """
+    try:
+        from modules.detection.text_seg_onnx import openvino_self_test
+
+        reason = openvino_self_test()
+    except Exception as exc:
+        print(f"{type(exc).__name__}: {exc}", file=sys.stderr)
+        return 2
+    if reason:
+        print(reason, file=sys.stderr)
+        return 1
+    return 0
+
+
 if __name__ == "__main__":
-    # Checked before anything else is imported or shown: this process exists
+    # Checked before anything else is imported or shown: these processes exist
     # only to answer the question and exit.
     from core.skia_text import SELF_TEST_FLAG
 
     if SELF_TEST_FLAG in sys.argv[1:]:
         sys.exit(_run_skia_self_test())
+    if "--openvino-self-test" in sys.argv[1:]:
+        sys.exit(_run_openvino_self_test())
     main()

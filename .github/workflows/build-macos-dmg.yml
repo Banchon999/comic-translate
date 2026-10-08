@@ -45,6 +45,7 @@ jobs:
             --icon resources/icons/icon.icns \
             --osx-bundle-identifier com.comiclabs.toonstudio \
             --add-data "resources:resources" \
+            --collect-all openvino \
             comic.py
 
       # PyInstaller writes version 0.0.0 and the bare executable name. Editing
@@ -96,6 +97,15 @@ jobs:
       # hdiutil ships with macOS, so the DMG needs nothing from Homebrew. The
       # bundle is copied with ditto, which keeps the symlinks PyInstaller lays
       # out inside it (cp -R can follow them and break the signature).
+      # Text segmentation falls back to ONNX Runtime (37-40 s per call instead
+      # of ~0.5 s) when OpenVINO is unusable, silently. PyInstaller can ship the
+      # package without the plugins it loads by path, so the frozen app proves
+      # the ONNX frontend and CPU plugin work, not just that the import does.
+      - name: Verify OpenVINO is bundled
+        run: |
+          dist/ToonStudio.app/Contents/MacOS/ToonStudio --openvino-self-test
+          echo "OpenVINO self-test passed in the frozen bundle"
+
       - name: Build DMG
         run: |
           stage=$(mktemp -d)
@@ -114,6 +124,7 @@ jobs:
           test -L "$mount/Applications"
           codesign --verify --deep --strict "$mount/Toon Studio.app"
           "$mount/Toon Studio.app/Contents/MacOS/ToonStudio" --skia-self-test
+          "$mount/Toon Studio.app/Contents/MacOS/ToonStudio" --openvino-self-test
           hdiutil detach "$mount"
           ls -lh dist/ToonStudio-macOS-arm64.dmg
 
