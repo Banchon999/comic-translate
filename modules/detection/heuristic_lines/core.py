@@ -9,6 +9,8 @@ from .skew import _detect_horizontal_lines_skew_aware, _filter_noise_lines
 from .clustering import (
     _detect_lines_from_mask,
     _filter_marginal_horizontal_artifacts,
+    _absorb_glyph_fragments,
+    _join_split_line_halves,
     _merge_small_horizontal_fragments,
     _trim_marginal_vertical_noise_from_horizontal_lines,
 )
@@ -155,6 +157,7 @@ def _detect_lines_and_direction_in_crop(
         lines = _collapse_edge_spanning_horizontal_fragments(lines, text_mask, vertical_lines)
         lines, text_mask = _replace_low_density_line_with_inverse_mask(image, lines, text_mask)
         lines = _merge_small_horizontal_fragments(lines)
+        lines = _absorb_glyph_fragments(lines)
         lines = _filter_marginal_horizontal_artifacts(lines, text_mask)
     else:
         if _should_use_component_vertical_columns(text_mask, vertical_lines, component_vertical_lines) or _should_add_one_component_vertical_column(
@@ -171,6 +174,12 @@ def _detect_lines_and_direction_in_crop(
     if not lines:
         lines = [[0, 0, width, height]]
     lines = _pad_line_boxes(lines, direction, width, height)
+    if direction == "horizontal":
+        # Again on the padded boxes: a glyph piece cut off a too-short line
+        # can overlap that line only once both are padded (measured: 31%
+        # padded, under the threshold before).
+        lines = _absorb_glyph_fragments(lines)
+        lines = _join_split_line_halves(lines)
     if direction == "vertical":
         lines = _widen_skinny_vertical_lines_by_spacing(lines, width, mask_stats)
         lines = _split_tall_vertical_lines_on_valleys(lines, text_mask, mask_stats)

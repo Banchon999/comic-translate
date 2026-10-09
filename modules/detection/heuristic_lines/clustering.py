@@ -453,6 +453,123 @@ def _merge_small_horizontal_fragments(lines: list[list[int]]) -> list[list[int]]
             res.append(line)
     return res
 
+def _absorb_glyph_fragments(lines: list[list[int]]) -> list[list[int]]:
+    """Fold pieces of a line's glyphs back into that line.
+
+    When a line's box comes out too short, the parts of its glyphs that stick
+    out (the bottom of 공 and 님!, a comma) are found as lines of their own,
+    and each is then recognised separately and appended to the text: a real
+    bubble reading "안녕하세요, 공녀님!" came out of OCR as
+    "안녕하세요, 인당아재표, [공녀님 [이너!] [이니!]". The median-based
+    `_merge_small_horizontal_fragments` cannot catch it when, as there, most
+    of the boxes are fragments and the median is a fragment's height.
+
+    So a box is judged against each candidate line instead: it is a fragment
+    of that line when it is at most half as wide, lies mostly within the
+    line's width, and overlaps the line vertically. Two real lines never
+    overlap vertically, which is what keeps a short second line separate.
+    """
+    from .geometry import _line_axis_box
+
+    if len(lines) <= 1:
+        return lines
+    boxes = [list(_line_axis_box(line)) for line in lines]
+    consumed: set[int] = set()
+    merged = True
+    while merged:  # a line grown by one fragment may now reach the next
+        merged = False
+        for index in sorted(range(len(boxes)), key=lambda i: boxes[i][2] - boxes[i][0]):
+            if index in consumed:
+                continue
+            box = boxes[index]
+            width = max(1, box[2] - box[0])
+            height = max(1, box[3] - box[1])
+            best, best_overlap = None, 0.0
+            for target_index, target in enumerate(boxes):
+                if target_index == index or target_index in consumed:
+                    continue
+                target_width = max(1, target[2] - target[0])
+                if target_width < width * 2:
+                    continue
+                horizontal = min(box[2], target[2]) - max(box[0], target[0])
+                vertical = min(box[3], target[3]) - max(box[1], target[1])
+                if horizontal < width * 0.7 or vertical < height * FRAGMENT_MIN_VERTICAL_OVERLAP:
+                    continue
+                if vertical / height > best_overlap:
+                    best, best_overlap = target_index, vertical / height
+            if best is None:
+                continue
+            target = boxes[best]
+            boxes[best] = [min(target[0], box[0]), min(target[1], box[1]),
+                           max(target[2], box[2]), max(target[3], box[3])]
+            consumed.add(index)
+            merged = True
+    out = []
+    for index, line in enumerate(lines):
+        if index in consumed:
+            continue
+        out.append(boxes[index] if boxes[index] != list(_line_axis_box(line)) else line)
+    return out
+
+
+def _join_split_line_halves(lines: list[list[int]]) -> list[list[int]]:
+    """Join a line that was cut into a top and a bottom half.
+
+    A Hangul syllable with a final consonant (공, 님) has a white gap between
+    its upper jamo and the consonant below, so a row projection can find a
+    valley there and split the line in two stacked halves of the same width
+    — "공녀님." on a real page came out of OCR as "괴녀니 아니마". Two boxes
+    are joined when each is under SPLIT_HALF_MAX of the tallest line's height,
+    they overlap sideways almost completely, they touch, and together they are
+    no taller than a whole line. Real lines in one bubble share its font size,
+    so they are as tall as the tallest line and never qualify.
+    """
+    from .geometry import _line_axis_box
+
+    if len(lines) <= 2:
+        return lines
+    boxes = [list(_line_axis_box(line)) for line in lines]
+    tallest = max(b[3] - b[1] for b in boxes)
+    consumed: set[int] = set()
+    for i in range(len(boxes)):
+        for j in range(len(boxes)):
+            if i == j or i in consumed or j in consumed:
+                continue
+            top, bottom = boxes[i], boxes[j]
+            if top[1] > bottom[1]:
+                continue
+            h_top, h_bottom = top[3] - top[1], bottom[3] - bottom[1]
+            if max(h_top, h_bottom) >= tallest * SPLIT_HALF_MAX:
+                continue
+            narrower = max(1, min(top[2] - top[0], bottom[2] - bottom[0]))
+            if min(top[2], bottom[2]) - max(top[0], bottom[0]) < narrower * 0.7:
+                continue
+            if bottom[1] - top[3] > max(2, tallest * 0.15):
+                continue
+            joined = [min(top[0], bottom[0]), top[1], max(top[2], bottom[2]), max(top[3], bottom[3])]
+            if joined[3] - joined[1] > tallest * 1.2:
+                continue
+            boxes[i] = joined
+            consumed.add(j)
+    out = []
+    for index, line in enumerate(lines):
+        if index in consumed:
+            continue
+        out.append(boxes[index] if boxes[index] != list(_line_axis_box(line)) else line)
+    return out
+
+
+#: A box this tall or taller (fraction of the block's tallest line) is a line,
+#: not half of one.
+SPLIT_HALF_MAX = 0.6
+
+
+#: How much of a fragment's height must overlap its line to be folded in.
+#: Glyph pieces measured on a real page overlapped by 31%; two separate lines
+#: of tightly set text overlap by a pixel or two, far below this.
+FRAGMENT_MIN_VERTICAL_OVERLAP = 0.25
+
+
 def _filter_marginal_horizontal_artifacts(
     lines: list[list[int]],
     text_mask: np.ndarray,
