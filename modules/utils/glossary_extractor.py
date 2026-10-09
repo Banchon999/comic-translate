@@ -3,6 +3,7 @@ import logging
 from typing import Callable
 
 from .glossary import GlossaryEntry, term_key
+from .thai_speech import extraction_gender_rules
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +37,10 @@ particle, spacing or an attached suffix.
 
 Translate/romanize each term the way a professional {target_lang} localization would, and keep it consistent.
 
+{gender_rules}
+
 Respond with ONLY a JSON array, no explanations, in this exact shape:
-[{{"source": "<term in dictionary form>", "target": "<translation in {target_lang}>", "type": "<character|place|organization|skill|item|term>", "gender": "<male|female|neutral or empty, characters only>", "note": "<short note, optional>"}}]"""
+[{{"source": "<term in dictionary form>", "target": "<translation in {target_lang}>", "type": "<character|place|organization|skill|item|term>", "gender": "<male|female|neutral for characters, empty otherwise>", "note": "<short note, optional>"}}]"""
 
 
 def _parse_json_array(response: str) -> list[dict]:
@@ -122,6 +125,7 @@ def extract_glossary_terms(
     system_prompt = EXTRACTION_SYSTEM_PROMPT.format(
         source_lang=translator.source_lang_en or "the source language",
         target_lang=translator.target_lang_en or "the target language",
+        gender_rules=extraction_gender_rules(translator.source_lang_en),
     )
 
     chunks = split_into_chunks(log_text)

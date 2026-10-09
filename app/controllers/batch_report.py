@@ -10,6 +10,7 @@ from app.ui.dayu_widgets import dayu_theme
 from app.ui.dayu_widgets.drawer import MDrawer
 from app.ui.dayu_widgets.message import MMessage
 from app.ui.dayu_widgets.push_button import MPushButton
+from app.ui.messages import Messages
 
 if TYPE_CHECKING:
     from controller import ComicTranslate
@@ -239,7 +240,9 @@ class BatchReportController:
         """Record glossary terms a page's translation left out.
 
         issues is a list of (term as seen in the source, expected translation)
-        pairs. A warning, not a skip: the page was translated and saved.
+        pairs, plus (translation, reason, "speech") for a Thai bubble whose
+        ครับ/ค่ะ contradict each other. A warning, not a skip: the page was
+        translated and saved.
         """
         report = self._current_batch_report
         if not report or not issues:
@@ -251,8 +254,8 @@ class BatchReportController:
             "image_name": os.path.basename(image_path),
             "issues": [],
         })
-        for seen_as, expected in issues:
-            pair = [str(seen_as), str(expected)]
+        for issue in issues:
+            pair = [str(part) for part in issue]
             if pair not in entry["issues"]:
                 entry["issues"].append(pair)
 
@@ -512,16 +515,20 @@ class BatchReportController:
         table.setMinimumHeight(visible_rows * 28 + 36)
         table.setMaximumHeight(visible_rows * 28 + 36)
         should_be = self.main.tr("«{0}» should be «{1}»")
+
+        def describe(issue):
+            if len(issue) > 2 and issue[2] == "speech":
+                return Messages.speech_issue_line(issue[0], issue[1])
+            return should_be.format(issue[0], issue[1])
+
         for row, entry in enumerate(glossary_entries):
             image_item = QtWidgets.QTableWidgetItem(entry["image_name"])
             image_item.setData(QtCore.Qt.ItemDataRole.UserRole, entry["image_path"])
             image_item.setToolTip(entry["image_path"])
             table.setItem(row, 0, image_item)
-            terms = "; ".join(should_be.format(seen, expected) for seen, expected in entry["issues"])
+            terms = "; ".join(describe(issue) for issue in entry["issues"])
             terms_item = QtWidgets.QTableWidgetItem(terms)
-            terms_item.setToolTip("\n".join(
-                should_be.format(seen, expected) for seen, expected in entry["issues"]
-            ))
+            terms_item.setToolTip("\n".join(describe(issue) for issue in entry["issues"]))
             table.setItem(row, 1, terms_item)
         table.itemDoubleClicked.connect(
             lambda item, t=table: self._open_report_row_image(t, item.row())

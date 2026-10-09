@@ -13,7 +13,7 @@ from modules.detection.processor import TextBlockDetector
 from modules.translation.processor import Translator
 from modules.utils.device import resolve_device
 from modules.utils.exceptions import InsufficientCreditsException
-from modules.utils.glossary import collect_source_text
+from modules.utils.glossary import collect_source_text, issue_rows
 from modules.utils.image_utils import generate_mask
 from modules.utils.text_segmentation import segment_page
 from modules.utils.pipeline_config import get_config, get_inpainter_backend, inpaint_map
@@ -166,9 +166,7 @@ class ChunkMixin:
             return
         issues = translator.check_glossary(blocks)
         if issues:
-            self.main_page.glossary_issues_found.emit(
-                image_path, [(i.seen_as or i.source_term, i.expected) for i in issues]
-            )
+            self.main_page.glossary_issues_found.emit(image_path, issue_rows(issues))
 
     def _inpaint_image_with_blocks(
         self: WebtoonBatchProcessor,

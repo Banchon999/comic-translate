@@ -7,6 +7,7 @@ import unicodedata
 from dataclasses import dataclass, asdict
 
 from .paths import get_user_data_dir
+from .thai_speech import SpeechIssue, fix_address_gender, is_thai, thai_gender_details
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +64,16 @@ class GlossaryEntry:
     def key(self) -> str:
         """What this entry is, for comparison against other entries."""
         return term_key(self.source)
+
+    @property
+    def prompt_target(self) -> str:
+        """The translation to ask for: target, with a wrong-gender form of address fixed."""
+        return fix_address_gender(self.source, self.target)
+
+    @property
+    def needs_gender(self) -> bool:
+        """A character whose gender nobody has decided yet."""
+        return self.type == "character" and self.gender not in ("male", "female", "neutral")
 
     @classmethod
     def from_dict(cls, data: dict) -> "GlossaryEntry | None":
@@ -570,6 +581,46 @@ class GlossaryManager:
                 seen.append(e.type)
         return seen
 
+    # Extraction
+
+    def extraction_skip_sources(self) -> set[str]:
+        """Terms an extraction run must not report again.
+
+        Characters with no gender yet are left off on purpose: the model then
+        reports them again, with a gender, and merge_extracted fills it in.
+        """
+        return {e.source for e in self.entries if e.source and not e.needs_gender}
+
+    def merge_extracted(self, entries: list[GlossaryEntry], save: bool = True) -> tuple[int, int]:
+        """Add extracted terms; returns (added, characters whose gender was filled in).
+
+        A term already in the glossary is never overwritten — the user may have
+        corrected it — except to give a gender-less character the male or
+        female the model found. "neutral" fills nothing: it means the model
+        could not tell either, so the next run may ask again.
+        """
+        added = filled = 0
+        for entry in entries:
+            if not entry.key:
+                continue
+            existing = self.find(entry.source)
+            if existing is not None:
+                if (
+                    existing.needs_gender and entry.type == "character"
+                    and entry.gender in ("male", "female")
+                ):
+                    existing.gender = entry.gender
+                    filled += 1
+                continue
+            if entry.type != "character":
+                entry.gender = ""
+            entry.target = fix_address_gender(entry.source, entry.target)
+            self.entries.append(entry)
+            added += 1
+        if save and (added or filled):
+            self.save()
+        return added, filled
+
     # OCR log (per profile) — raw source text collected during OCR so a
     # glossary can later be extracted from it by an LLM.
 
@@ -804,12 +855,12 @@ class GlossaryManager:
             for match in self.find_matches(source):
                 if match.fuzzy:
                     continue
-                expected = _squash(match.entry.target)
+                expected = _squash(match.entry.prompt_target)
                 if expected and expected not in translation:
                     issues.append(GlossaryIssue(
                         block_index=index,
                         source_term=match.entry.source,
-                        expected=match.entry.target,
+                        expected=match.entry.prompt_target,
                         seen_as=match.seen_as,
                     ))
         return issues
@@ -860,11 +911,17 @@ class GlossaryManager:
         ]
         for m in matches:
             e = m.entry
+            target = e.prompt_target
             details = []
             if e.type and e.type != "term":
                 details.append(e.type)
             if e.gender and e.type == "character":
-                details.append(f"gender: {e.gender}")
+                # Into Thai, a gender decides the particle and both pronouns,
+                # and the model only uses it reliably when told which ones.
+                if is_thai(target):
+                    details.extend(thai_gender_details(e.gender))
+                else:
+                    details.append(f"gender: {e.gender}")
             if e.note:
                 details.append(e.note)
             suffix = f" ({'; '.join(details)})" if details else ""
@@ -873,5 +930,20 @@ class GlossaryManager:
                     f" [the text has «{m.seen_as}», probably this term misread by OCR;"
                     " apply only if it means this term]"
                 )
-            lines.append(f"- {e.source} => {e.target}{suffix}")
+            lines.append(f"- {e.source} => {target}{suffix}")
         return "\n".join(lines)
+
+
+def issue_rows(issues) -> list[tuple]:
+    """Translation warnings as the batch report stores them.
+
+    A glossary term is (as seen, expected); a speech issue is
+    (translation, reason, "speech"), since it has no single expected word.
+    """
+    rows: list[tuple] = []
+    for issue in issues or []:
+        if isinstance(issue, SpeechIssue):
+            rows.append((issue.seen_as, issue.reason, "speech"))
+        else:
+            rows.append((issue.seen_as or issue.source_term, issue.expected))
+    return rows
