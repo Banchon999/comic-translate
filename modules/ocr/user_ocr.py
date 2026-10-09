@@ -9,7 +9,7 @@ from typing import Any, List, Optional, Dict
 from .base import OCREngine 
 from ..utils.textblock import TextBlock 
 from ..utils.textblock import lists_to_blk_list
-from ..utils.textblock import adjust_text_line_coordinates
+from .crop_utils import llm_ocr_bounds
 from ..utils.language_utils import resolve_auto_source_language
 
 from typing import TYPE_CHECKING
@@ -168,17 +168,11 @@ class UserOCR(OCREngine):
         h, w = img.shape[:2]
 
         for i, blk in enumerate(blk_list):
-            # Determine coordinates to be used
-            if blk.bubble_xyxy is not None:
-                x1, y1, x2, y2 = blk.bubble_xyxy
-            elif blk.xyxy is not None:
-                expansion_percentage = 5 
-                x1, y1, x2, y2 = adjust_text_line_coordinates(
-                    blk.xyxy, expansion_percentage, expansion_percentage, img, getattr(self, "min_expansion_px", 0)
-                )
-            else:
-                logger.warning(f"Block {i} has no coordinates, skipping.")
+            bounds = llm_ocr_bounds(img, blk, blk_list, 5, getattr(self, "min_expansion_px", 0))
+            if bounds is None:
+                logger.warning(f"Block {i} has no usable coordinates, skipping.")
                 continue
+            x1, y1, x2, y2 = bounds
 
             # Validate coordinates against image bounds
             x1, y1 = max(0, int(x1)), max(0, int(y1))

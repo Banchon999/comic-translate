@@ -4,7 +4,8 @@ import numpy as np
 import requests
 
 from .base import OCREngine
-from ..utils.textblock import TextBlock, adjust_text_line_coordinates
+from ..utils.textblock import TextBlock
+from .crop_utils import llm_ocr_bounds
 from ..utils.translator_utils import MODEL_MAP
 from typing import TYPE_CHECKING
 
@@ -63,17 +64,14 @@ class GeminiOCR(OCREngine):
             List of updated TextBlock objects with recognized text
         """
         for blk in blk_list:
-            # Get box coordinates
-            if blk.bubble_xyxy is not None:
-                x1, y1, x2, y2 = blk.bubble_xyxy
-            else:
-                x1, y1, x2, y2 = adjust_text_line_coordinates(
-                    blk.xyxy, 
-                    self.expansion_percentage, 
-                    self.expansion_percentage, 
-                    img, getattr(self, "min_expansion_px", 0)
-                )
-            
+            bounds = llm_ocr_bounds(
+                img, blk, blk_list, self.expansion_percentage,
+                getattr(self, "min_expansion_px", 0),
+            )
+            if bounds is None:
+                continue
+            x1, y1, x2, y2 = bounds
+
             # Check if coordinates are valid
             if x1 < x2 and y1 < y2 and x1 >= 0 and y1 >= 0 and x2 <= img.shape[1] and y2 <= img.shape[0]:
                 # Crop image and encode

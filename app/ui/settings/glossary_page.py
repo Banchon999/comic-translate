@@ -499,7 +499,7 @@ class GlossaryPage(QtWidgets.QWidget):
                 self.tr("The main window is not available yet."),
             )
             return
-        existing = {entry.source for entry in self.manager.entries}
+        existing = self.manager.extraction_skip_sources()
 
         self.extract_button.setEnabled(False)
         self.extract_button.setText(self.tr("Extracting..."))
@@ -564,7 +564,7 @@ class GlossaryPage(QtWidgets.QWidget):
 
         text = "\n".join(self._pending_pages)
         self._pending_pages.clear()
-        existing = {entry.source for entry in self.manager.entries}
+        existing = self.manager.extraction_skip_sources()
         self._page_extraction_running = True
         self._update_queue_status()
 
@@ -576,10 +576,8 @@ class GlossaryPage(QtWidgets.QWidget):
 
     def _on_page_extraction_done(self, entries):
         self._page_extraction_running = False
-        for entry in entries or []:
-            self.manager.upsert(entry, save=False)
-        if entries:
-            self.manager.save()
+        added, filled = self.manager.merge_extracted(entries or [])
+        if added or filled:
             self._refresh_type_filter()
             self.refresh_table()
         self._update_queue_status()
@@ -628,17 +626,15 @@ class GlossaryPage(QtWidgets.QWidget):
                 self.tr("No new terms were found in the OCR log."),
             )
             return
-        for entry in entries:
-            self.manager.upsert(entry, save=False)
-        self.manager.save()
+        added, filled = self.manager.merge_extracted(entries)
         self._refresh_type_filter()
         self.refresh_table()
-        QtWidgets.QMessageBox.information(
-            self, self.tr("Glossary"),
-            self.tr("Added {0} new term(s) to \"{1}\".").format(
-                len(entries), self.manager.active_profile
-            ),
+        message = self.tr("Added {0} new term(s) to \"{1}\".").format(
+            added, self.manager.active_profile
         )
+        if filled:
+            message += "\n" + self.tr("Filled in the gender of {0} character(s).").format(filled)
+        QtWidgets.QMessageBox.information(self, self.tr("Glossary"), message)
 
     def _on_extraction_error(self, error_info):
         self._reset_extract_button()

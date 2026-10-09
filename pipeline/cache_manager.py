@@ -4,6 +4,18 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _speaker_fields(blk) -> dict:
+    """The speaker a translator reported for blk, as cache entry fields."""
+    speaker = getattr(blk, 'speaker', '') or ''
+    gender = getattr(blk, 'speaker_gender', '') or ''
+    fields = {}
+    if speaker:
+        fields['speaker'] = speaker
+    if gender:
+        fields['speaker_gender'] = gender
+    return fields
+
+
 class CacheManager:
     """Manages OCR and translation caching for the pipeline."""
     
@@ -242,7 +254,8 @@ class CacheManager:
                         # Store both source text and translation to validate cache validity
                         block_results[block_id] = {
                             'source_text': source_text,
-                            'translation': translation
+                            'translation': translation,
+                            **_speaker_fields(processed_blk),
                         }
             else:
                 # Standard case: use the same blocks for both ID and translation
@@ -254,7 +267,8 @@ class CacheManager:
                     if translation:
                         block_results[block_id] = {
                             'source_text': source_text,
-                            'translation': translation
+                            'translation': translation,
+                            **_speaker_fields(blk),
                         }
             # Do not create a translation cache entry if no translations were present
             if block_results:
@@ -349,4 +363,10 @@ class CacheManager:
         for block in block_list:
             cached_translation = self._get_cached_translation_for_block(cache_key, block)
             if cached_translation is not None: 
-                block.translation = cached_translation  
+                block.translation = cached_translation
+                # Who speaks it, when the translator reported that (into Thai),
+                # so a page served from cache is checked like a fresh one.
+                _matched, result = self._find_matching_translation_block_id(cache_key, block)
+                result = result or {}
+                block.speaker = result.get('speaker', '')
+                block.speaker_gender = result.get('speaker_gender', '')  

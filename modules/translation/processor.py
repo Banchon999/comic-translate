@@ -3,6 +3,7 @@ import logging
 import numpy as np
 
 from ..utils.textblock import TextBlock
+from ..utils.thai_speech import check_speech, targets_thai
 from .base import LLMTranslation
 from .factory import TranslationFactory
 
@@ -107,23 +108,33 @@ class Translator:
             return self.engine.translate(blk_list)
 
     def check_glossary(self, blk_list: list[TextBlock]) -> list:
-        """Glossary terms the translation of blk_list left out, as GlossaryIssues.
+        """What is wrong with the translation of blk_list, as warnings.
 
-        Only for LLM engines — they are the ones handed the glossary; checking
-        a DeepL result against terms it never saw would only produce noise.
+        GlossaryIssues for terms the translation left out — only for LLM
+        engines, which are the ones handed the glossary; checking a DeepL
+        result against terms it never saw would only produce noise. Into Thai,
+        also SpeechIssues for blocks whose ครับ/ค่ะ contradict each other or
+        the speaker's self-pronoun, whatever engine wrote them: that is wrong
+        whoever said the line.
         Run it on the blocks as they finally stand, after any cache hit, so a
         page served from cache is checked the same as one just translated.
         """
-        if not self.is_llm_engine:
-            return []
-        try:
-            manager = self.settings.ui.glossary_page.manager
-        except AttributeError:
-            return []
-        issues = manager.check_translation(blk_list)
-        for issue in issues:
-            logger.warning(
-                "Translation ignored glossary: %r (seen as %r) should be %r",
-                issue.source_term, issue.seen_as, issue.expected,
-            )
+        issues: list = []
+        if self.is_llm_engine:
+            try:
+                manager = self.settings.ui.glossary_page.manager
+            except AttributeError:
+                manager = None
+            if manager is not None:
+                issues = manager.check_translation(blk_list)
+            for issue in issues:
+                logger.warning(
+                    "Translation ignored glossary: %r (seen as %r) should be %r",
+                    issue.source_term, issue.seen_as, issue.expected,
+                )
+        if targets_thai(getattr(self, "target_lang_en", "")):
+            speech = check_speech(blk_list)
+            for issue in speech:
+                logger.warning("Mismatched Thai speech markers (%s): %r", issue.reason, issue.seen_as)
+            issues = issues + speech
         return issues

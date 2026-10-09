@@ -256,25 +256,82 @@ class Messages:
 
 
     @staticmethod
+    def speech_reason_text(reason: str, speaker: str = "") -> str:
+        """Why a Thai block's ครับ/ค่ะ was flagged, for one SpeechIssue reason."""
+        from modules.utils import thai_speech
+        texts = {
+            thai_speech.MIXED: QCoreApplication.translate(
+                "Messages", "both ครับ and ค่ะ/คะ in one bubble"
+            ),
+            thai_speech.MALE_SELF_FEMALE_PARTICLE: QCoreApplication.translate(
+                "Messages", "says ผม but ends with ค่ะ/คะ"
+            ),
+            thai_speech.FEMALE_SELF_MALE_PARTICLE: QCoreApplication.translate(
+                "Messages", "says ดิฉัน but ends with ครับ"
+            ),
+            thai_speech.FEMALE_SPEAKER_MALE_SPEECH: QCoreApplication.translate(
+                "Messages", "the AI says {0} (female) speaks, but the line uses ครับ/กระผม"
+            ),
+            thai_speech.MALE_SPEAKER_FEMALE_SPEECH: QCoreApplication.translate(
+                "Messages", "the AI says {0} (male) speaks, but the line uses ค่ะ/คะ/ดิฉัน"
+            ),
+        }
+        text = texts.get(reason, reason)
+        if "{0}" in text:
+            text = text.format(
+                speaker or QCoreApplication.translate("Messages", "the speaker")
+            )
+        return text
+
+    @staticmethod
+    def speech_issue_line(seen_as: str, reason: str, max_chars: int = 60, speaker: str = "") -> str:
+        if len(seen_as) > max_chars:
+            seen_as = seen_as[:max_chars - 1] + "…"
+        return QCoreApplication.translate("Messages", "«{0}»: {1}").format(
+            seen_as, Messages.speech_reason_text(reason, speaker)
+        )
+
+    @staticmethod
     def glossary_issues_text(issues, limit: int = 5) -> str:
-        """The warning shown when a translation left out glossary terms."""
-        lines = [
-            QCoreApplication.translate(
-                "Messages",
-                "{0} glossary term(s) were not translated as set in the glossary:"
-            ).format(len(issues))
-        ]
-        line = QCoreApplication.translate("Messages", "«{0}» should be «{1}»")
-        seen = set()
-        for issue in issues:
-            pair = (issue.source_term, issue.expected)
-            if pair in seen:
-                continue
-            seen.add(pair)
-            if len(seen) > limit:
-                lines.append("…")
-                break
-            lines.append(line.format(issue.seen_as or issue.source_term, issue.expected))
+        """The warning shown when a translation left out glossary terms.
+
+        Thai ครับ/ค่ะ problems (SpeechIssues) get a section of their own.
+        """
+        from modules.utils.thai_speech import SpeechIssue
+        speech = [issue for issue in issues if isinstance(issue, SpeechIssue)]
+        terms = [issue for issue in issues if not isinstance(issue, SpeechIssue)]
+        lines = []
+        if terms:
+            lines.append(
+                QCoreApplication.translate(
+                    "Messages",
+                    "{0} glossary term(s) were not translated as set in the glossary:"
+                ).format(len(terms))
+            )
+            line = QCoreApplication.translate("Messages", "«{0}» should be «{1}»")
+            seen = set()
+            for issue in terms:
+                pair = (issue.source_term, issue.expected)
+                if pair in seen:
+                    continue
+                seen.add(pair)
+                if len(seen) > limit:
+                    lines.append("…")
+                    break
+                lines.append(line.format(issue.seen_as or issue.source_term, issue.expected))
+        if speech:
+            lines.append(
+                QCoreApplication.translate(
+                    "Messages", "{0} bubble(s) with ครับ/ค่ะ that need checking:"
+                ).format(len(speech))
+            )
+            for index, issue in enumerate(speech):
+                if index == limit:
+                    lines.append("…")
+                    break
+                lines.append(Messages.speech_issue_line(
+                    issue.seen_as, issue.reason, speaker=issue.speaker
+                ))
         return "\n".join(lines)
 
     @staticmethod

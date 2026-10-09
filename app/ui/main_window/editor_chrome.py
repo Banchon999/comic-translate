@@ -96,13 +96,26 @@ class GlossaryPeekPanel(QtWidgets.QWidget):
         manager = getattr(getattr(getattr(main, "settings_page", None), "ui", None), "glossary_page", None)
         manager = getattr(manager, "manager", None)
         t = dayu_theme.tokens
+        from app.ui.messages import Messages
+        from modules.utils.thai_speech import SpeechIssue
+
         issues = getattr(main, "last_glossary_issues", None) or []
+        speech = [i for i in issues if isinstance(i, SpeechIssue)]
+        terms = [i for i in issues if not isinstance(i, SpeechIssue)]
         if issues:
-            lines = [self.tr("{0} term(s) not translated as set:").format(len(issues))]
-            lines += [
-                self.tr("«{0}» should be «{1}»").format(i.seen_as or i.source_term, i.expected)
-                for i in issues[:5]
-            ]
+            lines = []
+            if terms:
+                lines.append(self.tr("{0} term(s) not translated as set:").format(len(terms)))
+                lines += [
+                    self.tr("«{0}» should be «{1}»").format(i.seen_as or i.source_term, i.expected)
+                    for i in terms[:5]
+                ]
+            if speech:
+                lines.append(self.tr("{0} bubble(s) with ครับ/ค่ะ to check:").format(len(speech)))
+                lines += [
+                    Messages.speech_issue_line(i.seen_as, i.reason, 40, i.speaker)
+                    for i in speech[:5]
+                ]
             self.warning.setText("\n".join(lines))
             self.warning.setStyleSheet(
                 f"color: {t['warn']}; background: transparent; padding: 8px;"

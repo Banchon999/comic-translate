@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple
 
 import imkit as imk
 import numpy as np
@@ -13,18 +13,32 @@ from modules.detection.processor import TextBlockDetector
 from modules.translation.processor import Translator
 from modules.utils.device import resolve_device
 from modules.utils.exceptions import InsufficientCreditsException
-from modules.utils.glossary import collect_source_text
+from modules.utils.glossary import collect_source_text, issue_rows
 from modules.utils.image_utils import generate_mask
 from modules.utils.text_segmentation import segment_page
 from modules.utils.pipeline_config import get_config, get_inpainter_backend, inpaint_map
 from modules.utils.textblock import TextBlock, sort_blk_list
-from modules.utils.translator_utils import is_renderable_translation
+from modules.utils.strip_sheet import sheet_note, strip_sheet
+from modules.utils.translator_utils import is_renderable_translation, previous_lines, speakers_so_far
 from pipeline.inpainting import call_inpaint_image
 
 if TYPE_CHECKING:
     from .processor import WebtoonBatchProcessor
 
 logger = logging.getLogger(__name__)
+
+
+#: Blocks per translation request when a whole strip is translated at once.
+STRIP_GROUP_BLOCKS = 40
+#: Told to a request that sees only part of a strip.
+STRIP_PART_NOTE = "The image shows only the part of the strip these text blocks are in."
+#: Told when other requests' lettering was covered in that image.
+STRIP_COVERED_NOTE = (
+    "Grey boxes cover lettering that belongs to other requests. Translate exactly the blocks "
+    "in the JSON."
+)
+#: What covers other groups' lettering in a group's image.
+OTHER_GROUP_FILL = (200, 200, 200)
 
 
 class ChunkMixin:
@@ -141,34 +155,143 @@ class ChunkMixin:
 
     def _run_translation_on_blocks(
         self: WebtoonBatchProcessor,
-        image: np.ndarray,
+        image: Optional[np.ndarray],
         blocks: List[TextBlock],
         source_lang: str,
         target_lang: str,
         image_path: str,
+        image_note: str = "",
+        group_image: Optional[Callable[[int, int], Tuple[np.ndarray, str]]] = None,
     ) -> None:
+        """Translate blocks — a whole strip — and report what needs checking.
+
+        Sent STRIP_GROUP_BLOCKS at a time: a long strip can hold a hundred
+        bubbles, and asked for all of them at once (each with its speaker,
+        into Thai) a model runs out of output tokens and returns cut-off
+        JSON. Every group after the first is told which speakers the earlier
+        ones named, so a character keeps one name and gender across the strip.
+
+        group_image(start, end) gives each group its own image and note. A
+        group must not be shown the whole strip: tested on a real model, five
+        blocks sent with a picture of fourteen bubbles came back as
+        translations of whichever bubbles the model read first in the picture.
+        """
         if not blocks:
             return
-        extra_context = self.main_page.settings_page.get_extra_context(
-            collect_source_text(blocks)
-        )
         translator = Translator(self.main_page, source_lang, target_lang)
-        try:
-            translator.translate(blocks, image, extra_context)
-        except InsufficientCreditsException:
-            raise
-        except Exception as error:
-            err_msg = self._extract_error_message(error, context="translation")
-            logger.exception("Translation failed for %s: %s", image_path, err_msg)
-            self.main_page.image_skipped.emit(image_path, "Translation", err_msg)
-            for block in blocks:
-                block.translation = ""
-            return
+        for start in range(0, len(blocks), STRIP_GROUP_BLOCKS):
+            end = min(len(blocks), start + STRIP_GROUP_BLOCKS)
+            group = blocks[start:end]
+            group_img, note = (image, image_note) if group_image is None else group_image(start, end)
+            extra_context = self.main_page.settings_page.get_extra_context(
+                collect_source_text(group)
+            )
+            notes = [note, speakers_so_far(blocks[:start]), previous_lines(blocks[:start])]
+            notes = [n for n in notes if n]
+            if notes:
+                extra_context = "\n\n".join(
+                    part for part in [extra_context.strip()] + notes if part
+                )
+            try:
+                translator.translate(group, group_img, extra_context)
+            except InsufficientCreditsException:
+                raise
+            except Exception as error:
+                err_msg = self._extract_error_message(error, context="translation")
+                logger.exception("Translation failed for %s: %s", image_path, err_msg)
+                self.main_page.image_skipped.emit(image_path, "Translation", err_msg)
+                for block in group:
+                    block.translation = ""
         issues = translator.check_glossary(blocks)
         if issues:
-            self.main_page.glossary_issues_found.emit(
-                image_path, [(i.seen_as or i.source_term, i.expected) for i in issues]
-            )
+            self.main_page.glossary_issues_found.emit(image_path, issue_rows(issues))
+
+    def _run_translation_on_strip(
+        self: WebtoonBatchProcessor,
+        image_path: str,
+        jobs: List[Dict],
+    ) -> None:
+        """One translation for a whole strip, once every chunk of it is OCR'd.
+
+        Each chunk used to be translated on its own, so a model saw a few
+        bubbles of a conversation at a time and could not tell who was
+        talking to whom. The blocks go in reading order: chunk by chunk, each
+        chunk sorted as the page is sorted. Each request is shown the part of
+        the strip its blocks are in, folded into columns.
+        """
+        blocks: List[TextBlock] = []
+        spans: List[Tuple[int, int, int, int]] = []  # each block's box in the strip
+        for job in jobs:
+            chunk_blocks = list(job["ocr_blocks"])
+            if not chunk_blocks:
+                continue
+            rtl = job["source_lang"] == "Japanese"
+            vpage = job["current_record"].get("vpage")
+            top = int(getattr(vpage, "crop_top", 0) or 0)
+            for blk in sort_blk_list(chunk_blocks, rtl):
+                blocks.append(blk)
+                x1, y1, x2, y2 = (int(v) for v in blk.xyxy[:4])
+                spans.append((x1, top + y1, x2, top + y2))
+        if not blocks:
+            return
+        strip = self._assemble_strip(jobs)
+
+        def group_image(start: int, end: int) -> Tuple[np.ndarray, str]:
+            if strip is None:
+                return np.zeros((1, 1, 3), np.uint8), ""
+            height, width = strip.shape[:2]
+            # Room above the first bubble and below the last for whoever is
+            # speaking them, without reaching far into the neighbouring groups.
+            pad = max(200, width // 2)
+            y0 = max(0, min(span[1] for span in spans[start:end]) - pad)
+            y1 = max(y0 + 1, min(height, max(span[3] for span in spans[start:end]) + pad))
+            crop = strip[y0:y1].copy()
+            # Other groups' lettering is covered: on a real model, a bubble from
+            # the previous group showing at the top of the image shifted every
+            # translation in this one by one block, note or no note.
+            covered = False
+            for index, (bx1, by1, bx2, by2) in enumerate(spans):
+                if start <= index < end or by2 <= y0 or by1 >= y1:
+                    continue
+                crop[max(0, by1 - y0):max(0, by2 - y0), max(0, bx1):max(0, bx2)] = OTHER_GROUP_FILL
+                covered = True
+            sheet, columns = strip_sheet(crop)
+            note = " ".join(part for part in (
+                sheet_note(columns),
+                STRIP_PART_NOTE if (y0 > 0 or y1 < height) else "",
+                STRIP_COVERED_NOTE if covered else "",
+            ) if part)
+            return sheet, note
+
+        self._run_translation_on_blocks(
+            image=None,
+            blocks=blocks,
+            source_lang=jobs[0]["source_lang"],
+            target_lang=jobs[0]["target_lang"],
+            image_path=image_path,
+            group_image=group_image,
+        )
+
+    @staticmethod
+    def _assemble_strip(jobs: List[Dict]) -> Optional[np.ndarray]:
+        """The strip, from the chunk images already in memory."""
+        pieces = []
+        for job in jobs:
+            record = job["current_record"]
+            vpage = record.get("vpage")
+            image = record.get("image")
+            if vpage is None or image is None:
+                continue
+            pieces.append((int(vpage.crop_top), image))
+        if not pieces:
+            return None
+        pieces.sort(key=lambda item: item[0])
+        width = max(image.shape[1] for _top, image in pieces)
+        height = max(top + image.shape[0] for top, image in pieces)
+        strip = np.full((height, width, 3), 255, dtype=np.uint8)
+        for top, image in pieces:
+            strip[top:top + image.shape[0], : image.shape[1]] = image[..., :3]
+        return strip
 
     def _inpaint_image_with_blocks(
         self: WebtoonBatchProcessor,

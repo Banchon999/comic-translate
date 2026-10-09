@@ -33,6 +33,8 @@ class TextBlock(object):
                  font_color: str|tuple = (),
                  direction: str = "",
                  object_id: str = "",
+                 speaker: str = "",
+                 speaker_gender: str = "",
                  **kwargs) -> None:
 
         # Stable logical identity (see modules/utils/common_utils.new_object_id).
@@ -66,6 +68,12 @@ class TextBlock(object):
         self.max_font_size = max_font_size
         self.font_color = font_color
         self.direction = direction
+
+        # Who says this block and their gender ("male"/"female", or "" when
+        # unknown), as the LLM translator reported them. Only asked for when
+        # translating into Thai, where ครับ/ค่ะ follow the speaker's gender.
+        self.speaker = speaker
+        self.speaker_gender = speaker_gender
 
     @property
     def xywh(self):
@@ -120,7 +128,9 @@ class TextBlock(object):
         new_block.max_font_size = self.max_font_size
         new_block.font_color = self.font_color
         new_block.direction = self.direction
-        
+        new_block.speaker = self.speaker
+        new_block.speaker_gender = self.speaker_gender
+
         return new_block
 
 def sort_blk_list(blk_list: List[TextBlock], right_to_left=None) -> List[TextBlock]:

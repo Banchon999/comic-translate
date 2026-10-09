@@ -385,32 +385,32 @@ Leave empty to use the same model as translation.</source>
 <context>
     <name>EditorStatusBar</name>
     <message>
-        <location filename="../../app/ui/main_window/editor_chrome.py" line="180"/>
+        <location filename="../../app/ui/main_window/editor_chrome.py" line="193"/>
         <source>Page {0} / {1}</source>
         <translation>หน้า {0} / {1}</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/editor_chrome.py" line="182"/>
+        <location filename="../../app/ui/main_window/editor_chrome.py" line="195"/>
         <source>No pages</source>
         <translation>ยังไม่มีหน้า</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/editor_chrome.py" line="187"/>
+        <location filename="../../app/ui/main_window/editor_chrome.py" line="200"/>
         <source>OCR · {0}</source>
         <translation>OCR · {0}</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/editor_chrome.py" line="189"/>
+        <location filename="../../app/ui/main_window/editor_chrome.py" line="202"/>
         <source>Translator · {0}</source>
         <translation>ตัวแปล · {0}</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/editor_chrome.py" line="193"/>
+        <location filename="../../app/ui/main_window/editor_chrome.py" line="206"/>
         <source>Glossary · {0} ({1})</source>
         <translation>Glossary · {0} ({1} คำ)</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/editor_chrome.py" line="194"/>
+        <location filename="../../app/ui/main_window/editor_chrome.py" line="207"/>
         <source>Glossary · off</source>
         <translation>Glossary · ปิดอยู่</translation>
     </message>
@@ -821,7 +821,7 @@ One page is extracted at a time in the background; it never blocks the pipeline.
     </message>
     <message>
         <location filename="../../app/ui/settings/glossary_page.py" line="277"/>
-        <location filename="../../app/ui/settings/glossary_page.py" line="620"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="618"/>
         <source>Extract Glossary from OCR Log</source>
         <translation>สกัดคลังคำศัพท์จากบันทึก OCR</translation>
     </message>
@@ -894,7 +894,7 @@ most often a Korean name stored twice in different Unicode forms.</source>
     </message>
     <message>
         <location filename="../../app/ui/settings/glossary_page.py" line="346"/>
-        <location filename="../../app/ui/settings/glossary_page.py" line="711"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="707"/>
         <source>Check Overlaps</source>
         <translation>ตรวจคำซ้อน</translation>
     </message>
@@ -953,17 +953,17 @@ whose translations disagree.</source>
         <location filename="../../app/ui/settings/glossary_page.py" line="489"/>
         <location filename="../../app/ui/settings/glossary_page.py" line="498"/>
         <location filename="../../app/ui/settings/glossary_page.py" line="525"/>
-        <location filename="../../app/ui/settings/glossary_page.py" line="627"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="625"/>
         <location filename="../../app/ui/settings/glossary_page.py" line="637"/>
-        <location filename="../../app/ui/settings/glossary_page.py" line="647"/>
-        <location filename="../../app/ui/settings/glossary_page.py" line="770"/>
-        <location filename="../../app/ui/settings/glossary_page.py" line="783"/>
-        <location filename="../../app/ui/settings/glossary_page.py" line="795"/>
-        <location filename="../../app/ui/settings/glossary_page.py" line="825"/>
-        <location filename="../../app/ui/settings/glossary_page.py" line="844"/>
-        <location filename="../../app/ui/settings/glossary_page.py" line="851"/>
-        <location filename="../../app/ui/settings/glossary_page.py" line="858"/>
-        <location filename="../../app/ui/settings/glossary_page.py" line="879"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="643"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="766"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="779"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="791"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="821"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="840"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="847"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="854"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="875"/>
         <source>Glossary</source>
         <translation>คลังคำศัพท์</translation>
     </message>
@@ -1003,12 +1003,12 @@ whose translations disagree.</source>
         <translation>หน้านี้ยังไม่มีข้อความที่อ่านได้ กด &quot;อ่านข้อความ&quot; ก่อน</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/glossary_page.py" line="609"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="607"/>
         <source>Extracting terms…</source>
         <translation>กำลังดึงคำศัพท์…</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/glossary_page.py" line="614"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="612"/>
         <source>Gathering context… {0} page(s) collected</source>
         <translation>กำลังรวบรวมบริบท… เก็บแล้ว {0} หน้า</translation>
     </message>
@@ -1017,131 +1017,136 @@ whose translations disagree.</source>
         <translation type="vanished">กำลังสกัดคำศัพท์… คิวอีก {0} หน้า</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/glossary_page.py" line="628"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="626"/>
         <source>No new terms were found in the OCR log.</source>
         <translation>ไม่พบคำศัพท์ใหม่ในบันทึก OCR</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/glossary_page.py" line="638"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="632"/>
         <source>Added {0} new term(s) to &quot;{1}&quot;.</source>
         <translation>เพิ่มคำศัพท์ใหม่ {0} คำลงใน &quot;{1}&quot; แล้ว</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/glossary_page.py" line="648"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="636"/>
+        <source>Filled in the gender of {0} character(s).</source>
+        <translation>เติมเพศให้ตัวละคร {0} ตัว</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/settings/glossary_page.py" line="644"/>
         <source>Glossary extraction failed:
 {0}</source>
         <translation>สกัดคลังคำศัพท์ไม่สำเร็จ:
 {0}</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/glossary_page.py" line="657"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="653"/>
         <source>All types</source>
         <translation>ทุกประเภท</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/glossary_page.py" line="691"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="687"/>
         <source>Part of «{0}» ({1}); translations agree.</source>
         <translation>เป็นส่วนหนึ่งของ «{0}» ({1}) คำแปลสอดคล้องกัน</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/glossary_page.py" line="692"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="688"/>
         <source>Contains «{0}» ({1}); translations agree.</source>
         <translation>มี «{0}» ({1}) ซ้อนอยู่ คำแปลสอดคล้องกัน</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/glossary_page.py" line="695"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="691"/>
         <source>Part of «{0}» ({1}), but translated differently. Where «{0}» appears only it is sent.</source>
         <translation>เป็นส่วนหนึ่งของ «{0}» ({1}) แต่แปลต่างกัน ตรงที่พบ «{0}» จะส่งเฉพาะ «{0}»</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/glossary_page.py" line="699"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="695"/>
         <source>Contains «{0}» ({1}), which is translated differently.</source>
         <translation>มี «{0}» ({1}) ซ้อนอยู่ ซึ่งแปลต่างกัน</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/glossary_page.py" line="711"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="707"/>
         <source>Check Overlaps · {0}</source>
         <translation>ตรวจคำซ้อน · {0}</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/glossary_page.py" line="732"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="728"/>
         <source>{0} of {1} terms</source>
         <translation>{0} จาก {1} คำ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/glossary_page.py" line="771"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="767"/>
         <source>Delete {0} selected term(s)?</source>
         <translation>ลบคำศัพท์ที่เลือก {0} คำหรือไม่?</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/glossary_page.py" line="783"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="779"/>
         <source>No terms overlap.</source>
         <translation>ไม่มีคำซ้อนกัน</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/glossary_page.py" line="801"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="797"/>
         <source>{0} overlapping pair(s), {1} with different translations.
 Where both terms appear, only the longer one is sent to the translator. ⚠ pairs are worth checking: the shorter term&apos;s translation is used wherever it appears on its own.</source>
         <translation>พบคำซ้อน {0} คู่ ในนั้น {1} คู่แปลต่างกัน
 ถ้าพบทั้งสองคำในที่เดียวกัน จะส่งเฉพาะคำที่ยาวกว่าให้ตัวแปล คู่ที่มี ⚠ ควรตรวจดู เพราะคำที่สั้นกว่าจะถูกใช้ทุกครั้งที่มันปรากฏเดี่ยวๆ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/glossary_page.py" line="826"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="822"/>
         <source>Merged {0} duplicate term(s).</source>
         <translation>รวมคำซ้ำแล้ว {0} คำ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/glossary_page.py" line="827"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="823"/>
         <source>No duplicate terms found.</source>
         <translation>ไม่พบคำซ้ำ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/glossary_page.py" line="832"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="828"/>
         <source>Import Glossary</source>
         <translation>นำเข้าคลังคำศัพท์</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/glossary_page.py" line="833"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="829"/>
         <source>Glossary Files (*.json *.csv);;JSON Files (*.json);;CSV Files (*.csv)</source>
         <translation>ไฟล์คลังคำศัพท์ (*.json *.csv);;ไฟล์ JSON (*.json);;ไฟล์ CSV (*.csv)</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/glossary_page.py" line="845"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="841"/>
         <source>Failed to import glossary: {0}</source>
         <translation>นำเข้าคลังคำศัพท์ไม่สำเร็จ: {0}</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/glossary_page.py" line="852"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="848"/>
         <source>Imported {0} term(s).</source>
         <translation>นำเข้าคำศัพท์ {0} คำแล้ว</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/glossary_page.py" line="858"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="854"/>
         <source>The glossary is empty.</source>
         <translation>คลังคำศัพท์ว่างเปล่า</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/glossary_page.py" line="863"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="859"/>
         <source>Export Glossary as CSV</source>
         <translation>ส่งออกคลังคำศัพท์เป็น CSV</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/glossary_page.py" line="863"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="859"/>
         <source>CSV Files (*.csv)</source>
         <translation>ไฟล์ CSV (*.csv)</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/glossary_page.py" line="867"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="863"/>
         <source>Export Glossary as JSON</source>
         <translation>ส่งออกคลังคำศัพท์เป็น JSON</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/glossary_page.py" line="867"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="863"/>
         <source>JSON Files (*.json)</source>
         <translation>ไฟล์ JSON (*.json)</translation>
     </message>
     <message>
-        <location filename="../../app/ui/settings/glossary_page.py" line="880"/>
+        <location filename="../../app/ui/settings/glossary_page.py" line="876"/>
         <source>Failed to export glossary: {0}</source>
         <translation>ส่งออกคลังคำศัพท์ไม่สำเร็จ: {0}</translation>
     </message>
@@ -1159,32 +1164,41 @@ Where both terms appear, only the longer one is sent to the translator. ⚠ pair
         <translation>เปิด Glossary</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/editor_chrome.py" line="101"/>
+        <location filename="../../app/ui/main_window/editor_chrome.py" line="108"/>
         <source>{0} term(s) not translated as set:</source>
         <translation>มี {0} คำที่แปลไม่ตรงกับที่ตั้งไว้:</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/editor_chrome.py" line="103"/>
+        <location filename="../../app/ui/main_window/editor_chrome.py" line="110"/>
         <source>«{0}» should be «{1}»</source>
         <translation>«{0}» ควรเป็น «{1}»</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/editor_chrome.py" line="125"/>
+        <location filename="../../app/ui/main_window/editor_chrome.py" line="114"/>
+        <source>{0} bubble(s) with ครับ/ค่ะ to check:</source>
+        <translation>ต้องตรวจ ครับ/ค่ะ {0} บอลลูน:</translation>
+    </message>
+    <message>
+        <source>{0} bubble(s) mix ครับ/ค่ะ:</source>
+        <translation type="vanished">{0} บอลลูนใช้ ครับ/ค่ะ ปนกัน:</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/main_window/editor_chrome.py" line="138"/>
         <source>inside «{0}»</source>
         <translation>อยู่ในคำว่า «{0}»</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/editor_chrome.py" line="130"/>
+        <location filename="../../app/ui/main_window/editor_chrome.py" line="143"/>
         <source>seen as «{0}»</source>
         <translation>ในข้อความเขียนว่า «{0}»</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/editor_chrome.py" line="135"/>
+        <location filename="../../app/ui/main_window/editor_chrome.py" line="148"/>
         <source>The glossary is turned off.</source>
         <translation>ปิด Glossary อยู่</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/editor_chrome.py" line="137"/>
+        <location filename="../../app/ui/main_window/editor_chrome.py" line="150"/>
         <source>No glossary terms on this page.</source>
         <translation>ไม่พบคำใน Glossary ในหน้านี้</translation>
     </message>
@@ -1632,17 +1646,61 @@ Draw a box over the leftover text, or paint it with the brush, lasso or magic wa
 ลากกล่องครอบข้อความที่เหลือ หรือระบายด้วยแปรง บ่วงบาศ หรือไม้กายสิทธิ์ แล้วกด ลบข้อความ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/messages.py" line="262"/>
+        <location filename="../../app/ui/messages.py" line="263"/>
+        <source>both ครับ and ค่ะ/คะ in one bubble</source>
+        <translation>มีทั้ง ครับ และ ค่ะ/คะ ในบอลลูนเดียว</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/messages.py" line="266"/>
+        <source>says ผม but ends with ค่ะ/คะ</source>
+        <translation>แทนตัวว่า ผม แต่ลงท้าย ค่ะ/คะ</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/messages.py" line="269"/>
+        <source>says ดิฉัน but ends with ครับ</source>
+        <translation>แทนตัวว่า ดิฉัน แต่ลงท้าย ครับ</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/messages.py" line="272"/>
+        <source>the AI says {0} (female) speaks, but the line uses ครับ/กระผม</source>
+        <translation>AI บอกว่า {0} (หญิง) เป็นคนพูด แต่ใช้ ครับ/กระผม</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/messages.py" line="275"/>
+        <source>the AI says {0} (male) speaks, but the line uses ค่ะ/คะ/ดิฉัน</source>
+        <translation>AI บอกว่า {0} (ชาย) เป็นคนพูด แต่ใช้ ค่ะ/คะ/ดิฉัน</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/messages.py" line="282"/>
+        <source>the speaker</source>
+        <translation>ผู้พูด</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/messages.py" line="290"/>
+        <source>«{0}»: {1}</source>
+        <translation>«{0}»: {1}</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/messages.py" line="306"/>
         <source>{0} glossary term(s) were not translated as set in the glossary:</source>
         <translation>มี {0} คำที่แปลไม่ตรงกับที่ตั้งไว้ใน Glossary:</translation>
     </message>
     <message>
-        <location filename="../../app/ui/messages.py" line="267"/>
+        <location filename="../../app/ui/messages.py" line="311"/>
         <source>«{0}» should be «{1}»</source>
         <translation>«{0}» ควรเป็น «{1}»</translation>
     </message>
     <message>
-        <location filename="../../app/ui/messages.py" line="295"/>
+        <location filename="../../app/ui/messages.py" line="324"/>
+        <source>{0} bubble(s) with ครับ/ค่ะ that need checking:</source>
+        <translation>มี {0} บอลลูนที่ต้องตรวจ ครับ/ค่ะ:</translation>
+    </message>
+    <message>
+        <source>{0} bubble(s) mix male and female speech (ครับ/ค่ะ):</source>
+        <translation type="vanished">{0} บอลลูนใช้คำพูดชาย/หญิงปนกัน (ครับ/ค่ะ):</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/messages.py" line="352"/>
         <source>{0} page(s) have translations that do not follow the glossary.
 Open Batch Report to see which terms.</source>
         <translation>มี {0} หน้าที่คำแปลไม่ตรงกับ Glossary
@@ -1692,11 +1750,12 @@ Please select a different tool in Settings.</source>
     </message>
     <message>
         <location filename="../../app/ui/messages.py" line="193"/>
-        <location filename="../../pipeline/batch_processor.py" line="360"/>
-        <location filename="../../pipeline/batch_processor.py" line="414"/>
-        <location filename="../../pipeline/webtoon_batch/chunk.py" line="94"/>
+        <location filename="../../pipeline/batch_processor.py" line="358"/>
+        <location filename="../../pipeline/batch_processor.py" line="412"/>
+        <location filename="../../pipeline/webtoon_batch/chunk.py" line="99"/>
         <source>Unable to connect to the server.
 Please check your internet connection.</source>
+        <extracomment>Blocks per translation request when a whole strip is translated at once.</extracomment>
         <translation>ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้
 กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต</translation>
     </message>
@@ -4483,236 +4542,236 @@ It may have already been moved, renamed, or deleted.
 <context>
     <name>self.main</name>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="89"/>
+        <location filename="../../app/controllers/batch_report.py" line="90"/>
         <source>The AI provider flagged this content</source>
         <translation>ผู้ให้บริการ AI ตีเนื้อหานี้ว่าไม่เหมาะสม</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="91"/>
+        <location filename="../../app/controllers/batch_report.py" line="92"/>
         <source>Insufficient credits</source>
         <translation>เครดิตไม่เพียงพอ</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="93"/>
+        <location filename="../../app/controllers/batch_report.py" line="94"/>
         <source>Request timed out</source>
         <translation>คำขอหมดเวลา</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="99"/>
+        <location filename="../../app/controllers/batch_report.py" line="100"/>
         <source>Rate limited by provider</source>
         <translation>ถูกผู้ให้บริการจำกัดอัตราการเรียกใช้</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="106"/>
+        <location filename="../../app/controllers/batch_report.py" line="107"/>
         <source>Authentication failed</source>
         <translation>ยืนยันตัวตนไม่สำเร็จ</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="113"/>
+        <location filename="../../app/controllers/batch_report.py" line="114"/>
         <source>Network or connection error</source>
         <translation>เครือข่ายหรือการเชื่อมต่อผิดพลาด</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="122"/>
+        <location filename="../../app/controllers/batch_report.py" line="123"/>
         <source>Provider unavailable</source>
         <translation>ผู้ให้บริการไม่พร้อมใช้งาน</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="128"/>
+        <location filename="../../app/controllers/batch_report.py" line="129"/>
         <source>Invalid translation response</source>
         <translation>ผลลัพธ์การแปลไม่ถูกต้อง</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="129"/>
+        <location filename="../../app/controllers/batch_report.py" line="130"/>
         <source>Unexpected tool error</source>
         <translation>เครื่องมือเกิดข้อผิดพลาดที่ไม่คาดคิด</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="137"/>
-        <location filename="../../app/controllers/batch_report.py" line="186"/>
+        <location filename="../../app/controllers/batch_report.py" line="138"/>
+        <location filename="../../app/controllers/batch_report.py" line="187"/>
         <source>Try another text recognition tool</source>
         <translation>ลองใช้เครื่องมืออ่านข้อความอื่น</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="141"/>
-        <location filename="../../app/controllers/batch_report.py" line="190"/>
+        <location filename="../../app/controllers/batch_report.py" line="142"/>
+        <location filename="../../app/controllers/batch_report.py" line="191"/>
         <source>Try another translator</source>
         <translation>ลองใช้ตัวแปลอื่น</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="142"/>
+        <location filename="../../app/controllers/batch_report.py" line="143"/>
         <source>Try another tool</source>
         <translation>ลองใช้เครื่องมืออื่น</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="144"/>
+        <location filename="../../app/controllers/batch_report.py" line="145"/>
         <source>Buy more credits</source>
         <translation>ซื้อเครดิตเพิ่ม</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="146"/>
-        <location filename="../../app/controllers/batch_report.py" line="181"/>
-        <location filename="../../app/controllers/batch_report.py" line="191"/>
+        <location filename="../../app/controllers/batch_report.py" line="147"/>
+        <location filename="../../app/controllers/batch_report.py" line="182"/>
+        <location filename="../../app/controllers/batch_report.py" line="192"/>
         <source>Try again</source>
         <translation>ลองใหม่อีกครั้ง</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="152"/>
+        <location filename="../../app/controllers/batch_report.py" line="153"/>
         <source>Wait and try again</source>
         <translation>รอสักครู่แล้วลองใหม่</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="159"/>
+        <location filename="../../app/controllers/batch_report.py" line="160"/>
         <source>Check API settings</source>
         <translation>ตรวจสอบการตั้งค่า API</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="166"/>
+        <location filename="../../app/controllers/batch_report.py" line="167"/>
         <source>Check your connection</source>
         <translation>ตรวจสอบการเชื่อมต่อ</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="175"/>
+        <location filename="../../app/controllers/batch_report.py" line="176"/>
         <source>Try again later</source>
         <translation>ลองใหม่ภายหลัง</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="197"/>
+        <location filename="../../app/controllers/batch_report.py" line="198"/>
         <source>Image could not be opened</source>
         <translation>ไม่สามารถเปิดรูปภาพได้</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="198"/>
+        <location filename="../../app/controllers/batch_report.py" line="199"/>
         <source>No text blocks detected</source>
         <translation>ไม่พบกล่องข้อความ</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="199"/>
+        <location filename="../../app/controllers/batch_report.py" line="200"/>
         <source>Text recognition failed</source>
         <translation>อ่านข้อความไม่สำเร็จ</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="200"/>
+        <location filename="../../app/controllers/batch_report.py" line="201"/>
         <source>Translation failed</source>
         <translation>แปลไม่สำเร็จ</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="201"/>
+        <location filename="../../app/controllers/batch_report.py" line="202"/>
         <source>Webtoon text recognition chunk failed</source>
         <translation>อ่านข้อความในส่วนย่อยของเว็บตูนไม่สำเร็จ</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="203"/>
+        <location filename="../../app/controllers/batch_report.py" line="204"/>
         <source>Webtoon translation chunk failed</source>
         <translation>แปลส่วนย่อยของเว็บตูนไม่สำเร็จ</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="206"/>
+        <location filename="../../app/controllers/batch_report.py" line="207"/>
         <source>Page processing failed</source>
         <translation>ประมวลผลหน้านี้ไม่สำเร็จ</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="295"/>
+        <location filename="../../app/controllers/batch_report.py" line="298"/>
         <source>This image is not in the current project.</source>
         <translation>รูปภาพนี้ไม่ได้อยู่ในโปรเจกต์ปัจจุบัน</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="319"/>
-        <location filename="../../app/controllers/batch_report.py" line="536"/>
+        <location filename="../../app/controllers/batch_report.py" line="322"/>
+        <location filename="../../app/controllers/batch_report.py" line="544"/>
         <source>No batch report is available yet.</source>
         <translation>ยังไม่มีรายงานการประมวลผลชุด</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="334"/>
-        <location filename="../../app/controllers/batch_report.py" line="426"/>
+        <location filename="../../app/controllers/batch_report.py" line="337"/>
+        <location filename="../../app/controllers/batch_report.py" line="429"/>
         <source>No skipped images are available to retry.</source>
         <translation>ไม่มีรูปภาพที่ถูกข้ามให้ลองใหม่</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="342"/>
-        <location filename="../../app/controllers/batch_report.py" line="422"/>
+        <location filename="../../app/controllers/batch_report.py" line="345"/>
+        <location filename="../../app/controllers/batch_report.py" line="425"/>
         <source>Wait for the current batch to finish before retrying skipped images.</source>
         <translation>กรุณารอให้การประมวลผลชุดปัจจุบันเสร็จก่อน จึงลองรูปที่ถูกข้ามใหม่</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="367"/>
+        <location filename="../../app/controllers/batch_report.py" line="370"/>
         <source>Cancelled</source>
         <translation>ยกเลิกแล้ว</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="367"/>
+        <location filename="../../app/controllers/batch_report.py" line="370"/>
         <source>Completed</source>
         <translation>เสร็จสิ้น</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="370"/>
+        <location filename="../../app/controllers/batch_report.py" line="373"/>
         <source>{0}  |  Updated {1}</source>
         <translation>{0}  |  อัปเดตเมื่อ {1}</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="398"/>
+        <location filename="../../app/controllers/batch_report.py" line="401"/>
         <source>Total</source>
         <translation>รวม</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="399"/>
-        <location filename="../../app/controllers/batch_report.py" line="462"/>
+        <location filename="../../app/controllers/batch_report.py" line="402"/>
+        <location filename="../../app/controllers/batch_report.py" line="465"/>
         <source>Skipped</source>
         <translation>ข้ามแล้ว</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="409"/>
+        <location filename="../../app/controllers/batch_report.py" line="412"/>
         <source>Skipped Images ({0})</source>
         <translation>รูปภาพที่ถูกข้าม ({0})</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="415"/>
+        <location filename="../../app/controllers/batch_report.py" line="418"/>
         <source>Retry Skipped Images</source>
         <translation>ลองรูปที่ถูกข้ามใหม่</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="433"/>
+        <location filename="../../app/controllers/batch_report.py" line="436"/>
         <source>Double-click a row to open that page.</source>
         <translation>ดับเบิลคลิกที่แถวเพื่อเปิดหน้านั้น</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="438"/>
-        <location filename="../../app/controllers/batch_report.py" line="501"/>
+        <location filename="../../app/controllers/batch_report.py" line="441"/>
+        <location filename="../../app/controllers/batch_report.py" line="504"/>
         <source>Image</source>
         <translation>รูปภาพ</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="438"/>
+        <location filename="../../app/controllers/batch_report.py" line="441"/>
         <source>Reason</source>
         <translation>เหตุผล</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="472"/>
+        <location filename="../../app/controllers/batch_report.py" line="475"/>
         <source>No skipped images in this batch.</source>
         <translation>ไม่มีรูปภาพที่ถูกข้ามในชุดนี้</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="490"/>
+        <location filename="../../app/controllers/batch_report.py" line="493"/>
         <source>Glossary Warnings ({0})</source>
         <translation>คำเตือน Glossary ({0})</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="494"/>
+        <location filename="../../app/controllers/batch_report.py" line="497"/>
         <source>These pages were translated, but some glossary terms were not translated as set. Double-click a row to open that page.</source>
         <translation>หน้าเหล่านี้แปลเสร็จแล้ว แต่บางคำแปลไม่ตรงกับที่ตั้งไว้ใน Glossary ดับเบิลคลิกแถวเพื่อเปิดหน้านั้น</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="501"/>
+        <location filename="../../app/controllers/batch_report.py" line="504"/>
         <source>Terms</source>
         <translation>คำ</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="514"/>
+        <location filename="../../app/controllers/batch_report.py" line="517"/>
         <source>«{0}» should be «{1}»</source>
         <translation>«{0}» ควรเป็น «{1}»</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="550"/>
+        <location filename="../../app/controllers/batch_report.py" line="558"/>
         <source>Batch Report</source>
         <translation>รายงานการประมวลผลชุด</translation>
     </message>
@@ -4958,7 +5017,7 @@ It may have been moved, renamed, or deleted.
     <name>self.settings.ui</name>
     <message>
         <location filename="../../modules/ocr/processor.py" line="169"/>
-        <location filename="../../modules/translation/processor.py" line="66"/>
+        <location filename="../../modules/translation/processor.py" line="67"/>
         <source>GPT-4.1-mini</source>
         <translation>GPT-4.1-mini</translation>
     </message>
@@ -4983,57 +5042,57 @@ It may have been moved, renamed, or deleted.
         <translation>ค่าเริ่มต้น</translation>
     </message>
     <message>
-        <location filename="../../modules/translation/processor.py" line="62"/>
+        <location filename="../../modules/translation/processor.py" line="63"/>
         <source>Custom</source>
         <translation>กำหนดเอง</translation>
     </message>
     <message>
-        <location filename="../../modules/translation/processor.py" line="63"/>
+        <location filename="../../modules/translation/processor.py" line="64"/>
         <source>OpenRouter</source>
         <translation>OpenRouter</translation>
     </message>
     <message>
-        <location filename="../../modules/translation/processor.py" line="64"/>
+        <location filename="../../modules/translation/processor.py" line="65"/>
         <source>Deepseek</source>
         <translation>Deepseek</translation>
     </message>
     <message>
-        <location filename="../../modules/translation/processor.py" line="65"/>
+        <location filename="../../modules/translation/processor.py" line="66"/>
         <source>GPT-4.1</source>
         <translation>GPT-4.1</translation>
     </message>
     <message>
-        <location filename="../../modules/translation/processor.py" line="67"/>
+        <location filename="../../modules/translation/processor.py" line="68"/>
         <source>Claude-4.6-Sonnet</source>
         <translation>Claude-4.6-Sonnet</translation>
     </message>
     <message>
-        <location filename="../../modules/translation/processor.py" line="68"/>
+        <location filename="../../modules/translation/processor.py" line="69"/>
         <source>Claude-4.5-Haiku</source>
         <translation>Claude-4.5-Haiku</translation>
     </message>
     <message>
-        <location filename="../../modules/translation/processor.py" line="69"/>
+        <location filename="../../modules/translation/processor.py" line="70"/>
         <source>Gemini-3.1-Flash-Lite</source>
         <translation>Gemini-3.1-Flash-Lite</translation>
     </message>
     <message>
-        <location filename="../../modules/translation/processor.py" line="70"/>
+        <location filename="../../modules/translation/processor.py" line="71"/>
         <source>Gemini-2.5-Pro</source>
         <translation>Gemini-2.5-Pro</translation>
     </message>
     <message>
-        <location filename="../../modules/translation/processor.py" line="71"/>
+        <location filename="../../modules/translation/processor.py" line="72"/>
         <source>Microsoft Translator</source>
         <translation>Microsoft Translator</translation>
     </message>
     <message>
-        <location filename="../../modules/translation/processor.py" line="72"/>
+        <location filename="../../modules/translation/processor.py" line="73"/>
         <source>DeepL</source>
         <translation>DeepL</translation>
     </message>
     <message>
-        <location filename="../../modules/translation/processor.py" line="73"/>
+        <location filename="../../modules/translation/processor.py" line="74"/>
         <source>Yandex</source>
         <translation>Yandex</translation>
     </message>

@@ -28,7 +28,7 @@ from modules.rendering.render import get_best_render_area, pyside_word_wrap, is_
 from modules.utils.text_presets import apply_to_state as apply_text_preset
 from modules.utils.device import resolve_device
 from modules.utils.exceptions import InsufficientCreditsException
-from modules.utils.glossary import collect_source_text
+from modules.utils.glossary import collect_source_text, issue_rows
 from core.path_materialization import ensure_path_materialized
 from .cache_manager import CacheManager
 from .block_detection import BlockDetectionHandler
@@ -82,9 +82,7 @@ class BatchProcessor:
     def _report_glossary_issues(self, image_path, issues):
         """Send a page's glossary warnings to the batch report (GUI thread)."""
         if issues:
-            self.main_page.glossary_issues_found.emit(
-                image_path, [(i.seen_as or i.source_term, i.expected) for i in issues]
-            )
+            self.main_page.glossary_issues_found.emit(image_path, issue_rows(issues))
 
     def log_skipped_image(self, directory, timestamp, image_path, reason="", full_traceback=""):
         # Deprecated: skip details are captured by batch reporting/UI signals.
