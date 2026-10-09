@@ -171,6 +171,10 @@ def speech_particle_rules(source_lang: str = "") -> str:
         "a male character คุณหนู or a female one คุณชาย.",
         "• Third-person pronouns follow each character's gender: male → เขา · female → เธอ/นาง "
         "— check the glossary before every เขา/เธอ/นาง.",
+        "• Second-person words follow the gender of the person ADDRESSED: นาย and แก (casual) "
+        "only to a male; to a female say เธอ, หนู or her name — never call a girl นาย.",
+        "• Each translation is final text: never correct yourself inside it "
+        "(no \"…เอ๊ย…\" or \"I mean\"), and never show a rejected word.",
         "• If the source uses a wrong-gender pronoun for a character whose gender is in the "
         "glossary, follow the glossary gender — silently: never add notes, brackets or "
         "explanations to the translation.",
@@ -194,7 +198,7 @@ def speaker_output_rules() -> str:
         '"translation": "<the Thai translation>"}}',
         "• speaker: the character's name as written in the glossary when they are in it, "
         'otherwise a short description ("the guard", "Lena\'s mother"); "narration" for a '
-        'caption box, "sfx" for a sound effect.',
+        'caption box, "sfx" for a sound effect, "unknown" when you cannot tell who speaks.',
         "• Decide the speaker before translating, from the whole page: the bubble's tail in "
         "the image, the order of turns in the conversation, who is addressed, the glossary "
         "gender. The same character keeps the same name in every block.",

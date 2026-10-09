@@ -18,7 +18,7 @@ from modules.utils.glossary import issue_rows
 from modules.utils.prompts import PromptManager
 from modules.utils.strip_sheet import column_count, sheet_note, strip_sheet
 from modules.utils.textblock import TextBlock
-from modules.utils.translator_utils import set_texts_from_json, speakers_so_far
+from modules.utils.translator_utils import previous_lines, set_texts_from_json, speakers_so_far
 
 
 def _blk(text="x", translation="", speaker="", gender=""):
@@ -149,6 +149,17 @@ class TestSpeakersSoFar:
     def test_nothing_named_gives_nothing(self):
         assert speakers_so_far([_blk(), _blk(speaker="narration")]) == ""
 
+    def test_previous_lines_carry_who_said_what(self):
+        blocks = [_blk(f"line{i}", speaker="하린" if i % 2 else "") for i in range(9)]
+        text = previous_lines(blocks, count=3)
+        assert "- 하린: line7" in text and "- unknown: line8" in text and "line5" not in text
+        assert "do not translate them again" in text
+        assert previous_lines([]) == ""
+
+    def test_a_question_mark_speaker_is_not_a_name(self):
+        """A real model answered "???" for a speaker it could not place."""
+        assert speakers_so_far([_blk(speaker="???", gender="male"), _blk(speaker="…")]) == ""
+
 
 class TestStripSheet:
     def test_a_short_page_is_one_column(self):
@@ -212,9 +223,10 @@ def chunk_proc(monkeypatch):
     )
     proc = types.SimpleNamespace(main_page=main, events=events)
     proc._extract_error_message = lambda error, context: str(error)
-    for name in ("_run_translation_on_blocks", "_run_translation_on_strip", "_strip_image_for_translation"):
+    for name in ("_run_translation_on_blocks", "_run_translation_on_strip"):
         method = getattr(chunk.ChunkMixin, name)
         setattr(proc, name, types.MethodType(method, proc))
+    proc._assemble_strip = chunk.ChunkMixin._assemble_strip
     return proc, chunk
 
 
@@ -253,13 +265,58 @@ class TestStripTranslation:
             }
 
         jobs = [job(0, 2400, [900, 100]), job(2400, 2400, [50, 1500]), job(4800, 2400, [10])]
+        # Paint each strip row band with its own grey so a crop can be traced back.
+        for j in jobs:
+            image = j["current_record"]["image"]
+            top = j["current_record"]["vpage"].crop_top
+            for y in range(0, image.shape[0], 100):
+                image[y:y + 100] = ((top + y) // 100) % 250
         seen = []
         proc._run_translation_on_blocks = lambda **kw: seen.append(kw)
         proc._run_translation_on_strip("/w/1.png", jobs)
         (call,) = seen
         assert [b.text for b in call["blocks"]] == ["y100", "y900", "y2450", "y3900", "y4810"]
-        assert column_count(7200, 800) == 3 and "3 columns" in call["image_note"]
-        assert max(call["image"].shape[:2]) <= 2048
+
+        whole, note = call["group_image"](0, 5)   # rows 100..4830, padded by 400
+        assert max(whole.shape[:2]) <= 2048 and "3 columns" in note
+        assert _chunk.STRIP_PART_NOTE in note      # rows past 5230 are not shown
+
+        assert _chunk.STRIP_COVERED_NOTE not in note  # nothing of another group was covered
+
+        part, part_note = call["group_image"](2, 4)  # rows 2450..3920 only
+        assert _chunk.STRIP_PART_NOTE in part_note
+        top_grey = int(part[0, 0, 0])
+        assert top_grey == (2450 - 400) // 100 % 250  # the crop starts just above its first block
+
+    def test_other_groups_lettering_is_covered_in_a_groups_image(self, chunk_proc, monkeypatch):
+        """A neighbour's bubble at the edge of the image shifted a real model's
+        translations by one block, so only this group's lettering stays readable."""
+        proc, chunk = chunk_proc
+        monkeypatch.setattr(chunk, "STRIP_GROUP_BLOCKS", 1)
+        blocks = [TextBlock(text_bbox=np.array([100, y, 300, y + 100]), text=f"b{y}") for y in (500, 800)]
+        jobs = [{"current_record": {"vpage": types.SimpleNamespace(crop_top=0),
+                                    "image": np.zeros((2400, 800, 3), np.uint8)},
+                 "ocr_blocks": blocks, "source_lang": "Korean", "target_lang": "Thai"}]
+        seen = []
+        proc._run_translation_on_blocks = lambda **kw: seen.append(kw)
+        proc._run_translation_on_strip("/w/1.png", jobs)
+        sheet, note = seen[0]["group_image"](0, 1)   # rows 100..1000: both blocks show
+        assert sheet.shape[:2] == (900, 800) and chunk.STRIP_COVERED_NOTE in note
+        assert (sheet[400:500, 100:300] == 0).all()                   # its own block: untouched
+        assert (sheet[700:800, 100:300] == chunk.OTHER_GROUP_FILL).all()  # the other: covered
+        assert (sheet[700:800, 400:] == 0).all()                       # art beside it: untouched
+
+    def test_one_group_per_request_gets_its_own_image(self, chunk_proc):
+        """Measured on a real model: a group shown the whole strip translated
+        the bubbles it read in the picture, not the ones it was sent."""
+        proc, chunk = chunk_proc
+        proc._run_translation_on_blocks(
+            None, [_blk(f"t{i}") for i in range(chunk.STRIP_GROUP_BLOCKS + 3)], "Korean", "Thai",
+            "/w/1.png", group_image=lambda a, b: (np.full((4, 4, 3), a, np.uint8), f"part {a}-{b}"),
+        )
+        assert [(c[0], c[1]) for c in _Translator.calls] == [
+            (chunk.STRIP_GROUP_BLOCKS, (4, 4, 3)), (3, (4, 4, 3))]
+        assert "part 0-40" in _Translator.calls[0][2] and "part 40-43" in _Translator.calls[1][2]
 
 
 class TestFlowWaitsForTheWholeStrip:

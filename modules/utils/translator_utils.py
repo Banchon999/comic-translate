@@ -94,7 +94,8 @@ def speakers_so_far(blk_list) -> str:
     seen: dict[str, str] = {}
     for blk in blk_list or []:
         name = getattr(blk, "speaker", "") or ""
-        if not name or name.lower() in ("narration", "sfx", "unknown"):
+        # "???" and the like: a model's way of saying it could not tell.
+        if not re.search(r"\w", name) or name.lower() in ("narration", "sfx", "unknown"):
             continue
         gender = getattr(blk, "speaker_gender", "") or ""
         if name not in seen or (gender and not seen[name]):
@@ -105,6 +106,28 @@ def speakers_so_far(blk_list) -> str:
     return (
         "Speakers already identified earlier in this strip — keep the same names and "
         f"genders for them: {names}"
+    )
+
+
+def previous_lines(blk_list, count: int = 6) -> str:
+    """The last lines of the conversation before this request, with who said them.
+
+    Names alone were not enough on a real model: a request starting mid-scene
+    gave each of its first lines to the speaker of the line before it. "" when
+    there is nothing before.
+    """
+    lines = []
+    for blk in list(blk_list or [])[-count:]:
+        text = " ".join(str(getattr(blk, "text", "") or "").split())
+        if not text:
+            continue
+        speaker = getattr(blk, "speaker", "") or "unknown"
+        lines.append(f"- {speaker}: {text}")
+    if not lines:
+        return ""
+    return (
+        "The lines just before these in the strip (already translated — context only, do not "
+        "translate them again):\n" + "\n".join(lines)
     )
 
 
