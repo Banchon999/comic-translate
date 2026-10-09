@@ -175,7 +175,7 @@ class TestAfterTranslation:
 
     def test_the_batch_report_gets_a_speech_row(self):
         rows = issue_rows([ts.SpeechIssue(0, "ได้ครับ ขอบคุณค่ะ", ts.MIXED)])
-        assert rows == [("ได้ครับ ขอบคุณค่ะ", ts.MIXED, "speech")]
+        assert rows == [("ได้ครับ ขอบคุณค่ะ", ts.MIXED, "speech", "")]
 
     def test_the_report_and_the_toast_describe_it(self, qapp):
         from PySide6 import QtWidgets
@@ -198,7 +198,7 @@ class TestAfterTranslation:
         ctrl.start_batch_report(["/a/1.png"])
         ctrl.register_glossary_issues("/a/1.png", issue_rows([issue]))
         report = ctrl.finalize_batch_report(was_cancelled=False)
-        assert report["glossary_entries"][0]["issues"] == [["ได้ครับ ขอบคุณค่ะ", ts.MIXED, "speech"]]
+        assert report["glossary_entries"][0]["issues"] == [["ได้ครับ ขอบคุณค่ะ", ts.MIXED, "speech", ""]]
         widget = ctrl._build_batch_report_widget(report)
         cells = [t.item(0, 1).text() for t in widget.findChildren(QtWidgets.QTableWidget) if t.rowCount()]
         assert any(Messages.speech_reason_text(ts.MIXED) in cell for cell in cells)

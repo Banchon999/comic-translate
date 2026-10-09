@@ -938,12 +938,13 @@ def issue_rows(issues) -> list[tuple]:
     """Translation warnings as the batch report stores them.
 
     A glossary term is (as seen, expected); a speech issue is
-    (translation, reason, "speech"), since it has no single expected word.
+    (translation, reason, "speech", speaker), since it has no single expected
+    word — speaker is who the translator said speaks, or "".
     """
     rows: list[tuple] = []
     for issue in issues or []:
         if isinstance(issue, SpeechIssue):
-            rows.append((issue.seen_as, issue.reason, "speech"))
+            rows.append((issue.seen_as, issue.reason, "speech", issue.speaker))
         else:
             rows.append((issue.seen_as or issue.source_term, issue.expected))
     return rows

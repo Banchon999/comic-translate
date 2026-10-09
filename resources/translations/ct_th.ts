@@ -385,32 +385,32 @@ Leave empty to use the same model as translation.</source>
 <context>
     <name>EditorStatusBar</name>
     <message>
-        <location filename="../../app/ui/main_window/editor_chrome.py" line="190"/>
+        <location filename="../../app/ui/main_window/editor_chrome.py" line="193"/>
         <source>Page {0} / {1}</source>
         <translation>หน้า {0} / {1}</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/editor_chrome.py" line="192"/>
+        <location filename="../../app/ui/main_window/editor_chrome.py" line="195"/>
         <source>No pages</source>
         <translation>ยังไม่มีหน้า</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/editor_chrome.py" line="197"/>
+        <location filename="../../app/ui/main_window/editor_chrome.py" line="200"/>
         <source>OCR · {0}</source>
         <translation>OCR · {0}</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/editor_chrome.py" line="199"/>
+        <location filename="../../app/ui/main_window/editor_chrome.py" line="202"/>
         <source>Translator · {0}</source>
         <translation>ตัวแปล · {0}</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/editor_chrome.py" line="203"/>
+        <location filename="../../app/ui/main_window/editor_chrome.py" line="206"/>
         <source>Glossary · {0} ({1})</source>
         <translation>Glossary · {0} ({1} คำ)</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/editor_chrome.py" line="204"/>
+        <location filename="../../app/ui/main_window/editor_chrome.py" line="207"/>
         <source>Glossary · off</source>
         <translation>Glossary · ปิดอยู่</translation>
     </message>
@@ -1175,26 +1175,30 @@ Where both terms appear, only the longer one is sent to the translator. ⚠ pair
     </message>
     <message>
         <location filename="../../app/ui/main_window/editor_chrome.py" line="114"/>
-        <source>{0} bubble(s) mix ครับ/ค่ะ:</source>
-        <translation>{0} บอลลูนใช้ ครับ/ค่ะ ปนกัน:</translation>
+        <source>{0} bubble(s) with ครับ/ค่ะ to check:</source>
+        <translation>ต้องตรวจ ครับ/ค่ะ {0} บอลลูน:</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/editor_chrome.py" line="135"/>
+        <source>{0} bubble(s) mix ครับ/ค่ะ:</source>
+        <translation type="vanished">{0} บอลลูนใช้ ครับ/ค่ะ ปนกัน:</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/main_window/editor_chrome.py" line="138"/>
         <source>inside «{0}»</source>
         <translation>อยู่ในคำว่า «{0}»</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/editor_chrome.py" line="140"/>
+        <location filename="../../app/ui/main_window/editor_chrome.py" line="143"/>
         <source>seen as «{0}»</source>
         <translation>ในข้อความเขียนว่า «{0}»</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/editor_chrome.py" line="145"/>
+        <location filename="../../app/ui/main_window/editor_chrome.py" line="148"/>
         <source>The glossary is turned off.</source>
         <translation>ปิด Glossary อยู่</translation>
     </message>
     <message>
-        <location filename="../../app/ui/main_window/editor_chrome.py" line="147"/>
+        <location filename="../../app/ui/main_window/editor_chrome.py" line="150"/>
         <source>No glossary terms on this page.</source>
         <translation>ไม่พบคำใน Glossary ในหน้านี้</translation>
     </message>
@@ -1657,27 +1661,46 @@ Draw a box over the leftover text, or paint it with the brush, lasso or magic wa
         <translation>แทนตัวว่า ดิฉัน แต่ลงท้าย ครับ</translation>
     </message>
     <message>
-        <location filename="../../app/ui/messages.py" line="279"/>
+        <location filename="../../app/ui/messages.py" line="272"/>
+        <source>the AI says {0} (female) speaks, but the line uses ครับ/กระผม</source>
+        <translation>AI บอกว่า {0} (หญิง) เป็นคนพูด แต่ใช้ ครับ/กระผม</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/messages.py" line="275"/>
+        <source>the AI says {0} (male) speaks, but the line uses ค่ะ/คะ/ดิฉัน</source>
+        <translation>AI บอกว่า {0} (ชาย) เป็นคนพูด แต่ใช้ ค่ะ/คะ/ดิฉัน</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/messages.py" line="282"/>
+        <source>the speaker</source>
+        <translation>ผู้พูด</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/messages.py" line="290"/>
         <source>«{0}»: {1}</source>
         <translation>«{0}»: {1}</translation>
     </message>
     <message>
-        <location filename="../../app/ui/messages.py" line="295"/>
+        <location filename="../../app/ui/messages.py" line="306"/>
         <source>{0} glossary term(s) were not translated as set in the glossary:</source>
         <translation>มี {0} คำที่แปลไม่ตรงกับที่ตั้งไว้ใน Glossary:</translation>
     </message>
     <message>
-        <location filename="../../app/ui/messages.py" line="300"/>
+        <location filename="../../app/ui/messages.py" line="311"/>
         <source>«{0}» should be «{1}»</source>
         <translation>«{0}» ควรเป็น «{1}»</translation>
     </message>
     <message>
-        <location filename="../../app/ui/messages.py" line="313"/>
-        <source>{0} bubble(s) mix male and female speech (ครับ/ค่ะ):</source>
-        <translation>{0} บอลลูนใช้คำพูดชาย/หญิงปนกัน (ครับ/ค่ะ):</translation>
+        <location filename="../../app/ui/messages.py" line="324"/>
+        <source>{0} bubble(s) with ครับ/ค่ะ that need checking:</source>
+        <translation>มี {0} บอลลูนที่ต้องตรวจ ครับ/ค่ะ:</translation>
     </message>
     <message>
-        <location filename="../../app/ui/messages.py" line="339"/>
+        <source>{0} bubble(s) mix male and female speech (ครับ/ค่ะ):</source>
+        <translation type="vanished">{0} บอลลูนใช้คำพูดชาย/หญิงปนกัน (ครับ/ค่ะ):</translation>
+    </message>
+    <message>
+        <location filename="../../app/ui/messages.py" line="352"/>
         <source>{0} page(s) have translations that do not follow the glossary.
 Open Batch Report to see which terms.</source>
         <translation>มี {0} หน้าที่คำแปลไม่ตรงกับ Glossary
@@ -1729,9 +1752,10 @@ Please select a different tool in Settings.</source>
         <location filename="../../app/ui/messages.py" line="193"/>
         <location filename="../../pipeline/batch_processor.py" line="358"/>
         <location filename="../../pipeline/batch_processor.py" line="412"/>
-        <location filename="../../pipeline/webtoon_batch/chunk.py" line="94"/>
+        <location filename="../../pipeline/webtoon_batch/chunk.py" line="99"/>
         <source>Unable to connect to the server.
 Please check your internet connection.</source>
+        <extracomment>Blocks per translation request when a whole strip is translated at once.</extracomment>
         <translation>ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้
 กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต</translation>
     </message>
@@ -4653,7 +4677,7 @@ It may have already been moved, renamed, or deleted.
     </message>
     <message>
         <location filename="../../app/controllers/batch_report.py" line="322"/>
-        <location filename="../../app/controllers/batch_report.py" line="543"/>
+        <location filename="../../app/controllers/batch_report.py" line="544"/>
         <source>No batch report is available yet.</source>
         <translation>ยังไม่มีรายงานการประมวลผลชุด</translation>
     </message>
@@ -4747,7 +4771,7 @@ It may have already been moved, renamed, or deleted.
         <translation>«{0}» ควรเป็น «{1}»</translation>
     </message>
     <message>
-        <location filename="../../app/controllers/batch_report.py" line="557"/>
+        <location filename="../../app/controllers/batch_report.py" line="558"/>
         <source>Batch Report</source>
         <translation>รายงานการประมวลผลชุด</translation>
     </message>

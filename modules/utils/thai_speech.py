@@ -16,9 +16,13 @@ novels. Two things are different in a comic, and they decide what was kept:
   quote-mark extraction and separate speaker-identification call have nothing
   to work on here; the rules tell the model to read the image instead.
 - There are no dialogue tags ("…" Lina said), so a checker cannot tell who
-  spoke a bubble from the text. The local check flags only what is wrong
-  whoever said it: both genders' particles in one bubble, or a self-pronoun
-  of one gender with the other's particle.
+  spoke a bubble from the text. Instead the translator reports it: into
+  Thai, every block comes back as {"speaker", "gender", "translation"}
+  (`speaker_output_rules`), read from the whole page or strip at once. The
+  local check then flags a block whose ครับ/ค่ะ contradicts the gender the
+  model itself gave, as well as what is wrong whoever said it: both genders'
+  particles in one bubble, or a self-pronoun of one gender with the other's
+  particle. It only warns — a person fixes the line.
 
 Everything here is pure text and Qt-free.
 """
@@ -173,6 +177,34 @@ def speech_particle_rules(source_lang: str = "") -> str:
     ])
 
 
+SPEAKER_OUTPUT_HEADER = "OUTPUT FORMAT — SPEAKER AND GENDER PER BLOCK"
+
+
+def speaker_output_rules() -> str:
+    """Into Thai: ask for each block's speaker and gender with its translation.
+
+    This replaces the plain "return the JSON with the texts translated" shape
+    for Thai only; `translator_utils.set_texts_from_json` reads both shapes.
+    """
+    return "\n".join([
+        SPEAKER_OUTPUT_HEADER,
+        "This overrides the output shape described above. Return a JSON object with the same "
+        "keys; the value of every key is an object, not a string:",
+        '{"block_0": {"speaker": "<who says it>", "gender": "male" | "female" | "unknown", '
+        '"translation": "<the Thai translation>"}}',
+        "• speaker: the character's name as written in the glossary when they are in it, "
+        'otherwise a short description ("the guard", "Lena\'s mother"); "narration" for a '
+        'caption box, "sfx" for a sound effect.',
+        "• Decide the speaker before translating, from the whole page: the bubble's tail in "
+        "the image, the order of turns in the conversation, who is addressed, the glossary "
+        "gender. The same character keeps the same name in every block.",
+        "• gender is the SPEAKER's gender, and the particle and self-pronoun in translation "
+        'must agree with it. "unknown" when you cannot tell — then use a gender-neutral '
+        "ending. Narration and sound effects are always \"unknown\".",
+        "• translation holds only the Thai text: no speaker names, notes or brackets in it.",
+    ])
+
+
 # Glossary extraction
 
 
@@ -238,15 +270,20 @@ _NEUTRAL_SELF = re.compile("ฉัน|หนู")
 MIXED = "mixed"
 MALE_SELF_FEMALE_PARTICLE = "male_self_female_particle"
 FEMALE_SELF_MALE_PARTICLE = "female_self_male_particle"
+# The translator said who speaks, and the line contradicts that gender.
+FEMALE_SPEAKER_MALE_SPEECH = "female_speaker_male_speech"
+MALE_SPEAKER_FEMALE_SPEECH = "male_speaker_female_speech"
 
 
 @dataclass
 class SpeechIssue:
-    """A translated block whose gendered words contradict each other."""
+    """A translated block whose gendered words contradict each other, or
+    contradict the speaker's gender as the translator reported it."""
 
     block_index: int
     seen_as: str  # the translation, as it stands
-    reason: str   # MIXED, MALE_SELF_FEMALE_PARTICLE or FEMALE_SELF_MALE_PARTICLE
+    reason: str   # one of the reason constants above
+    speaker: str = ""  # who the translator said speaks, for the speaker reasons
 
 
 def particle_counts(text: str) -> tuple[int, int]:
@@ -277,12 +314,43 @@ def speech_problem(text: str) -> str | None:
     return None
 
 
+def speaker_problem(text: str, gender: str) -> str | None:
+    """Why a block's gendered speech contradicts its speaker's gender, or None.
+
+    gender is what the translator reported ("male"/"female"; anything else
+    means unknown and is never judged). A polite particle of the other gender
+    counts, and so does a self-pronoun that only one gender uses (กระผม,
+    ดิฉัน, อิฉัน). Plain ผม does not: without a particle beside it, it is as
+    likely to be hair ("ผมเปียก") as "I".
+    """
+    if gender not in ("male", "female"):
+        return None
+    male, female = particle_counts(text)
+    t = text or ""
+    if gender == "female" and (male or "กระผม" in t):
+        return FEMALE_SPEAKER_MALE_SPEECH
+    if gender == "male" and (female or _FEMALE_SELF.search(t)):
+        return MALE_SPEAKER_FEMALE_SPEECH
+    return None
+
+
 def check_speech(blk_list) -> list[SpeechIssue]:
-    """Blocks whose Thai translation mixes male and female speech markers."""
+    """Blocks whose Thai translation mixes male and female speech markers, or
+    whose markers contradict the speaker's gender the translator reported.
+
+    A block contradicting itself is reported as that and nothing else: which
+    half is wrong is the question, and the speaker's gender only answers it
+    when someone reads the line.
+    """
     issues: list[SpeechIssue] = []
     for index, blk in enumerate(blk_list):
         translation = getattr(blk, "translation", "") or ""
+        seen_as = " ".join(translation.split())
         reason = speech_problem(translation)
         if reason:
-            issues.append(SpeechIssue(index, " ".join(translation.split()), reason))
+            issues.append(SpeechIssue(index, seen_as, reason))
+            continue
+        reason = speaker_problem(translation, getattr(blk, "speaker_gender", "") or "")
+        if reason:
+            issues.append(SpeechIssue(index, seen_as, reason, getattr(blk, "speaker", "") or ""))
     return issues

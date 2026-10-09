@@ -256,7 +256,7 @@ class Messages:
 
 
     @staticmethod
-    def speech_reason_text(reason: str) -> str:
+    def speech_reason_text(reason: str, speaker: str = "") -> str:
         """Why a Thai block's ครับ/ค่ะ was flagged, for one SpeechIssue reason."""
         from modules.utils import thai_speech
         texts = {
@@ -269,15 +269,26 @@ class Messages:
             thai_speech.FEMALE_SELF_MALE_PARTICLE: QCoreApplication.translate(
                 "Messages", "says ดิฉัน but ends with ครับ"
             ),
+            thai_speech.FEMALE_SPEAKER_MALE_SPEECH: QCoreApplication.translate(
+                "Messages", "the AI says {0} (female) speaks, but the line uses ครับ/กระผม"
+            ),
+            thai_speech.MALE_SPEAKER_FEMALE_SPEECH: QCoreApplication.translate(
+                "Messages", "the AI says {0} (male) speaks, but the line uses ค่ะ/คะ/ดิฉัน"
+            ),
         }
-        return texts.get(reason, reason)
+        text = texts.get(reason, reason)
+        if "{0}" in text:
+            text = text.format(
+                speaker or QCoreApplication.translate("Messages", "the speaker")
+            )
+        return text
 
     @staticmethod
-    def speech_issue_line(seen_as: str, reason: str, max_chars: int = 60) -> str:
+    def speech_issue_line(seen_as: str, reason: str, max_chars: int = 60, speaker: str = "") -> str:
         if len(seen_as) > max_chars:
             seen_as = seen_as[:max_chars - 1] + "…"
         return QCoreApplication.translate("Messages", "«{0}»: {1}").format(
-            seen_as, Messages.speech_reason_text(reason)
+            seen_as, Messages.speech_reason_text(reason, speaker)
         )
 
     @staticmethod
@@ -311,14 +322,16 @@ class Messages:
         if speech:
             lines.append(
                 QCoreApplication.translate(
-                    "Messages", "{0} bubble(s) mix male and female speech (ครับ/ค่ะ):"
+                    "Messages", "{0} bubble(s) with ครับ/ค่ะ that need checking:"
                 ).format(len(speech))
             )
             for index, issue in enumerate(speech):
                 if index == limit:
                     lines.append("…")
                     break
-                lines.append(Messages.speech_issue_line(issue.seen_as, issue.reason))
+                lines.append(Messages.speech_issue_line(
+                    issue.seen_as, issue.reason, speaker=issue.speaker
+                ))
         return "\n".join(lines)
 
     @staticmethod

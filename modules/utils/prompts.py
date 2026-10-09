@@ -3,7 +3,7 @@ import json
 import logging
 
 from .paths import get_user_data_dir
-from .thai_speech import speech_particle_rules, targets_thai
+from .thai_speech import speaker_output_rules, speech_particle_rules, targets_thai
 
 logger = logging.getLogger(__name__)
 
@@ -191,5 +191,6 @@ class PromptManager:
         # custom preset saved before these rules existed still gets them.
         if targets_thai(target_lang):
             parts.append(speech_particle_rules(source_lang))
+            parts.append(speaker_output_rules())
         parts.append("Do your best! I'm really counting on you.")
         return "\n\n".join(parts)

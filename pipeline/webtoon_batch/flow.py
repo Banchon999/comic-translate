@@ -325,16 +325,86 @@ class FlowMixin:
             physical_blocks.append(out)
         return physical_blocks
 
+    def _complete_strip_jobs(
+        self: WebtoonBatchProcessor,
+        page_info: Dict,
+        jobs: List[Dict],
+        page_accum: Dict[str, Dict[str, List]],
+        total_images: int,
+    ) -> None:
+        """Translate a strip in one go, then clean each of its chunks and add
+        their blocks and patches to the page."""
+        selected_index = int(page_info["selected_index"])
+        self._emit_progress(selected_index, total_images, 7, False)
+        self._run_translation_on_strip(page_info["path"], jobs)
+
+        for job in jobs:
+            current_record = job["current_record"]
+            next_record = job["next_record"]
+            regular_blocks = job["regular_blocks"]
+            split_owned_blocks = job["split_owned_blocks"]
+            split_matches = job["split_matches"]
+
+            self._emit_progress(selected_index, total_images, 4, False)
+            mask, inpainted = self._inpaint_image_with_blocks(
+                current_record["image"], regular_blocks
+            )
+            if mask is not None and inpainted is not None:
+                regular_patches = self._extract_page_patches_from_mask(
+                    mask=mask,
+                    inpainted=inpainted,
+                    page_index=int(current_record["global_index"]),
+                    file_path=current_record["path"],
+                    y_offset=int(current_record["y_offset"]),
+                )
+                page_accum[current_record["path"]]["patches"].extend(regular_patches)
+
+            if split_matches and next_record is not None:
+                seam_patches = self._process_seam_job_ocr_and_inpaint(
+                    seam_job=SimpleNamespace(
+                        top_page_index=0,
+                        bottom_page_index=1,
+                        matches=split_matches,
+                    ),
+                    page_records=[current_record, next_record],
+                )
+                for patches in seam_patches.values():
+                    for patch in patches:
+                        patch_path = patch.get("file_path")
+                        if patch_path in page_accum:
+                            page_accum[patch_path]["patches"].append(patch)
+
+            final_blocks_virtual = regular_blocks + split_owned_blocks
+            rtl = job["source_lang"] == "Japanese"
+            final_blocks_virtual = (
+                sort_blk_list(final_blocks_virtual, rtl) if final_blocks_virtual else []
+            )
+            final_blocks_physical = self._convert_blocks_to_physical(
+                final_blocks_virtual, current_record["vpage"]
+            )
+            page_accum[current_record["path"]]["blocks"].extend(final_blocks_physical)
+
+        # Nothing reads this strip's chunk images again (a seam into the next
+        # strip was cleaned above, from that job's own next_record). The
+        # records live in virtual_records for the whole batch, so without this
+        # every chunk of every strip stayed in memory until the batch ended.
+        for job in jobs:
+            job["current_record"]["image"] = None
+
     def _finalize_physical_page(
         self: WebtoonBatchProcessor,
         page_info: Dict,
         page_accum: Dict[str, Dict[str, List]],
         total_images: int,
         timestamp: str,
+        pending_jobs: Optional[Dict[str, List[Dict]]] = None,
     ) -> None:
         image_path = page_info["path"]
         selected_index = int(page_info["selected_index"])
         global_index = int(page_info["global_index"])
+        jobs = (pending_jobs or {}).pop(image_path, [])
+        if jobs and not page_info.get("skip", False):
+            self._complete_strip_jobs(page_info, jobs, page_accum, total_images)
         page_state = self.main_page.image_states.ensure_page(image_path)
         page_state.setdefault("viewer_state", {})
 
@@ -499,6 +569,8 @@ class FlowMixin:
                 info["path"]: {"blocks": [], "patches": []}
                 for info in physical_pages
             }
+            # Chunks OCR'd but not yet translated, per physical page.
+            pending_jobs: Dict[str, List[Dict]] = {}
 
             logger.info(
                 "Starting seam-aware virtual streaming webtoon batch processing for %d pages.",
@@ -542,6 +614,7 @@ class FlowMixin:
                         page_accum=page_accum,
                         total_images=total_images,
                         timestamp=timestamp,
+                        pending_jobs=pending_jobs,
                     )
                     cached_current = next_record
                     continue
@@ -603,7 +676,6 @@ class FlowMixin:
                     sort_after=False,
                 )
 
-                self._emit_progress(current_record["selected_index"], total_images, 7, False)
                 target_lang = page_state.get(
                     "target_lang",
                     to_canonical_language_name(
@@ -611,53 +683,20 @@ class FlowMixin:
                         self.main_page.lang_mapping,
                     ),
                 )
-                self._run_translation_on_blocks(
-                    image=current_record["image"],
-                    blocks=ocr_blocks,
-                    source_lang=source_lang,
-                    target_lang=target_lang,
-                    image_path=current_record["path"],
-                )
-
-                self._emit_progress(current_record["selected_index"], total_images, 4, False)
-                mask, inpainted = self._inpaint_image_with_blocks(
-                    current_record["image"], regular_blocks
-                )
-                if mask is not None and inpainted is not None:
-                    regular_patches = self._extract_page_patches_from_mask(
-                        mask=mask,
-                        inpainted=inpainted,
-                        page_index=int(current_record["global_index"]),
-                        file_path=current_record["path"],
-                        y_offset=int(current_record["y_offset"]),
-                    )
-                    page_accum[current_record["path"]]["patches"].extend(regular_patches)
-
-                if split_matches and next_record is not None:
-                    seam_patches = self._process_seam_job_ocr_and_inpaint(
-                        seam_job=SimpleNamespace(
-                            top_page_index=0,
-                            bottom_page_index=1,
-                            matches=split_matches,
-                        ),
-                        page_records=[current_record, next_record],
-                    )
-                    for patches in seam_patches.values():
-                        for patch in patches:
-                            patch_path = patch.get("file_path")
-                            if patch_path in page_accum:
-                                page_accum[patch_path]["patches"].append(patch)
-
-                final_blocks_virtual = regular_blocks + split_owned_blocks
-                rtl = source_lang == "Japanese"
-                final_blocks_virtual = (
-                    sort_blk_list(final_blocks_virtual, rtl) if final_blocks_virtual else []
-                )
-
-                final_blocks_physical = self._convert_blocks_to_physical(
-                    final_blocks_virtual, current_vpage
-                )
-                page_accum[current_record["path"]]["blocks"].extend(final_blocks_physical)
+                # Translation, cleaning and the move to page coordinates wait
+                # for the strip's last chunk: the strip is translated in one
+                # request, and cleaning reads the translations (a block that
+                # got none is left as drawn).
+                pending_jobs.setdefault(current_record["path"], []).append({
+                    "current_record": current_record,
+                    "next_record": next_record if split_matches else None,
+                    "regular_blocks": regular_blocks,
+                    "split_owned_blocks": split_owned_blocks,
+                    "split_matches": split_matches,
+                    "ocr_blocks": ocr_blocks,
+                    "source_lang": source_lang,
+                    "target_lang": target_lang,
+                })
 
                 if current_record.get("is_last_virtual", False):
                     self._finalize_physical_page(
@@ -665,6 +704,7 @@ class FlowMixin:
                         page_accum=page_accum,
                         total_images=total_images,
                         timestamp=timestamp,
+                        pending_jobs=pending_jobs,
                     )
 
                 cached_current = next_record

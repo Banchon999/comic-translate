@@ -240,8 +240,8 @@ class BatchReportController:
         """Record glossary terms a page's translation left out.
 
         issues is a list of (term as seen in the source, expected translation)
-        pairs, plus (translation, reason, "speech") for a Thai bubble whose
-        ครับ/ค่ะ contradict each other. A warning, not a skip: the page was
+        pairs, plus (translation, reason, "speech", speaker) for a Thai bubble
+        whose ครับ/ค่ะ contradict each other or the speaker's gender. A warning, not a skip: the page was
         translated and saved.
         """
         report = self._current_batch_report
@@ -518,7 +518,8 @@ class BatchReportController:
 
         def describe(issue):
             if len(issue) > 2 and issue[2] == "speech":
-                return Messages.speech_issue_line(issue[0], issue[1])
+                speaker = issue[3] if len(issue) > 3 else ""
+                return Messages.speech_issue_line(issue[0], issue[1], speaker=speaker)
             return should_be.format(issue[0], issue[1])
 
         for row, entry in enumerate(glossary_entries):

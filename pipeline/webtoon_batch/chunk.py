@@ -18,13 +18,18 @@ from modules.utils.image_utils import generate_mask
 from modules.utils.text_segmentation import segment_page
 from modules.utils.pipeline_config import get_config, get_inpainter_backend, inpaint_map
 from modules.utils.textblock import TextBlock, sort_blk_list
-from modules.utils.translator_utils import is_renderable_translation
+from modules.utils.strip_sheet import sheet_note, strip_sheet
+from modules.utils.translator_utils import is_renderable_translation, speakers_so_far
 from pipeline.inpainting import call_inpaint_image
 
 if TYPE_CHECKING:
     from .processor import WebtoonBatchProcessor
 
 logger = logging.getLogger(__name__)
+
+
+#: Blocks per translation request when a whole strip is translated at once.
+STRIP_GROUP_BLOCKS = 40
 
 
 class ChunkMixin:
@@ -146,27 +151,99 @@ class ChunkMixin:
         source_lang: str,
         target_lang: str,
         image_path: str,
+        image_note: str = "",
     ) -> None:
+        """Translate blocks — a whole strip — and report what needs checking.
+
+        Sent STRIP_GROUP_BLOCKS at a time: a long strip can hold a hundred
+        bubbles, and asked for all of them at once (each with its speaker,
+        into Thai) a model runs out of output tokens and returns cut-off
+        JSON. Every group after the first is told which speakers the earlier
+        ones named, so a character keeps one name and gender across the strip.
+        """
         if not blocks:
             return
-        extra_context = self.main_page.settings_page.get_extra_context(
-            collect_source_text(blocks)
-        )
         translator = Translator(self.main_page, source_lang, target_lang)
-        try:
-            translator.translate(blocks, image, extra_context)
-        except InsufficientCreditsException:
-            raise
-        except Exception as error:
-            err_msg = self._extract_error_message(error, context="translation")
-            logger.exception("Translation failed for %s: %s", image_path, err_msg)
-            self.main_page.image_skipped.emit(image_path, "Translation", err_msg)
-            for block in blocks:
-                block.translation = ""
-            return
+        for start in range(0, len(blocks), STRIP_GROUP_BLOCKS):
+            group = blocks[start:start + STRIP_GROUP_BLOCKS]
+            extra_context = self.main_page.settings_page.get_extra_context(
+                collect_source_text(group)
+            )
+            notes = [image_note, speakers_so_far(blocks[:start])]
+            notes = [note for note in notes if note]
+            if notes:
+                extra_context = "\n\n".join(
+                    part for part in [extra_context.strip()] + notes if part
+                )
+            try:
+                translator.translate(group, image, extra_context)
+            except InsufficientCreditsException:
+                raise
+            except Exception as error:
+                err_msg = self._extract_error_message(error, context="translation")
+                logger.exception("Translation failed for %s: %s", image_path, err_msg)
+                self.main_page.image_skipped.emit(image_path, "Translation", err_msg)
+                for block in group:
+                    block.translation = ""
         issues = translator.check_glossary(blocks)
         if issues:
             self.main_page.glossary_issues_found.emit(image_path, issue_rows(issues))
+
+    def _run_translation_on_strip(
+        self: WebtoonBatchProcessor,
+        image_path: str,
+        jobs: List[Dict],
+    ) -> None:
+        """One translation for a whole strip, once every chunk of it is OCR'd.
+
+        Each chunk used to be translated on its own, so a model saw a few
+        bubbles of a conversation at a time and could not tell who was
+        talking to whom. The blocks go in reading order: chunk by chunk, each
+        chunk sorted as the page is sorted.
+        """
+        blocks: List[TextBlock] = []
+        for job in jobs:
+            chunk_blocks = list(job["ocr_blocks"])
+            if chunk_blocks:
+                rtl = job["source_lang"] == "Japanese"
+                blocks.extend(sort_blk_list(chunk_blocks, rtl))
+        if not blocks:
+            return
+        image, note = self._strip_image_for_translation(image_path, jobs)
+        self._run_translation_on_blocks(
+            image=image,
+            blocks=blocks,
+            source_lang=jobs[0]["source_lang"],
+            target_lang=jobs[0]["target_lang"],
+            image_path=image_path,
+            image_note=note,
+        )
+
+    def _strip_image_for_translation(
+        self: WebtoonBatchProcessor,
+        image_path: str,
+        jobs: List[Dict],
+    ) -> Tuple[np.ndarray, str]:
+        """The strip folded into columns (see modules.utils.strip_sheet), built
+        from the chunk images already in memory."""
+        pieces = []
+        for job in jobs:
+            record = job["current_record"]
+            vpage = record.get("vpage")
+            image = record.get("image")
+            if vpage is None or image is None:
+                continue
+            pieces.append((int(vpage.crop_top), image))
+        if not pieces:
+            return np.zeros((1, 1, 3), np.uint8), ""
+        pieces.sort(key=lambda item: item[0])
+        width = max(image.shape[1] for _top, image in pieces)
+        height = max(top + image.shape[0] for top, image in pieces)
+        strip = np.full((height, width, 3), 255, dtype=np.uint8)
+        for top, image in pieces:
+            strip[top:top + image.shape[0], : image.shape[1]] = image[..., :3]
+        sheet, columns = strip_sheet(strip)
+        return sheet, sheet_note(columns)
 
     def _inpaint_image_with_blocks(
         self: WebtoonBatchProcessor,

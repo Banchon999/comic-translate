@@ -111,8 +111,11 @@ class GlossaryPeekPanel(QtWidgets.QWidget):
                     for i in terms[:5]
                 ]
             if speech:
-                lines.append(self.tr("{0} bubble(s) mix ครับ/ค่ะ:").format(len(speech)))
-                lines += [Messages.speech_issue_line(i.seen_as, i.reason, 40) for i in speech[:5]]
+                lines.append(self.tr("{0} bubble(s) with ครับ/ค่ะ to check:").format(len(speech)))
+                lines += [
+                    Messages.speech_issue_line(i.seen_as, i.reason, 40, i.speaker)
+                    for i in speech[:5]
+                ]
             self.warning.setText("\n".join(lines))
             self.warning.setStyleSheet(
                 f"color: {t['warn']}; background: transparent; padding: 8px;"

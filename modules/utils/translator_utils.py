@@ -42,7 +42,26 @@ def get_raw_translation(blk_list: list[TextBlock]):
     
     return raw_translations_json
 
+_GENDERS = {
+    "male": "male", "m": "male", "man": "male", "boy": "male", "ชาย": "male",
+    "female": "female", "f": "female", "woman": "female", "girl": "female", "หญิง": "female",
+}
+
+
+def normalise_gender(value) -> str:
+    """"male", "female", or "" for anything else (unknown, neutral, missing)."""
+    return _GENDERS.get(str(value or "").strip().lower(), "")
+
+
 def set_texts_from_json(blk_list: list[TextBlock], json_string: str):
+    """Fill each block's translation from the model's JSON reply.
+
+    A value is either the translation itself or, when the model was asked who
+    speaks each block (translating into Thai), an object
+    {"speaker": ..., "gender": ..., "translation": ...}. Both are accepted
+    whatever was asked for: a model that answers in the plain shape still
+    gets its translation used, it just reports no speaker.
+    """
     match = re.search(r"\{[\s\S]*\}", json_string)
     if match:
         # Extract the JSON string from the matched regular expression
@@ -52,11 +71,42 @@ def set_texts_from_json(blk_list: list[TextBlock], json_string: str):
         for idx, blk in enumerate(blk_list):
             block_key = f"block_{idx}"
             if block_key in translation_dict:
-                blk.translation = translation_dict[block_key]
+                value = translation_dict[block_key]
+                if isinstance(value, dict):
+                    text = value.get("translation", value.get("text", ""))
+                    blk.translation = text if isinstance(text, str) else str(text or "")
+                    blk.speaker = " ".join(str(value.get("speaker") or "").split())
+                    blk.speaker_gender = normalise_gender(value.get("gender"))
+                else:
+                    blk.translation = value if isinstance(value, str) else str(value)
+                    blk.speaker = ""
+                    blk.speaker_gender = ""
             else:
                 print(f"Warning: {block_key} not found in JSON string.")
     else:
         print("No JSON found in the input string.")
+
+def speakers_so_far(blk_list) -> str:
+    """The speakers already named in blk_list, as a line for the next request.
+
+    "" when no block names one. Narration and sound effects are left out.
+    """
+    seen: dict[str, str] = {}
+    for blk in blk_list or []:
+        name = getattr(blk, "speaker", "") or ""
+        if not name or name.lower() in ("narration", "sfx", "unknown"):
+            continue
+        gender = getattr(blk, "speaker_gender", "") or ""
+        if name not in seen or (gender and not seen[name]):
+            seen[name] = gender
+    if not seen:
+        return ""
+    names = ", ".join(f"{n} ({g})" if g else n for n, g in seen.items())
+    return (
+        "Speakers already identified earlier in this strip — keep the same names and "
+        f"genders for them: {names}"
+    )
+
 
 def set_upper_case(blk_list: list[TextBlock], upper_case: bool):
     for blk in blk_list:
