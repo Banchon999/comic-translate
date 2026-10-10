@@ -4,6 +4,7 @@ import numpy as np
 
 from ..utils.textblock import TextBlock
 from ..utils.thai_speech import check_speech, targets_thai
+from ..utils.translator_utils import join_translation_line_breaks
 from .base import LLMTranslation
 from .factory import TranslationFactory
 
@@ -102,10 +103,14 @@ class Translator:
         """
         if self.is_llm_engine:
             # LLM translators need image and extra context
-            return self.engine.translate(blk_list, image, extra_context)
+            result = self.engine.translate(blk_list, image, extra_context)
         else:
             # Text-based translators only need the text blocks
-            return self.engine.translate(blk_list)
+            result = self.engine.translate(blk_list)
+        # Every engine, every run mode: a translation reaches the renderer as
+        # running text, which it wraps to the bubble itself.
+        join_translation_line_breaks(result if result is not None else blk_list)
+        return result
 
     def check_glossary(self, blk_list: list[TextBlock]) -> list:
         """What is wrong with the translation of blk_list, as warnings.

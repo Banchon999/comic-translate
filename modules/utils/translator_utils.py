@@ -22,11 +22,55 @@ def encode_image_array(img_array: np.ndarray):
     img_bytes = imk.encode_image(img_array, ".png")
     return base64.b64encode(img_bytes).decode('utf-8')
 
+#: Scripts written without spaces between words: a line break between two of
+#: their characters joins them with nothing, anywhere else with a space.
+_UNSPACED = re.compile(r"[\u0E00-\u0E7F\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\uFF66-\uFF9F]")
+#: Sentence-ending marks after which Thai still takes a space.
+_SENTENCE_END = set("!?.…\"')”’»」』）)ฯ")
+_LINE_BREAKS = re.compile(r"\s*(?:\r\n|[\r\n\u2028\u2029])\s*")
+
+
+def join_line_breaks(text: str | None) -> str | None:
+    """`text` with its line breaks folded back into running text.
+
+    A bubble's line breaks belong to its layout, not its words, and the
+    renderer fits a translation to its bubble itself — it treats every break
+    as a forced new line and then wraps each piece again. LLM OCR transcribes
+    a bubble line by line, and models (and some traditional translators)
+    mirror those breaks in the translation, so a sentence arrived in three
+    pieces, each wrapped again into a long line and a stub, and people had to
+    delete the breaks by hand. Between two Thai or CJK characters a break
+    joins with nothing — which is what deleting it by hand gives — unless a
+    sentence ended there; anywhere else with a space.
+    """
+    if not text or not _LINE_BREAKS.search(text):
+        return text
+    pieces = [piece for piece in _LINE_BREAKS.split(text.strip()) if piece]
+    if not pieces:
+        return ""
+    joined = pieces[0]
+    for piece in pieces[1:]:
+        left, right = joined[-1], piece[0]
+        unspaced = _UNSPACED.match(left) and _UNSPACED.match(right)
+        joined += ("" if unspaced and left not in _SENTENCE_END else " ") + piece
+    return joined
+
+
+def join_translation_line_breaks(blk_list: list[TextBlock]) -> None:
+    """join_line_breaks over every block's translation, in place."""
+    for blk in blk_list or []:
+        translation = getattr(blk, "translation", None)
+        if isinstance(translation, str):
+            blk.translation = join_line_breaks(translation)
+
+
 def get_raw_text(blk_list: list[TextBlock]):
     rw_txts_dict = {}
     for idx, blk in enumerate(blk_list):
         block_key = f"block_{idx}"
-        rw_txts_dict[block_key] = blk.text
+        # Sent without its line breaks: a model handed a bubble line by line
+        # answers line by line (see join_line_breaks).
+        rw_txts_dict[block_key] = join_line_breaks(blk.text)
     
     raw_texts_json = json.dumps(rw_txts_dict, ensure_ascii=False, indent=4)
     
