@@ -149,6 +149,8 @@ def shifted(image: np.ndarray, dx: int, dy: int):
 #: Relaxation sweeps for the healing brush's correction. The start is already
 #: a smooth estimate, so this only has to settle it, not build it from zero.
 HEAL_ITERATIONS = 400
+#: Text-shaped regions are thin, so the relaxation settles in far fewer steps.
+SMOOTH_FILL_ITERATIONS = 80
 
 
 def heal(dest: np.ndarray, source: np.ndarray, region: np.ndarray,
@@ -225,6 +227,40 @@ def heal(dest: np.ndarray, source: np.ndarray, region: np.ndarray,
     block = out[y0:y1, x0:x1]
     block[inside] = np.round(healed[inside]).astype(dest.dtype)
     return out
+
+
+def smooth_fill(image: np.ndarray, region: np.ndarray,
+                iterations: int = SMOOTH_FILL_ITERATIONS) -> np.ndarray:
+    """`image` with `region` filled smoothly from the pixels just outside it.
+
+    The fill matches the surroundings at the region's edge and is as smooth
+    as possible inside (Laplace's equation — `heal` with no source). On a flat
+    background that is the background's colour; on a gradient it is the
+    gradient, where any single colour leaves a visible patch.
+    """
+    image = np.asarray(image)
+    return heal(image, np.zeros_like(image), region, iterations=iterations)
+
+
+def plane_residual(image: np.ndarray, ring: np.ndarray, percentile: float = 90.0) -> float:
+    """How far `ring`'s pixels stray from the best flat-or-sloped colour plane.
+
+    Fits ``colour = a·x + b·y + c`` per channel to the ring's pixels and returns
+    the given percentile of the largest per-channel deviation. A flat fill or
+    a smooth gradient scores near zero; dots, screentone and artwork score
+    high — which is what tells a background a smooth fill can reproduce from
+    one it cannot. Infinity when the ring is too small to judge.
+    """
+    ys, xs = np.nonzero(ring)
+    if ys.size < 20:
+        return float("inf")
+    values = np.asarray(image)[ring].astype(np.float64)
+    if values.ndim == 1:
+        values = values[:, None]
+    design = np.column_stack([xs, ys, np.ones_like(xs)]).astype(np.float64)
+    coef, *_ = np.linalg.lstsq(design, values, rcond=None)
+    residual = np.abs(values - design @ coef).max(axis=1)
+    return float(np.percentile(residual, percentile))
 
 
 def _smooth_fill(values: np.ndarray, known: np.ndarray, unknown: np.ndarray) -> np.ndarray:

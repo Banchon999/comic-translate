@@ -117,6 +117,16 @@ def build_bubble_clip_mask(
                     # it means it leaked to the outside (no outline/boundary contained it).
                     if touch_ratio < 0.5:
                         use_fallback = False
+                    else:
+                        # No outline: a caption box or text on a flat panel,
+                        # detected as a bubble. Its text runs into the box's
+                        # corners, which an ellipse inscribed in the box cut
+                        # off and left uncleaned; there is no outline there
+                        # to protect, so the inset box itself is the clip.
+                        rows = np.arange(height)[:, None]
+                        cols = np.arange(width)[None, :]
+                        return ((rows >= by1_rel) & (rows < by2_rel)
+                                & (cols >= bx1_rel) & (cols < bx2_rel))
                         
                     if not use_fallback:
                         # Fill holes to include text and ink inside the bubble
@@ -294,6 +304,68 @@ def _resolve_block_crop_bounds(
     return cx1, cy1, cx2, cy2
 
 
+#: lettering_rows: fewest glyph-like pieces that make a row, and the
+#: narrowest a typical piece in it may be (width / height) — hatching and
+#: speed lines are as regular as letters but far thinner.
+LETTERING_MIN_GLYPHS = 3
+LETTERING_MIN_ASPECT = 0.35
+
+
+def lettering_rows(mask: np.ndarray | None) -> np.ndarray | None:
+    """The parts of a thresholded crop that line up like a row of letters.
+
+    Keeps components of about the typical piece height whose vertical
+    centres share a row with at least LETTERING_MIN_GLYPHS others, plus
+    smaller pieces (dots, accents) inside such a row, grown to cover an
+    outline. Pieces of artwork caught by the threshold are taller, off the
+    row, or thin strokes. None when nothing reads as lettering.
+    """
+    if mask is None or not np.any(mask):
+        return None
+    binary = (np.asarray(mask) > 0).astype(np.uint8)
+    num, labels, stats, _ = imk.connected_components_with_stats(binary, connectivity=8)
+    boxes = [(i, int(stats[i, imk.CC_STAT_LEFT]), int(stats[i, imk.CC_STAT_TOP]),
+              int(stats[i, imk.CC_STAT_WIDTH]), int(stats[i, imk.CC_STAT_HEIGHT]))
+             for i in range(1, num) if stats[i, imk.CC_STAT_AREA] >= 4]
+    sized = [b for b in boxes if b[4] >= 4]
+    if len(sized) < LETTERING_MIN_GLYPHS:
+        return None
+    typical = float(np.median([b[4] for b in sized]))
+    glyphs = [b for b in sized if 0.5 * typical <= b[4] <= 1.5 * typical]
+    glyphs.sort(key=lambda b: b[2] + b[4] / 2.0)
+    rows, current = [], []
+    for b in glyphs:
+        centre = b[2] + b[4] / 2.0
+        if current and centre - (current[-1][2] + current[-1][4] / 2.0) > 0.5 * typical:
+            rows.append(current)
+            current = []
+        current.append(b)
+    if current:
+        rows.append(current)
+    keep = np.zeros(num, dtype=bool)
+    for row in rows:
+        if len(row) < LETTERING_MIN_GLYPHS:
+            continue
+        if float(np.median([b[3] / b[4] for b in row])) < LETTERING_MIN_ASPECT:
+            continue
+        slack = 0.25 * typical
+        top = min(b[2] for b in row) - slack
+        bottom = max(b[2] + b[4] for b in row) + slack
+        for b in boxes:
+            if b[2] >= top and b[2] + b[4] <= bottom and b[4] <= 1.5 * typical:
+                keep[b[0]] = True
+    if not keep.any():
+        return None
+    letters = np.where(keep[labels], 255, 0).astype(np.uint8)
+    # The threshold picks one tone, and lettering the network misses is
+    # mostly outlined: the fill alone, inpainted, takes the outline's colour
+    # and leaves dark letter shapes. Grown by about an outline's width, the
+    # mask covers both and joins a word's letters into one region.
+    reach = max(2, int(round(0.2 * typical)))
+    element = imk.get_structuring_element(imk.MORPH_ELLIPSE, (2 * reach + 1, 2 * reach + 1))
+    return (imk.dilate(letters, element, iterations=1) > 0).astype(np.uint8) * 255
+
+
 def _precise_block_mask(
     img: np.ndarray,
     crop: np.ndarray,
@@ -328,9 +400,12 @@ def _precise_block_mask(
                 )
                 if refined.any():
                     return refined
-        # The network saw no text here. Falling back would reinstate exactly the
-        # false positives it is here to suppress, so leave the block alone.
-        return None
+        # The network saw no text here. A plain threshold would reinstate
+        # exactly the false positives it is here to suppress, so only rows of
+        # glyph-shaped pieces are taken from it: the network misses outlined
+        # white lettering laid over artwork (a site watermark), which the
+        # detector found and the reader expects gone.
+        return lettering_rows(detect_content_mask_in_bbox(crop))
 
     return detect_content_mask_in_bbox(crop)
 

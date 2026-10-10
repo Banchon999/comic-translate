@@ -5,6 +5,7 @@ import inspect
 import imkit as imk
 
 
+from core.paint import plane_residual, smooth_fill
 from modules.inpainting.denoise import denoise_around_mask
 from modules.utils.device import resolve_device
 from modules.utils.image_utils import build_block_mask_data, build_bubble_clip_mask, clip_mask_to_bubble, clip_mask_components_to_bubble
@@ -21,6 +22,20 @@ from pipeline.webtoon_utils import filter_and_convert_visible_blocks, restore_or
 logger = logging.getLogger(__name__)
 
 FAST_FILL_BUBBLE_INSET = 7
+#: Above this plane-fit residual (core.paint.plane_residual) of the ring
+#: around a bubble's text, the background is texture a smooth fill cannot
+#: reproduce, and the block goes to the inpainter. Measured on seven real
+#: webtoon pages: flat bubbles 0.2-3, gradients 3-6, glow and see-through
+#: boxes 6-10, artwork behind the text above 10.
+FAST_FILL_MAX_TEXTURE = 10.0
+#: How far (px) the fill region may grow past the text mask to clear a glow
+#: or drop shadow, and how much worse than the best growth a smaller one may
+#: score and still be taken.
+FAST_FILL_GROWTH_STEPS = (1, 3, 5, 7, 9, 11)
+FAST_FILL_HALO_SLACK = 1.0
+#: A ring whose median strays further than this from the bubble's background
+#: colour is still on the halo: a solid glow is as flat as any background.
+FAST_FILL_HALO_COLOUR = 32.0
 
 
 def call_inpaint_image(inpainting_handler, image: np.ndarray, mask: np.ndarray, config, blk_list: list | None = None):
@@ -533,17 +548,94 @@ class InpaintingHandler:
         else:
             bubble_mask = None
 
-        soft_mask = imk.gaussian_blur(fill_region.astype(np.uint8) * 255, 1.0).astype(np.float32) / 255.0
-        soft_mask = np.clip(soft_mask, 0.0, 1.0)[..., np.newaxis]
-        
+        if not np.any(fill_region):
+            return False, "empty-fill-region"
+
+        # Judge the background right around the text, not the whole bubble:
+        # a single colour suits a flat background, a smooth fill also suits a
+        # gradient, and real texture (dots, artwork behind a see-through box)
+        # is left for the inpainter. Lettering often carries a glow or a drop
+        # shadow a few pixels past the mask; sampled there, the fill took the
+        # halo's colour and left a dark or light blob. So, as PanelCleaner
+        # does, the region is grown step by step and the smallest growth whose
+        # surroundings are as clean as any is kept.
+        region, texture = self._grow_past_halo(crop, fill_region, bubble_mask, fill_color)
+        # Patches are cut as the bounding rectangles of the mask's components
+        # (get_inpainted_patches, _get_regular_patches), so growth past them
+        # would be thrown away and leave a seam; the fill stays inside them.
+        region &= self._component_rects(fill_region)
+        if texture > FAST_FILL_MAX_TEXTURE:
+            return False, f"textured:{texture:.1f}"
+
+        # Filled from the pixels just outside the text instead of with one
+        # colour: on a gradient bubble a flat fill left a visible patch shaped
+        # like the mask.
+        smooth = smooth_fill(crop, region)
+
+        # Feathered outward only: blurred both ways, the region's own edge kept
+        # a tenth of each glyph's colour and left a faint outline of the text.
+        soft_mask = imk.gaussian_blur(region.astype(np.uint8) * 255, 1.0).astype(np.float32) / 255.0
+        soft_mask = np.maximum(np.clip(soft_mask, 0.0, 1.0), region)[..., np.newaxis]
+
         if bubble_mask is not None:
             soft_mask = soft_mask * bubble_mask[..., np.newaxis]
         crop_f = crop.astype(np.float32)
-        fill_rgb = np.broadcast_to(fill_color, crop.shape).astype(np.float32)
-        blended = crop_f * (1.0 - soft_mask) + fill_rgb * soft_mask
+        blended = crop_f * (1.0 - soft_mask) + smooth.astype(np.float32) * soft_mask
         cleaned_image[y1:y2, x1:x2] = np.clip(np.round(blended), 0, 255).astype(np.uint8)
         residual_crop[fill_region] = 0
         return True, color_reason
+
+    @staticmethod
+    def _component_rects(region: np.ndarray) -> np.ndarray:
+        """The union of the bounding rectangles of region's components."""
+        rects = np.zeros(region.shape[:2], dtype=bool)
+        num_labels, _labels, stats, _centroids = imk.connected_components_with_stats(
+            region.astype(np.uint8), connectivity=8,
+        )
+        for label in range(1, num_labels):
+            x = int(stats[label, imk.CC_STAT_LEFT]); y = int(stats[label, imk.CC_STAT_TOP])
+            w = int(stats[label, imk.CC_STAT_WIDTH]); h = int(stats[label, imk.CC_STAT_HEIGHT])
+            rects[y:y + h, x:x + w] = True
+        return rects
+
+    @staticmethod
+    def _grow_past_halo(
+        crop: np.ndarray,
+        fill_region: np.ndarray,
+        bubble_mask: np.ndarray | None,
+        background: np.ndarray | None = None,
+    ) -> tuple[np.ndarray, float]:
+        """(region to fill, texture of what surrounds it).
+
+        Each candidate grows the text's mask by `step` pixels (inside the
+        bubble) and is scored by `plane_residual` of the 3 px ring right
+        outside it — the pixels the fill grows from. A ring whose median is
+        far from the bubble's `background` colour is still on a glow or a
+        shadow, which is as flat as a background, so it only counts when no
+        ring reaches the background. The smallest growth within
+        FAST_FILL_HALO_SLACK of the best score wins: it clears the halo
+        without eating into the background.
+        """
+        grow = np.ones((3, 3), np.uint8)
+        fill_u8 = fill_region.astype(np.uint8)
+        candidates = []
+        for step in FAST_FILL_GROWTH_STEPS:
+            inner = imk.dilate(fill_u8, grow, iterations=step) > 0
+            ring = (imk.dilate(fill_u8, grow, iterations=step + 3) > 0) & ~inner
+            if bubble_mask is not None:
+                inner &= bubble_mask
+                ring &= bubble_mask
+            on_background = True
+            if background is not None and np.any(ring):
+                median = np.median(crop[ring].reshape(-1, crop.shape[-1]), axis=0)
+                on_background = float(np.max(np.abs(median - background))) <= FAST_FILL_HALO_COLOUR
+            candidates.append((inner, plane_residual(crop, ring), on_background))
+        usable = [c for c in candidates if c[2]] or candidates
+        best = min(score for _inner, score, _bg in usable)
+        for inner, score, _bg in usable:
+            if score <= best + FAST_FILL_HALO_SLACK:
+                return inner, score
+        return usable[0][0], usable[0][1]
 
     def _get_associated_residual_components(self, residual_crop: np.ndarray, masked_region: np.ndarray) -> np.ndarray:
         residual_binary = (residual_crop > 0).astype(np.uint8)
