@@ -173,10 +173,45 @@ def _segment_no_space_paragraph(paragraph: str) -> List[str]:
     if _contains_thai(paragraph):
         try:
             from pythainlp import word_tokenize  # optional dependency
-            return [token for token in word_tokenize(paragraph, keep_whitespace=True) if token]
+            tokens = [token for token in word_tokenize(paragraph, keep_whitespace=True) if token]
         except Exception:
-            return _thai_safe_clusters(paragraph)
+            tokens = _thai_safe_clusters(paragraph)
+        return _attach_punctuation(tokens)
     return [char for char in paragraph if char != " "]
+
+
+#: Marks that open what follows them and so never end a line.
+_OPENING_PUNCTUATION = set("([{“‘«「『（")
+#: Marks that end what comes before them and so never start a line.
+_CLOSING_PUNCTUATION = set(".,!?…:;)]}\"'”’»」』）、。！？～~-")
+
+
+def _attach_punctuation(tokens: List[str]) -> List[str]:
+    """Glue punctuation-only tokens to the word they belong to.
+
+    The tokenizer returns "...", "!" and "?" as words of their own, so the
+    greedy wrap could start a line with them — a bubble ending in a line that
+    says only "...". Closing marks join the word before them, opening marks
+    the word after.
+    """
+    out: List[str] = []
+    pending = ""          # opening marks waiting for the word they open
+    for token in tokens:
+        if token and all(c in _OPENING_PUNCTUATION for c in token):
+            pending += token
+            continue
+        if pending and not token.isspace():
+            token, pending = pending + token, ""
+        if out and not out[-1].isspace() and token and all(c in _CLOSING_PUNCTUATION for c in token):
+            out[-1] += token
+        else:
+            if pending:            # an opening mark followed by a space keeps its place
+                out.append(pending)
+                pending = ""
+            out.append(token)
+    if pending:
+        out.append(pending)
+    return out
 
 
 def _segment_no_space_text(text: str) -> List[List[str]]:
