@@ -117,6 +117,15 @@ Three things about it are load-bearing:
 
 Callers pass the page prediction down as `page_text_mask=` (see `pipeline/batch_processor.py`, `pipeline/webtoon_batch/chunk.py`, `pipeline/inpainting.py`). Interactive paths use `peek_page_mask()` instead, which returns the cached prediction or `None` and never runs inference — a brush stroke must not wait seconds for a model.
 
+When the network sees no text in a block, `_precise_block_mask` no longer gives up outright: `lettering_rows` keeps only the thresholded pieces that form rows of ≥3 similar-height, glyph-shaped components (median width/height ≥ 0.35, so hatching does not pass), drops taller or off-row shapes (artwork), and grows the result by ~20% of the letter height so an outline is covered and the word becomes one region — `_drop_tiny_residual_components` (≤256 px) otherwise discards separate letters. This is what removes an outlined white site watermark over artwork, which the network scores ~0 and PanelCleaner also leaves. Without a row of letters the block is still left alone.
+
+**The fast bubble fill** (`InpaintingHandler._fast_fill_block`, run on every `text_bubble` before any inpainter, so it decides most bubbles' result) was compared with PanelCleaner on seven real webtoon pages and fixed in three places, each pinned by `tests/test_fast_fill.py` / `tests/test_clean_masks.py`:
+
+- **It fills smoothly, not with one colour**: `core.paint.smooth_fill` (Laplace from the pixels just outside the region — `heal` with no source). A flat colour left a patch shaped like the mask on every gradient bubble.
+- **It grows past a glow or drop shadow** (`_grow_past_halo`): the mask grows 1–11 px and each growth is scored by `plane_residual` of the 3 px ring right against it; the smallest growth within 1.0 of the best wins, but only rings whose median is within 32 of the bubble's background colour count — a solid halo is as flat as any background. Growth is clipped to the bounding rectangles of the mask's components, because patches are cut as those rectangles and anything past them would be dropped, leaving a seam. The edge is feathered *outward* only: blurred both ways, the region's own border kept a tenth of each glyph.
+- **Texture goes to the inpainter**: a ring residual over `FAST_FILL_MAX_TEXTURE` (10; measured: flat 0.2–3, gradients 3–6, glow and see-through boxes 6–10, artwork above) fails the block, which then reaches AOT/LaMa.
+- **A "bubble" with no outline is clipped to its inset box** (`build_bubble_clip_mask`): when the flood from the text's background touches over half the box's border, it is a caption box or text on a flat panel, and the ellipse inscribed in the box cut off the text in its corners. The ellipse is still used when there is no image to flood.
+
 `imkit` is a partial `cv2` replacement and its semantics are not always OpenCV's; when porting cv2 code, check the specific function first (`erode`/`dilate` binarise their output, so grayscale morphology has to be reordered into a threshold plus binary morphology).
 
 ## Licensing
